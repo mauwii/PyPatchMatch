@@ -102,6 +102,10 @@ else:
         download_url_to_file(url="https://github.com/lkwq007/PyPatchMatch/releases/download/v0.1/libpatchmatch.dll",dst=osp.join(osp.dirname(__file__), 'libpatchmatch.dll'))
     if not os.path.exists(osp.join(osp.dirname(__file__), 'opencv_world460.dll')):
         download_url_to_file(url="https://github.com/lkwq007/PyPatchMatch/releases/download/v0.1/opencv_world460.dll",dst=osp.join(osp.dirname(__file__), 'opencv_world460.dll'))
+    if not os.path.exists(osp.join(osp.dirname(__file__), 'libpatchmatch.dll')):
+        print("[Dependency Missing] Please download https://github.com/lkwq007/PyPatchMatch/releases/download/v0.1/libpatchmatch.dll and put it into the PyPatchMatch folder")
+    if not os.path.exists(osp.join(osp.dirname(__file__), 'opencv_world460.dll')):
+        print("[Dependency Missing] Please download https://github.com/lkwq007/PyPatchMatch/releases/download/v0.1/opencv_world460.dll and put it into the PyPatchMatch folder")
     PMLIB = ctypes.CDLL(osp.join(osp.dirname(__file__), 'libpatchmatch.dll'))
 
 PMLIB.PM_set_random_seed.argtypes = [ctypes.c_uint]
