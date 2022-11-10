@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 with open("README.md", "r", encoding="utf-8") as readme_file:
     readme = readme_file.read()
@@ -10,7 +10,8 @@ requirements = [
 
 setup(
     name='pypatchmatch',
-    packages=['patchmatch'],
+    py_modules=['patchmatch'],
+    packages=find_packages(),
     version='0.0.1',
     url='https://github.com/invoke-ai/PyPatchMatch',
     python_requires='>=3.10',
