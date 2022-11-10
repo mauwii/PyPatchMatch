@@ -10,7 +10,7 @@ requirements = [
 
 setup(
     name='pypatchmatch',
-    packages=find_packages(),
+    packages=['patchmatch'],
     version='0.0.1',
     url='https://github.com/invoke-ai/PyPatchMatch',
     python_requires='>=3.10',
