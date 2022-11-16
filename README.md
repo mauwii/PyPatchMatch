@@ -1,11 +1,9 @@
-PatchMatch based Inpainting
-=====================================
+# PatchMatch based Inpainting
 This library implements the PatchMatch based inpainting algorithm. It provides both C++ and Python interfaces.
 This implementation is heavily based on the implementation by Younesse ANDAM:
-(younesse-cv/PatchMatch)[https://github.com/younesse-cv/PatchMatch], with some bugs fix.
+(younesse-cv/PatchMatch)[https://github.com/younesse-cv/PatchMatch], with some bug fixes, and updates.
 
-Usage
--------------------------------------
+## Usage
 
 You need to first install OpenCV to compile the C++ libraries. Then, run `make` to compile the
 shared library `libpatchmatch.so`.
@@ -15,9 +13,10 @@ For Python users (example available at `examples/py_example.py`)
 ```python
 import patch_match
 
-image = ...  # either a numpy ndarray or a PIL Image object.
-mask = ...   # either a numpy ndarray or a PIL Image object.
-result = patch_match.inpaint(image, mask, patch_size=5)
+if patch_match.patchmatch_available:
+    image = ...  # either a numpy ndarray or a PIL Image object.
+    mask = ...   # either a numpy ndarray or a PIL Image object.
+    result = patch_match.inpaint(image, mask, patch_size=3)
 ```
 
 For C++ users (examples available at `examples/cpp_example.cpp`)
@@ -36,8 +35,7 @@ int main() {
 ```
 
 
-README and COPYRIGHT by Younesse ANDAM
--------------------------------------
+## README and COPYRIGHT by Younesse ANDAM
 @Author: Younesse ANDAM
 
 @Contact: younesse.andam@gmail.com
@@ -55,10 +53,8 @@ The algorithm is presented in the following paper
 Copyright (c) 2010-2011
 
 
-Requirements
--------------------------------------
+## Requirements
 
 To run the project you need to install Opencv library and link it to your project.
 Opencv can be download it here
 http://opencv.org/downloads.html
-
