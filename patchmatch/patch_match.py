@@ -123,17 +123,17 @@ for asset in platform_assets:
     if lib_name.startswith('libpatchmatch_'):
         pypatchmatch_lib = lib_name
 
-
-# Compile if we didn't find a platform-compatible version (and it's not compiled already)
-if pypatchmatch_lib is None:
-    pypatchmatch_lib = 'libpatchmatch.so'
-    if not os.path.exists(osp.join(osp.dirname(__file__), pypatchmatch_lib)):
-        import subprocess
-        print('Compiling and loading c extensions from "{}".'.format(osp.realpath(osp.dirname(__file__))))
-        # subprocess.check_call(['./travis.sh'], cwd=osp.dirname(__file__))
-        subprocess.check_call("make clean && make", cwd=osp.dirname(__file__), shell=True)
-
 try:
+    # Compile if we didn't find a platform-compatible version (and it's not compiled already)
+    if pypatchmatch_lib is None:
+        pypatchmatch_lib = 'libpatchmatch.so'
+        if not os.path.exists(osp.join(osp.dirname(__file__), pypatchmatch_lib)):
+            import subprocess
+            print('Compiling and loading c extensions from "{}".'.format(osp.realpath(osp.dirname(__file__))))
+            # subprocess.check_call(['./travis.sh'], cwd=osp.dirname(__file__))
+            subprocess.check_call("make clean && make", cwd=osp.dirname(__file__), shell=True)
+
+
     PMLIB = ctypes.CDLL(osp.join(osp.dirname(__file__), pypatchmatch_lib))
     patchmatch_available = True
 
