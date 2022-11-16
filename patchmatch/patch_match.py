@@ -22,7 +22,7 @@ patchmatch_available = False
 
 # The GitHub release information
 repo = 'https://api.github.com/repos/invoke-ai/PyPatchMatch/'
-release_id = '83203735'
+release_id = 'tags/0.1.1'
 release_url = f'{repo}releases/{release_id}'
 
 
