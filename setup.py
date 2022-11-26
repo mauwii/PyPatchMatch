@@ -13,7 +13,7 @@ setup(
     packages=['patchmatch'],
     version='0.1.1',
     url='https://github.com/invoke-ai/PyPatchMatch',
-    python_requires='>=3.10',
+    python_requires='>=3.9',
     install_requires=requirements,
     description='This library implements the PatchMatch based inpainting algorithm.',
     long_description=readme,
