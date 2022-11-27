@@ -11,12 +11,12 @@ requirements = [
 setup(
     name='pypatchmatch',
     packages=['patchmatch'],
-    version='0.1.2',
+    version='0.1.3',
     url='https://github.com/invoke-ai/PyPatchMatch',
     python_requires='>=3.9',
     install_requires=requirements,
     description='This library implements the PatchMatch based inpainting algorithm.',
     long_description=readme,
     long_description_content_type="text/markdown",
-    package_data={'patchmatch': ['Makefile']},
+    package_data={'patchmatch': ['Makefile','csrc/*','build/*']},
 )
