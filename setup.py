@@ -18,4 +18,5 @@ setup(
     description='This library implements the PatchMatch based inpainting algorithm.',
     long_description=readme,
     long_description_content_type="text/markdown",
+    package_data={'patchmatch': ['Makefile']},
 )
