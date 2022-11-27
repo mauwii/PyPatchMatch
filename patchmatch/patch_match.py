@@ -16,6 +16,7 @@ from typing import Optional, Union
 import os
 import numpy as np
 from PIL import Image
+import logging
 
 # This will be True if patchmatch was loaded successfully
 patchmatch_available = False
@@ -24,6 +25,19 @@ patchmatch_available = False
 repo = 'https://api.github.com/repos/invoke-ai/PyPatchMatch/'
 release_id = 'tags/0.1.1'
 release_url = f'{repo}releases/{release_id}'
+
+install_help_location = 'https://github.com/invoke-ai/InvokeAI/blob/main/docs/installation/INSTALL_PATCHMATCH.md'
+
+# Create the logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Create handlers
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.INFO) # TODO: make this user-configurable
+stream_format = logging.Formatter('>> %(name)s: %(levelname)s - %(message)s')
+stream_handler.setFormatter(stream_format)
+logger.addHandler(stream_handler)
 
 
 __all__ = ['set_random_seed', 'set_verbose', 'inpaint', 'inpaint_regularity']
@@ -117,6 +131,7 @@ for asset in platform_assets:
     lib_url = asset['browser_download_url']
 
     if not os.path.exists(osp.join(osp.dirname(__file__), lib_name)):
+        logger.info(f'Downloading patchmatch libraries from github release {lib_url}')
         download_url_to_file(url=lib_url, dst=osp.join(osp.dirname(__file__), lib_name))
 
     # Store patchmatch library name
@@ -129,9 +144,25 @@ try:
         pypatchmatch_lib = 'libpatchmatch.so'
         if not os.path.exists(osp.join(osp.dirname(__file__), pypatchmatch_lib)):
             import subprocess
-            print('Compiling and loading c extensions from "{}".'.format(osp.realpath(osp.dirname(__file__))))
+
+            # Streams make will write to
+            # TODO: use user-configured log-level to control this
+            make_stdout = subprocess.DEVNULL
+            make_stderr = subprocess.DEVNULL
+
+            if os.environ.get('INVOKEAI_DEBUG_PATCHMATCH'):
+                make_stdout = None
+                make_stderr = None
+            
+            logger.info('Compiling and loading c extensions from "{}".'.format(osp.realpath(osp.dirname(__file__))))
             # subprocess.check_call(['./travis.sh'], cwd=osp.dirname(__file__))
-            subprocess.check_call("make clean && make", cwd=osp.dirname(__file__), shell=True)
+            # TODO: pipe output to logger instead of just swallowing it
+            subprocess.run("make clean && make",
+                cwd    = osp.dirname(__file__),
+                shell  = True,
+                check  = True,
+                stdout = make_stdout,
+                stderr = make_stderr)
 
 
     PMLIB = ctypes.CDLL(osp.join(osp.dirname(__file__), pypatchmatch_lib))
@@ -291,4 +322,5 @@ try:
         return ret
 
 except:
-    ...
+    logger.warning('patchmatch failed to load or compile.')
+    logger.warning(f'Refer to {install_help_location} for installation instructions.')
