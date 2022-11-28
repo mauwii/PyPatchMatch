@@ -11,7 +11,7 @@ requirements = [
 setup(
     name='pypatchmatch',
     packages=['patchmatch'],
-    version='0.1.3',
+    version='0.1.4',
     url='https://github.com/invoke-ai/PyPatchMatch',
     python_requires='>=3.9',
     install_requires=requirements,
