@@ -321,6 +321,6 @@ try:
         ret[:] = npmat
         return ret
 
-except:
-    logger.warning('patchmatch failed to load or compile.')
-    logger.warning(f'Refer to {install_help_location} for installation instructions.')
+except Exception as e:
+    logger.error(f'patchmatch failed to load or compile ({e}).')
+    logger.info(f'Refer to {install_help_location} for installation instructions.')
