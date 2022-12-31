@@ -5,7 +5,8 @@ with open("README.md", "r", encoding="utf-8") as readme_file:
 
 requirements = [
     "numpy",
-    "pillow"
+    "pillow",
+    "tqdm"
 ]
 
 setup(

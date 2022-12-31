@@ -26,7 +26,7 @@ repo = 'https://api.github.com/repos/invoke-ai/PyPatchMatch/'
 release_id = 'tags/0.1.1'
 release_url = f'{repo}releases/{release_id}'
 
-install_help_location = 'https://github.com/invoke-ai/InvokeAI/blob/main/docs/installation/INSTALL_PATCHMATCH.md'
+install_help_location = 'https://invoke-ai.github.io/InvokeAI/installation/060_INSTALL_PATCHMATCH/'
 
 # Create the logger
 logger = logging.getLogger(__name__)
@@ -153,7 +153,7 @@ try:
             if os.environ.get('INVOKEAI_DEBUG_PATCHMATCH'):
                 make_stdout = None
                 make_stderr = None
-            
+
             logger.info('Compiling and loading c extensions from "{}".'.format(osp.realpath(osp.dirname(__file__))))
             # subprocess.check_call(['./travis.sh'], cwd=osp.dirname(__file__))
             # TODO: pipe output to logger instead of just swallowing it
