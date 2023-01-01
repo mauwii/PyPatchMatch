@@ -1,0 +1,38 @@
+[build-system]
+    requires = [
+        "setuptools >= 61.0.0",
+        "wheel"
+    ]
+    build-backend = "setuptools.build_meta"
+
+[project]
+    name = 'pypatchmatch'
+    dynamic = [
+        "version"
+    ]
+    requires-python = ">=3.9"
+    description = 'This library implements the PatchMatch based inpainting algorithm.'
+    readme = {file = "README.md", content-type = "text/markdown", charset = "UTF-8"}
+    license = {file = "LICENSE"}
+    authors = [
+        {name = "The InvokeAI Project",email = "lincoln.stein@gmail.com"},
+        {name = "Younesse ANDAM",email = "younesse.andam@gmail.com"}
+    ]
+    dependencies = [
+        "numpy",
+        "pillow",
+        "tqdm"
+    ]
+
+[project.urls]
+    'Source Code' = 'https://github.com/invoke-ai/PyPatchMatch'
+
+[tool.setuptools.dynamic]
+    version = {attr = "patchmatch.__version__"}
+
+[tool.setuptools.package-data]
+    "patchmatch" = [
+      'Makefile',
+      'csrc/*',
+      'build/*'
+    ]
