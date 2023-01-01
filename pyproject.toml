@@ -16,6 +16,7 @@
     license = {file = "LICENSE"}
     authors = [
         {name = "The InvokeAI Project",email = "lincoln.stein@gmail.com"},
+        {name = "Kyle Schouviller",email = "kyle0654@hotmail.com"},
         {name = "Younesse ANDAM",email = "younesse.andam@gmail.com"}
     ]
     dependencies = [
