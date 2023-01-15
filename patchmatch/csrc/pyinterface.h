@@ -1,4 +1,4 @@
-#include <opencv2/core.hpp>
+#include <opencv2/core/core.hpp>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>

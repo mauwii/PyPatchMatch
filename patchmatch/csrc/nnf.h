@@ -1,6 +1,6 @@
 #pragma once
 
-#include <opencv2/core.hpp>
+#include <opencv2/core/core.hpp>
 #include "masked_image.h"
 
 class PatchDistanceMetric {

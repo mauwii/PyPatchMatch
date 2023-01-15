@@ -1,0 +1,137 @@
+[build-system]
+requires = [
+    "Cython>=0.29.30,<3.0",
+    "delocate; sys_platform=='darwin'",
+    "ninja",
+    "setuptools >= 65.6.3",
+    "setuptools-scm[toml]",
+    "pipx",
+    "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = 'PyPatchMatch'
+dynamic = [
+    "version"
+]
+requires-python = ">=3.9, <3.11"
+description = 'This library implements the PatchMatch based inpainting algorithm.'
+readme = {file = "README.md", content-type = "text/markdown", charset = "UTF-8"}
+license = {file = "LICENSE"}
+authors = [
+    {name = "Younesse ANDAM",email = "younesse.andam@gmail.com"},
+    {name = "Matthias Wild",email = "mauwii@outlook.de"},
+]
+dependencies = [
+    "numpy",
+    "pillow",
+    "tqdm"
+]
+
+[project.optional-dependencies]
+"dev" = [
+    "black",
+    "flake8",
+    "isort",
+    "pipdeptree",
+]
+"dist" = [
+    "build",
+    "cibuildwheel",
+    "nox",
+    "pip-tools",
+    "twine",
+]
+
+[project.urls]
+'Source Code' = 'https://github.com/mauwii/PyPatchMatch'
+
+[project.scripts]
+"patch_match" = "patchmatch:patch_match.CShapeT"
+
+[tool.setuptools.dynamic]
+version = {attr = "patchmatch.__version__"}
+
+[tool.setuptools.packages.find]
+include = [
+    "patchmatch",
+    "patchmatch.csrc"
+]
+
+[tool.setuptools.package-data]
+"patchmatch" = [
+    'csrc/*',
+    'Makefile',
+    'travis.sh',
+]
+
+[tool.black]
+line-length = 120
+src-paths = [
+    "patchmatch"
+]
+target-version = [
+    "py310"
+]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  | .venv
+)/
+'''
+
+[tool.isort]
+profile = "black"
+
+[tool.flake8]
+extend-ignore = ["E203","E501","B950","B023"]
+extend-select = ["B9"]
+application-import-names = "patchmatch"
+exclude = [
+    "dist/",
+    "build/",
+    ".git/",
+    "env/",
+    "env2/",
+    "env??/",
+    ".venv/",
+    "site/",
+]
+
+[tool.cibuildwheel]
+skip = "*-manylinux_i686 *_ppc64le *_s390x *-musllinux*"
+build-verbosity = "3"
+build-frontend = "build"
+test-command = "bash {project}/patchmatch/travis.sh"
+# test-command = 'python -c "from patchmatch import patch_match"'
+# environment = { CXXFLAGS="-std=c++14", CXX = "clang++" }
+environment = { CXX="g++", CXXFLAGS="-std=c++14", LDFLAGS="-static-libstdc++ -static-libgcc" }
+# test-skip = ["*-win_arm64", "*-macosx_universal2:arm64"]
+# before-test = ""
+# test-requires = []
+dependency-versions = "pinned"
+
+[tool.cibuildwheel.macos]
+# For universal2 wheels, we will need to fuse them manually
+# instead of going through cibuildwheel
+# This is because cibuildwheel tries to make a fat wheel
+# https://github.com/multi-build/multibuild/blame/devel/README.rst#L541-L565
+# for more info
+archs = "universal2"
+# test-skip = "*_arm64 *_universal2:arm64"
+# MACOS linker doesn't support stripping symbols
+environment = { CFLAGS="-std=c99 -fno-strict-aliasing", OPENBLAS64_="/usr/local", NPY_USE_BLAS_ILP64="1", CC="clang", CXX = "clang++", BUILD_PREFIX="${BUILD_PREFIX:-/usr/local}" }
+
+[tool.cibuildwheel.linux]
+archs = "x86_64 aarch64"
+manylinux-x86_64-image = "manylinux2014"
+manylinux-aarch64-image = "manylinux2014"
+# before-build = [
+#     "git clone https://github.com/u0251077/opencv2.git /usr/include/opencv2",
+#     "make -C {project}/patchmatch"
+# ]
+# before-all = "yum install -y opencv-devel"
+# before-build = "yum install -y opencv opencv-devel opencv-python && python -c 'from patchmatch import patch_match'"
+# before-build = "yum install -y opencv opencv-devel opencv-python && PKG_CONFIG_PATH=/usr/lib64/pkgconfig make -C patchmatch"
+# environment = { CFLAGS="-std=c99 -fno-strict-aliasing", LDFLAGS="-Wl,--strip-debug", OPENBLAS64_="/usr/local", NPY_USE_BLAS_ILP64="1", RUNNER_OS="Linux" }

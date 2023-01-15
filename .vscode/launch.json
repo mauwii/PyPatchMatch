@@ -1,0 +1,31 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "patch_match",
+      "type": "python",
+      "request": "launch",
+      "module": "patchmatch.patch_match",
+      "justMyCode": true
+    },
+    {
+      "name": "py_example",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/py_example.py",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "py_example_global_mask",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/examples/py_example_global_mask.py",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+  ]
+}

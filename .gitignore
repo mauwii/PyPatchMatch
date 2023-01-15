@@ -1,4 +1,5 @@
-/build/
-/*.so
+/patchmatch/build/
+/patchmatch/*.so
 __pycache__
 *.py[cod]
+/wheelhouse

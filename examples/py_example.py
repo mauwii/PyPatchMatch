@@ -9,13 +9,9 @@
 
 from PIL import Image
 
-import sys
-sys.path.insert(0, '../')
-import patch_match
+from patchmatch import patch_match
 
-
-if __name__ == '__main__':
-    source = Image.open('./images/forest_pruned.bmp')
+if __name__ == "__main__":
+    source = Image.open("./examples/images/forest_pruned.bmp")
     result = patch_match.inpaint(source, patch_size=3)
-    Image.fromarray(result).save('./images/forest_recovered.bmp')
-
+    Image.fromarray(result).save("./examples/images/forest_recovered.bmp")
