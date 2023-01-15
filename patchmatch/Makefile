@@ -1,6 +1,7 @@
 #
 # Makefile
 # Jiayuan Mao, 2019-01-09 13:59
+# Matthias Wild, 2022-01-14 13:37
 #
 
 SRC_DIR = csrc
@@ -15,20 +16,23 @@ CXX = $(ENVIRONMENT_OPTIONS) g++
 CXXFLAGS = -std=c++14
 CXXFLAGS += -Ofast -ffast-math -w
 # CXXFLAGS += -g
-CXXFLAGS += $(shell pkg-config --cflags opencv) -fPIC
-CXXFLAGS += $(shell pkg-config --cflags opencv4) -fPIC
+CXXFLAGS += $(shell pkg-config --cflags opencv &>/dev/null && pkg-config --cflags opencv)
+CXXFLAGS += $(shell pkg-config --cflags opencv4 &>/dev/null && pkg-config --cflags opencv4)
+CXXFLAGS += -fPIC
 CXXFLAGS += $(INCLUDE_DIR)
-LDFLAGS += $(shell pkg-config --cflags --libs opencv) -shared -fPIC
-LDFLAGS += $(shell pkg-config --cflags --libs opencv4) -shared -fPIC
+LDFLAGS += $(shell pkg-config --libs opencv &>/dev/null && pkg-config --libs opencv)
+LDFLAGS += $(shell pkg-config --libs opencv4 &>/dev/null && pkg-config --libs opencv4)
+LDFLAGS += -shared -fPIC
 
-
-CXXSOURCES = $(shell find $(SRC_DIR)/ -name "*.cpp")
+CXXSOURCES = $(shell find $(SRC_DIR) -name "*.cpp")
 OBJS = $(addprefix $(OBJ_DIR)/,$(CXXSOURCES:.cpp=.o))
 DEPFILES = $(OBJS:.o=.d)
 
-.PHONY: all clean rebuild test
+.PHONY: all build clean rebuild
 
-all: $(LIB_TARGET)
+all: build
+
+build: $(LIB_TARGET)
 
 $(OBJ_DIR)/%.o: %.cpp
 	@echo "[CC] $< ..."
@@ -46,11 +50,11 @@ $(LIB_TARGET): $(OBJS)
 	@$(CXX) $(OBJS) -o $@ $(CXXFLAGS) $(LDFLAGS)
 
 clean:
-	rm -rf $(OBJ_DIR) $(LIB_TARGET)
+	rm -rf $(OBJ_DIR) $(TARGET)
 
 rebuild:
-	+@make clean
-	+@make
+	@make clean
+	@make build
 
 # vim:ft=make
 #
