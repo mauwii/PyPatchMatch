@@ -104,4 +104,3 @@ PM_mat_t _cv2_to_py(cv::Mat cvmat) {
 
     return PM_mat_t {data_ptr, shape, dtype};
 }
-

@@ -14,6 +14,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pre-commit-check:
+    runs-on: ubuntu-latest
+    env:
+      PIP_USE_PEP517: '1'
+    steps:
+      - name: Checkout sources
+        id: checkout-sources
+        uses: actions/checkout@v3
+
+      - name: setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: install dev dependencies
+        run: pip3 install ".[dev]"
+
+      - name: run pre-commit-check
+        run: >
+          pre-commit run
+          --all-files
+          --show-diff-on-failure
+
   build:
     if: github.event.pull_request.draft == false
     strategy:

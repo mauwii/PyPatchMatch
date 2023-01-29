@@ -7,9 +7,9 @@ requires=[
 
 [project]
 authors=[
-    { name="The InvokeAI Project", email="lincoln.stein@gmail.com" },
     { name="Kyle Schouviller", email="kyle0654@hotmail.com" },
     { name="Matthias Wild", email="mauwii@outlook.de" },
+    { name="The InvokeAI Project", email="lincoln.stein@gmail.com" },
     { name="Younesse ANDAM", email="younesse.andam@gmail.com" },
 ]
 dependencies=[
@@ -46,8 +46,43 @@ include=[
 ]
 
 [project.optional-dependencies]
+"dev"=[
+    "black",
+    "flake8",
+    "flake8-black",
+    "isort",
+    "pre-commit",
+]
 "dist"=[
     "pip-tools",
     "pipdeptree",
     "twine",
 ]
+
+[tool.black]
+exclude='''
+/(
+    .git
+    | .hg
+    | .mypy_cache
+    | .tox
+    | .venv
+    | _build
+    | buck-out
+    | build
+    | dist
+)/
+'''
+include='.pyi?$'
+line-length=88
+source=[
+    'examples',
+    'patchmatch',
+]
+target-version=[
+    'py310',
+    'py39',
+]
+
+[tool.isort]
+profile="black"

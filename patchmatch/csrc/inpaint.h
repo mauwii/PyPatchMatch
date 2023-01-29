@@ -24,4 +24,3 @@ private:
     NearestNeighborField m_target2source;
     const PatchDistanceMetric *m_distance_metric;
 };
-

@@ -130,4 +130,3 @@ protected:
     cv::Mat m_ijmap;
     double m_width, m_height, m_weight;
 };
-

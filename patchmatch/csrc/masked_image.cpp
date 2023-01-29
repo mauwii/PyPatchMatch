@@ -135,4 +135,3 @@ void MaskedImage::compute_image_gradients() {
 void MaskedImage::compute_image_gradients() const {
     const_cast<MaskedImage *>(this)->compute_image_gradients();
 }
-
