@@ -1,0 +1,58 @@
+name: Verify buildability
+
+on:
+  push:
+    paths:
+      - pyproject.toml
+      - patchmatch
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event.pull_request.draft == false
+    strategy:
+      matrix:
+        python-version:
+          - '3.9'
+          - '3.10'
+        os:
+          - windows-latest
+          - linux-latest
+          - macos-latest
+      fail-fast: false
+    name: ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    env:
+      PIP_USE_PEP517: '1'
+    steps:
+      - name: Checkout sources
+        id: checkout-sources
+        uses: actions/checkout@v3
+
+      - name: linux prerequisites
+        if: runner.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopencv-dev
+
+      - name: macos prerequisites
+        if: runner.os == 'macos'
+        run: brew install opencv
+
+      - name: setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: install PyPatchMatch
+        run: pip3 install .
+
+      - name: import patch_match
+        run: python -c "from patchmatch import patch_match"
