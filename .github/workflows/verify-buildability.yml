@@ -5,6 +5,7 @@ on:
     paths:
       - pyproject.toml
       - patchmatch
+      - github/workflows/verify-buildability.yml
   pull_request:
   workflow_dispatch:
 
