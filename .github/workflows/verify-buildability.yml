@@ -55,5 +55,5 @@ jobs:
       - name: install PyPatchMatch
         run: pip3 install .
 
-      - name: import patch_match
-        run: python -c "from patchmatch import patch_match"
+      - name: run py_example.py
+        run: python examples/py_example.py
