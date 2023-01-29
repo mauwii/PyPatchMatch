@@ -231,4 +231,3 @@ void Inpainting::_maximization_step(MaskedImage &target, const cv::Mat &vote) {
         }
     }
 }
-

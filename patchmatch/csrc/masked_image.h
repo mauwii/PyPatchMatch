@@ -109,4 +109,3 @@ private:
     cv::Mat m_image_gradx;
     bool m_image_grad_computed = false;
 };
-

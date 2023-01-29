@@ -265,4 +265,3 @@ int RegularityGuidedPatchDistanceMetricV2::operator ()(const MaskedImage &source
     double score = score1 * m_weight + score2;
     return int(score / (1 + m_weight));
 }
-
