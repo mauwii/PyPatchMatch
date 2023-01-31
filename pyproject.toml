@@ -7,9 +7,9 @@ requires=[
 
 [project]
 authors=[
+    { name="The InvokeAI Project", email="lincoln.stein@gmail.com" },
     { name="Kyle Schouviller", email="kyle0654@hotmail.com" },
     { name="Matthias Wild", email="mauwii@outlook.de" },
-    { name="The InvokeAI Project", email="lincoln.stein@gmail.com" },
     { name="Younesse ANDAM", email="younesse.andam@gmail.com" },
 ]
 dependencies=[
@@ -52,6 +52,7 @@ include=[
     "flake8-black",
     "isort",
     "pre-commit",
+    "pylance",
 ]
 "dist"=[
     "pip-tools",
