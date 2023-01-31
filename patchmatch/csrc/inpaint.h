@@ -5,7 +5,8 @@
 #include "masked_image.h"
 #include "nnf.h"
 
-class Inpainting {
+class Inpainting
+{
 public:
     Inpainting(cv::Mat image, cv::Mat mask, const PatchDistanceMetric *metric);
     Inpainting(cv::Mat image, cv::Mat mask, cv::Mat global_mask, const PatchDistanceMetric *metric);

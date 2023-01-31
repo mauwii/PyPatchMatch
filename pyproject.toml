@@ -1,59 +1,40 @@
 [build-system]
 build-backend="setuptools.build_meta"
-requires=[
-    "setuptools >= 65.7.0",
-    "wheel",
-]
+requires=["setuptools >= 65.7.0", "wheel"]
 
 [project]
 authors=[
-    { name="Kyle Schouviller", email="kyle0654@hotmail.com" },
-    { name="Matthias Wild", email="mauwii@outlook.de" },
-    { name="The InvokeAI Project", email="lincoln.stein@gmail.com" },
-    { name="Younesse ANDAM", email="younesse.andam@gmail.com" },
+    {name="The InvokeAI Project", email="lincoln.stein@gmail.com"},
+
+    {name="Kyle Schouviller", email="kyle0654@hotmail.com"},
+    {name="Matthias Wild", email="mauwii@outlook.de"},
+    {name="Younesse ANDAM", email="younesse.andam@gmail.com"},
 ]
-dependencies=[
-    "numpy",
-    "pillow",
-    "tqdm",
-]
+dependencies=["numpy", "pillow", "tqdm"]
 description='This library implements the PatchMatch based inpainting algorithm.'
-dynamic=[
-    "version",
-]
-license={ file="LICENSE" }
+dynamic=["version"]
+license={file="LICENSE"}
 name='PyPatchMatch'
-readme={ content-type="text/markdown", file="README.md" }
+readme={content-type="text/markdown", file="README.md"}
 requires-python=">=3.9"
 
 [project.urls]
 'Source Code'='https://github.com/mauwii/PyPatchMatch'
 
 [tool.setuptools.dynamic]
-version={ attr="patchmatch.__version__" }
+version={attr="patchmatch.__version__"}
 
 [tool.setuptools.packages.find]
-include=[
-    "patchmatch",
-    "patchmatch.csrc",
-]
+include=["patchmatch", "patchmatch.csrc"]
 
 [tool.setuptools.package-data]
-"patchmatch"=[
-    'Makefile',
-    'csrc/*',
-    'travis.sh',
-]
+"patchmatch"=['Makefile', 'csrc/*', 'travis.sh']
 
 [project.optional-dependencies]
-"dev"=[
-    "black",
-    "flake8",
-    "flake8-black",
-    "isort",
-    "pre-commit",
-]
+"dev"=["black", "flake8", "flake8-black", "isort", "pre-commit", "pylance"]
 "dist"=[
+    "auditwheel; sys_platform=='linux'",
+    "delocate; sys_platform=='darwin'",
     "pip-tools",
     "pipdeptree",
     "twine",
@@ -75,14 +56,8 @@ exclude='''
 '''
 include='.pyi?$'
 line-length=88
-source=[
-    'examples',
-    'patchmatch',
-]
-target-version=[
-    'py310',
-    'py39',
-]
+source=['examples', 'patchmatch']
+target-version=['py39']
 
 [tool.isort]
 profile="black"
