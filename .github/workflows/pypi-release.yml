@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'patchmatch/__init__.py'
+  pull_request:
   workflow_dispatch:
 
 jobs:
