@@ -39,6 +39,7 @@ include=["patchmatch", "patchmatch.csrc"]
     "pipdeptree",
     "twine",
 ]
+"test"=["pytest", "pytest-coverage"]
 
 [tool.black]
 exclude='''
@@ -61,3 +62,14 @@ target-version=['py39']
 
 [tool.isort]
 profile="black"
+
+[tool.pytest.ini_options]
+addopts=[
+    "--cov-branch",
+    "--cov-report=term:skip-covered",
+    "--cov=patchmatch",
+    "--junitxml=junit/test-results.xml",
+]
+minversion="6.0"
+python_files=["test_*.py"]
+testpaths=["tests"]
