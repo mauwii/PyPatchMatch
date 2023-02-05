@@ -122,16 +122,17 @@ def download_url_to_file(url, dst, hash_prefix=None, progress=True):
 
 
 try:
-    # Get release information from github
-    release_response = urlopen(release_url)
-    release_json = json.loads(release_response.read())
-
+    # Get assets
+    pypatchmatch_lib = None
     # Filter to assets for platform
     platform_slug = f"{platform.system().lower()}_{platform.machine().lower()}"
-    platform_assets = list(
-        filter(lambda a: platform_slug in a["name"], release_json["assets"])
-    )
     if "windows" in platform_slug:
+        # Get release information from github
+        release_response = urlopen(release_url)
+        release_json = json.loads(release_response.read())
+        platform_assets = list(
+            filter(lambda a: platform_slug in a["name"], release_json["assets"])
+        )
         platform_assets.extend(
             filter(
                 lambda a: a["name"] == "opencv_world460.dll",
@@ -139,23 +140,21 @@ try:
             )
         )
 
-    # Get assets
-    pypatchmatch_lib = None
-    for asset in platform_assets:
-        lib_name = asset["name"]
-        lib_url = asset["browser_download_url"]
+        for asset in platform_assets:
+            lib_name = asset["name"]
+            lib_url = asset["browser_download_url"]
 
-        if not os.path.exists(osp.join(osp.dirname(__file__), lib_name)):
-            logger.info(
-                f"Downloading patchmatch libraries from github release {lib_url}"
-            )
-            download_url_to_file(
-                url=lib_url, dst=osp.join(osp.dirname(__file__), lib_name)
-            )
+            if not os.path.exists(osp.join(osp.dirname(__file__), lib_name)):
+                logger.info(
+                    f"Downloading patchmatch libraries from github release {lib_url}"
+                )
+                download_url_to_file(
+                    url=lib_url, dst=osp.join(osp.dirname(__file__), lib_name)
+                )
 
-        # Store patchmatch library name
-        if lib_name.startswith("libpatchmatch_"):
-            pypatchmatch_lib = lib_name
+            # Store patchmatch library name
+            if lib_name.startswith("libpatchmatch_"):
+                pypatchmatch_lib = lib_name
 
     # Compile if we didn't find a platform-compatible version (and it's not compiled already)
     if pypatchmatch_lib is None:
