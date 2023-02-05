@@ -1,6 +1,6 @@
 [build-system]
 build-backend="setuptools.build_meta"
-requires=["setuptools >= 65.7.0", "wheel"]
+requires=["setuptools == 67.1.0", "wheel"]
 
 [project]
 authors=[
@@ -34,9 +34,11 @@ include=["patchmatch", "patchmatch.csrc"]
 "dev"=["black", "flake8", "flake8-black", "isort", "pre-commit", "pylance"]
 "dist"=[
     "auditwheel; sys_platform=='linux'",
+    "build",
     "delocate; sys_platform=='darwin'",
     "pip-tools",
     "pipdeptree",
+    "requests",
     "twine",
 ]
 "test"=["pytest", "pytest-coverage"]
@@ -64,12 +66,7 @@ target-version=['py39']
 profile="black"
 
 [tool.pytest.ini_options]
-addopts=[
-    "--cov-branch",
-    "--cov-report=term:skip-covered",
-    "--cov=patchmatch",
-    "--junitxml=junit/test-results.xml",
-]
+addopts=["--cov-branch", "--cov-report=term:skip-covered", "--cov=patchmatch"]
 minversion="6.0"
 python_files=["test_*.py"]
 testpaths=["tests"]

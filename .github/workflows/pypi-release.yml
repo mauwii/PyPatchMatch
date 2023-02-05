@@ -8,6 +8,7 @@ on:
 
 jobs:
   release:
+    if: github.repository == 'mauwii/PyPatchMatch'
     runs-on: ubuntu-22.04
     env:
       TWINE_USERNAME: __token__
@@ -17,15 +18,30 @@ jobs:
       - name: checkout sources
         uses: actions/checkout@v3
 
+      - name: setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
       - name: install deps
-        run: pip install --upgrade build twine
+        run: pip install --upgrade ".[dist]"
 
       - name: build package
         run: python3 -m build
 
       - name: check distribution
+        if: github.ref == 'refs/heads/main'
         run: twine check dist/*
 
+      - name: check PyPI versions
+        run: |
+          python -c "\
+          import scripts.pypi_helper; \
+          EXISTS=scripts.pypi_helper.local_on_pypi(); \
+          print(f'PACKAGE_EXISTS={EXISTS}')" >> $GITHUB_ENV
+
       - name: upload package
-        if: github.ref == 'refs/heads/main'
+        if: env.PACKAGE_EXISTS == 'False' && env.TWINE_PASSWORD != ''
         run: twine upload dist/*
