@@ -18,7 +18,6 @@
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter",
         "editor.formatOnSave": true,
-        "editor.formatOnSaveMode": "modificationsIfAvailable"
     },
     "[toml]": {
         "editor.defaultFormatter": "tamasfe.even-better-toml",
