@@ -1,7 +1,11 @@
-/patchmatch/build/
-/patchmatch/*.so
-__pycache__
-*.py[cod]
+**/build/
+**/dist/
+**/__pycache__/
+**/*.py[cod]
 .scratch/
-*.dll
-*.so
+**/*.dll
+**/*.so
+
+# test results files
+**/.coverage
+**/test-results.xml
