@@ -10,5 +10,7 @@
         "ms-python.vscode-pylance",
         "redhat.vscode-yaml",
         "tamasfe.even-better-toml",
+        "github.vscode-github-actions",
+        "esbenp.prettier-vscode"
     ]
 }

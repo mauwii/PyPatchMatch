@@ -16,7 +16,7 @@ dynamic=["version"]
 license={file="LICENSE"}
 name='PyPatchMatch'
 readme={content-type="text/markdown", file="README.md"}
-requires-python=">=3.9"
+requires-python=">=3.9,<3.11"
 
 [project.urls]
 'Source Code'='https://github.com/mauwii/PyPatchMatch'
@@ -47,13 +47,9 @@ include=["patchmatch", "patchmatch.csrc"]
 exclude='''
 /(
     .git
-    | .hg
-    | .mypy_cache
-    | .tox
     | .venv
-    | _build
-    | buck-out
     | build
+    | csrc
     | dist
 )/
 '''
@@ -61,6 +57,9 @@ include='.pyi?$'
 line-length=88
 source=['examples', 'patchmatch']
 target-version=['py39']
+
+[tool.coverage.report]
+fail_under=75
 
 [tool.isort]
 profile="black"
