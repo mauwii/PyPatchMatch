@@ -18,7 +18,6 @@ libpatchmatch = shared_library('patchmatch',
   csrc_files,
   install : true,
   install_dir: py.get_install_dir() / 'patchmatch',
-  soversion : '0',
   dependencies: [opencv_dep])
 
 py.install_sources(['patchmatch/__init__.py', 'patchmatch/patch_match.py'], subdir: 'patchmatch')
