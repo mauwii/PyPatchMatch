@@ -16,7 +16,7 @@ dynamic=["version"]
 license={file="LICENSE"}
 name='PyPatchMatch'
 readme={content-type="text/markdown", file="README.md"}
-requires-python=">=3.9,<3.11"
+requires-python=">=3.9,<3.13"
 
 [project.urls]
 'Source Code'='https://github.com/mauwii/PyPatchMatch'
