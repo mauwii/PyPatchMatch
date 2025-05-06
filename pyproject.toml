@@ -1,6 +1,6 @@
 [build-system]
-build-backend="setuptools.build_meta"
-requires=["setuptools == 67.1.0", "wheel"]
+build-backend = 'mesonpy'
+requires = ['meson-python']
 
 [project]
 authors=[
@@ -20,15 +20,6 @@ requires-python=">=3.9,<3.13"
 
 [project.urls]
 'Source Code'='https://github.com/mauwii/PyPatchMatch'
-
-[tool.setuptools.dynamic]
-version={attr="patchmatch.__version__"}
-
-[tool.setuptools.packages.find]
-include=["patchmatch", "patchmatch.csrc"]
-
-[tool.setuptools.package-data]
-"patchmatch"=['Makefile', 'csrc/*', 'travis.sh']
 
 [project.optional-dependencies]
 "dev"=["black", "flake8", "flake8-black", "isort", "pre-commit", "pylance"]
