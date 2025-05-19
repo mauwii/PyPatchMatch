@@ -13,6 +13,7 @@
 
 
 import ctypes
+import importlib.resources
 import json
 import logging
 import os
@@ -156,38 +157,18 @@ try:
             if lib_name.startswith("libpatchmatch_"):
                 pypatchmatch_lib = lib_name
 
-    # Compile if we didn't find a platform-compatible version (and it's not compiled already)
     if pypatchmatch_lib is None:
         pypatchmatch_lib = "libpatchmatch.so"
-        if not os.path.exists(osp.join(osp.dirname(__file__), pypatchmatch_lib)):
-            import subprocess
 
-            # Streams make will write to
-            # TODO: use user-configured log-level to control this
-            make_stdout = subprocess.DEVNULL
-            make_stderr = subprocess.DEVNULL
+    # use importlib to find the resolve the library location so it works under
+    # both editable and built installations
+    patchmatch_filename = importlib.resources.files(__package__).joinpath(pypatchmatch_lib)
+    if not os.path.exists(patchmatch_filename):
+        raise RuntimeError(f"library not found at {patchmatch_filename}")
+    else:
+        logger.debug(f"library found at {patchmatch_filename}")
 
-            if os.environ.get("INVOKEAI_DEBUG_PATCHMATCH"):
-                make_stdout = None
-                make_stderr = None
-
-            logger.info(
-                'Compiling and loading c extensions from "{}".'.format(
-                    osp.realpath(osp.dirname(__file__))
-                )
-            )
-            # subprocess.check_call(['./travis.sh'], cwd=osp.dirname(__file__))
-            # TODO: pipe output to logger instead of just swallowing it
-            subprocess.run(
-                "make clean && make",
-                cwd=osp.dirname(__file__),
-                shell=True,
-                check=True,
-                stdout=make_stdout,
-                stderr=make_stderr,
-            )
-
-    PMLIB = ctypes.CDLL(osp.join(osp.dirname(__file__), pypatchmatch_lib))
+    PMLIB = ctypes.CDLL(patchmatch_filename)
     patchmatch_available = True
 
     PMLIB.PM_set_random_seed.argtypes = [ctypes.c_uint]
