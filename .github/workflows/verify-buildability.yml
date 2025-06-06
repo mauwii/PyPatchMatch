@@ -76,7 +76,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: install PyPatchMatch
-        run: pip3 install --upgrade .
+        run: pip3 install --upgrade . --verbose
 
       - name: run py_example.py
         run: python3 examples/py_example.py
