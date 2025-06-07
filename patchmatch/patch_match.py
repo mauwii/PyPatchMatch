@@ -156,6 +156,8 @@ try:
             # Store patchmatch library name
             if lib_name.startswith("libpatchmatch_"):
                 pypatchmatch_lib = lib_name
+    elif "darwin" in platform_slug:
+        pypatchmatch_lib = "libpatchmatch.dylib"
 
     if pypatchmatch_lib is None:
         pypatchmatch_lib = "libpatchmatch.so"
