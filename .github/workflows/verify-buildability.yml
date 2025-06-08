@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PIP_USE_PEP517: '1'
+      REQUIREMENTS_FILE: 'requirements.dev.txt'
     steps:
       - name: Checkout sources
         id: checkout-sources
@@ -26,8 +27,14 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      - name: install pip-tools
+        run: pip3 install pip-tools
+
+      - name: create dev requirements
+        run: pip-compile --upgrade --extra=dev -o $REQUIREMENTS_FILE
+
       - name: install dev dependencies
-        run: pip3 install ".[dev]"
+        run: pip3 install -r $REQUIREMENTS_FILE
 
       - name: run pre-commit-check
         run: >
