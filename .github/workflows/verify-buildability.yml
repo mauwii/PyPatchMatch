@@ -33,7 +33,7 @@ jobs:
       - name: create dev requirements
         run: pip-compile --upgrade --extra=dev -o $REQUIREMENTS_FILE
 
-      - name: install dev dependencies
+      - name: install dev requirements
         run: pip3 install -r $REQUIREMENTS_FILE
 
       - name: run pre-commit-check
