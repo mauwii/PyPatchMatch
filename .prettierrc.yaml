@@ -1,5 +1,0 @@
-editorconfig: true
-overrides:
-  - files: '*.{yaml,yml}'
-    options:
-      singleQuote: true

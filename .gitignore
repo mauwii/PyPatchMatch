@@ -9,3 +9,18 @@
 # test results files
 **/.coverage
 **/test-results.xml
+
+# build artifacts
+**/build/obj/
+**/*.dylib
+*.egg-info/
+
+# tooling caches / environments
+.venv/
+.ruff_cache/
+.pytest_cache/
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
