@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blueviolet.svg)](https://github.com/mauwii/PyPatchMatch/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/PyPatchMatch)](https://pypi.org/project/PyPatchMatch/)
 [![Downloads](https://static.pepy.tech/badge/pypatchmatch)](https://pepy.tech/project/pypatchmatch)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 This library implements the PatchMatch based inpainting algorithm. It provides both C++
 and Python interfaces. This implementation is heavily based on the implementation by
@@ -22,7 +22,7 @@ import patch_match
 
 if patch_match.patchmatch_available:
     image = ...  # either a numpy ndarray or a PIL Image object.
-    mask = ...   # either a numpy ndarray or a PIL Image object.
+    mask = ...  # either a numpy ndarray or a PIL Image object.
     result = patch_match.inpaint(image, mask, patch_size=3)
 ```
 
@@ -39,6 +39,16 @@ int main() {
 
     return 0;
 }
+```
+
+## Development
+
+The project is managed with [uv](https://docs.astral.sh/uv/):
+
+```sh
+uv sync                        # create .venv and install dev dependencies
+uv run pre-commit install      # enable ruff and the other hooks on commit
+uv run pytest                  # run the test suite
 ```
 
 ## README and COPYRIGHT by Younesse ANDAM

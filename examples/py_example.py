@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-# -*- coding: utf-8 -*-
 # File   : test.py
 # Author : Jiayuan Mao
 # Email  : maojiayuan@gmail.com

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # File   : patch_match.py
 # Author : Jiayuan Mao
 # Email  : maojiayuan@gmail.com
@@ -20,7 +19,6 @@ import os.path as osp
 import platform
 import shutil
 import tempfile
-from typing import Optional, Union
 from urllib.request import Request, urlopen
 
 import numpy as np
@@ -51,7 +49,7 @@ stream_handler.setFormatter(stream_format)
 logger.addHandler(stream_handler)
 
 
-__all__ = ["set_random_seed", "set_verbose", "inpaint", "inpaint_regularity"]
+__all__ = ["inpaint", "inpaint_regularity", "set_random_seed", "set_verbose"]
 
 
 class CShapeT(ctypes.Structure):
@@ -96,7 +94,7 @@ def download_url_to_file(url, dst, hash_prefix=None, progress=True):
     # being overridden by a broken download.
     dst = os.path.expanduser(dst)
     dst_dir = os.path.dirname(dst)
-    f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)
+    f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)  # noqa: SIM115
 
     try:
         with tqdm(
@@ -172,9 +170,7 @@ try:
                 make_stderr = None
 
             logger.info(
-                'Compiling and loading c extensions from "{}".'.format(
-                    osp.realpath(osp.dirname(__file__))
-                )
+                f'Compiling and loading c extensions from "{osp.realpath(osp.dirname(__file__))}".'
             )
             # subprocess.check_call(['./travis.sh'], cwd=osp.dirname(__file__))
             # TODO: pipe output to logger instead of just swallowing it
@@ -222,10 +218,10 @@ try:
         PMLIB.PM_set_verbose(ctypes.c_int(verbose))
 
     def inpaint(
-        image: Union[np.ndarray, Image.Image],
-        mask: Optional[Union[np.ndarray, Image.Image]] = None,
+        image: np.ndarray | Image.Image,
+        mask: np.ndarray | Image.Image | None = None,
         *,
-        global_mask: Optional[Union[np.ndarray, Image.Image]] = None,
+        global_mask: np.ndarray | Image.Image | None = None,
         patch_size: int = 15,
     ) -> np.ndarray:
         """
@@ -277,11 +273,11 @@ try:
         return ret_npmat
 
     def inpaint_regularity(
-        image: Union[np.ndarray, Image.Image],
-        mask: Optional[Union[np.ndarray, Image.Image]],
+        image: np.ndarray | Image.Image,
+        mask: np.ndarray | Image.Image | None,
         ijmap: np.ndarray,
         *,
-        global_mask: Optional[Union[np.ndarray, Image.Image]] = None,
+        global_mask: np.ndarray | Image.Image | None = None,
         patch_size: int = 15,
         guide_weight: float = 0.25,
     ) -> np.ndarray:
