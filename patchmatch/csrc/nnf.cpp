@@ -287,16 +287,17 @@ int RegularityGuidedPatchDistanceMetricV2::operator()(const MaskedImage &source,
     if (target_y < 0 || target_y >= target.size().height || target_x < 0 || target_x >= target.size().width)
         return PatchDistanceMetric::kDistanceScale;
 
-    int source_scale = m_ijmap.size().height / source.size().height;
-    int target_scale = m_ijmap.size().height / target.size().height;
-
-    // fprintf(stderr, "RegularityGuidedPatchDistanceMetricV2 %d %d %d %d\n", source_y * source_scale, m_ijmap.size().height, source_x * source_scale, m_ijmap.size().width);
+    // Map pyramid-level coordinates to the full-resolution ijmap. Height and width are
+    // scaled independently and clamped, since the pyramid sizes are rounded per axis.
+    const int map_h = m_ijmap.size().height, map_w = m_ijmap.size().width;
+    auto map_y = [&](const MaskedImage &img, int y) { return std::min(y * map_h / img.size().height, map_h - 1); };
+    auto map_x = [&](const MaskedImage &img, int x) { return std::min(x * map_w / img.size().width, map_w - 1); };
 
     double score1 = PatchDistanceMetric::kDistanceScale;
     if (!source.is_globally_masked(source_y, source_x) && !target.is_globally_masked(target_y, target_x))
     {
-        auto source_ij = m_ijmap.ptr<float>(source_y * source_scale, source_x * source_scale);
-        auto target_ij = m_ijmap.ptr<float>(target_y * target_scale, target_x * target_scale);
+        auto source_ij = m_ijmap.ptr<float>(map_y(source, source_y), map_x(source, source_x));
+        auto target_ij = m_ijmap.ptr<float>(map_y(target, target_y), map_x(target, target_x));
 
         float di = fabs(source_ij[0] - target_ij[0]);
         if (di > 0.5)
