@@ -80,7 +80,7 @@ void Inpainting::_initialize_pyramid()
 
 cv::Mat Inpainting::run(bool verbose, bool verbose_visualize, unsigned int random_seed)
 {
-    srand(random_seed);
+    NearestNeighborField::seed_random(random_seed);
     const int nr_levels = m_pyramid.size();
 
     MaskedImage source, target;

@@ -3,6 +3,7 @@
 import ctypes
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pytest
@@ -106,6 +107,17 @@ def test_inpaint_is_deterministic_with_seed(image):
     patchmatch.set_random_seed(42)
     second = patchmatch.inpaint(image, patch_size=3)
     np.testing.assert_array_equal(first, second)
+
+
+def test_concurrent_inpaint_is_deterministic(image):
+    # the native code runs without the GIL, so the threads really overlap
+    expected = patchmatch.inpaint(image, patch_size=3)
+    with ThreadPoolExecutor(4) as pool:
+        results = list(
+            pool.map(lambda _: patchmatch.inpaint(image, patch_size=3), range(16))
+        )
+    for result in results:
+        np.testing.assert_array_equal(result, expected)
 
 
 @pytest.mark.parametrize("verbose", [True, False])

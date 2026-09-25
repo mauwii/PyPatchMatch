@@ -89,6 +89,9 @@ public:
 
     void minimize(int nr_pass);
 
+    // Seeds the random search of the calling thread.
+    static void seed_random(unsigned int seed);
+
 private:
     inline int _distance(int source_y, int source_x, int target_y, int target_x)
     {

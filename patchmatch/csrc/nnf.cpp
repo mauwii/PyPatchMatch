@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <iostream>
 #include <cmath>
+#include <random>
 
 #include "masked_image.h"
 #include "nnf.h"
@@ -15,6 +16,24 @@ template <typename T>
 T clamp(T value, T min_value, T max_value)
 {
     return std::min(std::max(value, min_value), max_value);
+}
+
+namespace
+{
+    // One generator per thread, so concurrent inpaintings with the same seed give the
+    // same results. The modulo instead of std::uniform_int_distribution keeps the
+    // sequence identical on all platforms.
+    thread_local std::mt19937 random_engine;
+
+    inline int random_int(int n)
+    {
+        return static_cast<int>(random_engine() % static_cast<unsigned int>(n));
+    }
+}
+
+void NearestNeighborField::seed_random(unsigned int seed)
+{
+    random_engine.seed(seed);
 }
 
 void NearestNeighborField::_randomize_field(int max_retry, bool reset)
@@ -38,8 +57,8 @@ void NearestNeighborField::_randomize_field(int max_retry, bool reset)
             int i_target = 0, j_target = 0;
             for (int t = 0; t < max_retry; ++t)
             {
-                i_target = rand() % this_target_size.height;
-                j_target = rand() % this_target_size.width;
+                i_target = random_int(this_target_size.height);
+                j_target = random_int(this_target_size.width);
                 if (m_target.is_globally_masked(i_target, j_target))
                     continue;
 
@@ -139,8 +158,8 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
     int random_scale = (std::min(this_target_size.height, this_target_size.width) - 1) / 2;
     while (random_scale > 0)
     {
-        int yp = this_ptr[0] + (rand() % (2 * random_scale + 1) - random_scale);
-        int xp = this_ptr[1] + (rand() % (2 * random_scale + 1) - random_scale);
+        int yp = this_ptr[0] + (random_int(2 * random_scale + 1) - random_scale);
+        int xp = this_ptr[1] + (random_int(2 * random_scale + 1) - random_scale);
         yp = clamp(yp, 0, target_size().height - 1);
         xp = clamp(xp, 0, target_size().width - 1);
 
