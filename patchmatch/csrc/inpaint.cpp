@@ -1,8 +1,9 @@
 #include <algorithm>
 #include <iostream>
-#include <opencv2/imgcodecs.hpp>
+#ifdef PATCHMATCH_WITH_HIGHGUI
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
+#endif
 
 #include "inpaint.h"
 
@@ -48,13 +49,13 @@ namespace
  */
 
 Inpainting::Inpainting(cv::Mat image, cv::Mat mask, const PatchDistanceMetric *metric)
-    : m_initial(image, mask), m_distance_metric(metric), m_pyramid(), m_source2target(), m_target2source()
+    : m_initial(image, mask), m_pyramid(), m_source2target(), m_target2source(), m_distance_metric(metric)
 {
     _initialize_pyramid();
 }
 
 Inpainting::Inpainting(cv::Mat image, cv::Mat mask, cv::Mat global_mask, const PatchDistanceMetric *metric)
-    : m_initial(image, mask, global_mask), m_distance_metric(metric), m_pyramid(), m_source2target(), m_target2source()
+    : m_initial(image, mask, global_mask), m_pyramid(), m_source2target(), m_target2source(), m_distance_metric(metric)
 {
     _initialize_pyramid();
 }
@@ -104,6 +105,7 @@ cv::Mat Inpainting::run(bool verbose, bool verbose_visualize, unsigned int rando
         if (verbose)
             std::cerr << "Initialization done." << std::endl;
 
+#ifdef PATCHMATCH_WITH_HIGHGUI
         if (verbose_visualize)
         {
             auto visualize_size = m_initial.size();
@@ -115,6 +117,9 @@ cv::Mat Inpainting::run(bool verbose, bool verbose_visualize, unsigned int rando
             cv::imshow("Target", target_visualize);
             cv::waitKey(0);
         }
+#else
+        (void)verbose_visualize;
+#endif
 
         target = _expectation_maximization(source, target, level, verbose);
     }

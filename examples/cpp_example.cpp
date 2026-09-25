@@ -1,6 +1,5 @@
 #include <iostream>
-#include <opencv2/imgcodecs/imgcodecs.hpp>
-#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgcodecs.hpp>
 
 #include "masked_image.h"
 #include "nnf.h"
@@ -25,10 +24,8 @@ int main()
     }
 
     auto metric = PatchSSDDistanceMetric(3);
-    auto result = Inpainting(source, mask, &metric).run(true, true);
-    // cv::imwrite("./images/forest_recovered.bmp", result);
-    // cv::imshow("Result", result);
-    // cv::waitKey();
+    auto result = Inpainting(source, mask, &metric).run(true);
+    cv::imwrite("./images/forest_recovered.bmp", result);
 
     return 0;
 }
