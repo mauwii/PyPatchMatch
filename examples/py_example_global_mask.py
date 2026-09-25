@@ -15,8 +15,9 @@ IMAGES = Path(__file__).parent / "images"
 if __name__ == "__main__":
     patchmatch.set_verbose(True)
     source = np.array(Image.open(IMAGES / "forest_pruned.bmp"))
-    source[:100, :100] = 255
+    # The global mask covers the plant at the bottom left: it stays in the image, but
+    # is not used as a source, so it is not copied into the holes.
     global_mask = np.zeros_like(source[..., 0])
-    global_mask[:100, :100] = 1
+    global_mask[290:, 100:180] = 1
     result = patchmatch.inpaint(source, global_mask=global_mask, patch_size=3)
     Image.fromarray(result).save(IMAGES / "forest_recovered.bmp")

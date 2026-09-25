@@ -61,3 +61,16 @@ install(TARGETS patchmatch
   LIBRARY DESTINATION patchmatch
   RUNTIME DESTINATION patchmatch
 )
+
+# A static OpenCV becomes part of the library, so a wheel has to ship its licenses,
+# which scripts/build_opencv.py collects in <prefix>/licenses.
+if(DEFINED SKBUILD_METADATA_DIR AND NOT OpenCV_SHARED)
+  set(PATCHMATCH_OPENCV_LICENSES "${OpenCV_INSTALL_PATH}/licenses")
+  if(EXISTS "${PATCHMATCH_OPENCV_LICENSES}/opencv-LICENSE")
+    install(DIRECTORY "${PATCHMATCH_OPENCV_LICENSES}/"
+      DESTINATION "${SKBUILD_METADATA_DIR}/licenses/opencv")
+  else()
+    message(WARNING "No OpenCV licenses in ${PATCHMATCH_OPENCV_LICENSES}, "
+      "the wheel will not include them")
+  endif()
+endif()

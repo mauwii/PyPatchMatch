@@ -25,9 +25,16 @@ def surrounding(mask: np.ndarray, width: int = 10) -> np.ndarray:
     return (np.array(grown) > 0) & ~mask
 
 
-def assert_plausible_fill(source: np.ndarray, result: np.ndarray) -> None:
-    """Check an inpainting result of ``source`` without a ground truth image."""
-    holes = white_pixels(source)
+def assert_plausible_fill(
+    source: np.ndarray, result: np.ndarray, excluded: np.ndarray | None = None
+) -> None:
+    """Check an inpainting result of ``source`` without a ground truth image.
+
+    ``excluded`` marks the pixels of a global mask, which are not filled.
+    """
+    if excluded is None:
+        excluded = np.zeros(source.shape[:2], dtype=bool)
+    holes = white_pixels(source) & ~excluded
     assert holes.any()
     assert result.shape == source.shape
     assert result.dtype == np.uint8
@@ -39,7 +46,7 @@ def assert_plausible_fill(source: np.ndarray, result: np.ndarray) -> None:
     assert outside < 1, outside
 
     # the filling blends in with its surroundings
-    band = surrounding(holes)
+    band = surrounding(holes) & ~excluded
     color_diff = np.abs(result[holes].mean(axis=0) - source[band].mean(axis=0))
     assert color_diff.max() < 10, color_diff
 
@@ -79,15 +86,37 @@ def test_remove_white_regions(pruned_image, tmp_path, as_array):
 
 
 def test_global_mask(pruned_image):
-    """examples/py_example_global_mask.py: extra hole excluded as patch source."""
+    """examples/py_example_global_mask.py: the globally masked plant is kept."""
     source = np.array(pruned_image)
-    source[:100, :100] = 255
     global_mask = np.zeros_like(source[..., 0])
-    global_mask[:100, :100] = 1
+    global_mask[290:, 100:180] = 1
 
     result = patchmatch.inpaint(source, global_mask=global_mask, patch_size=3)
 
-    assert_plausible_fill(source, result)
+    excluded = global_mask.astype(bool)
+    np.testing.assert_array_equal(result[excluded], source[excluded])
+    assert_plausible_fill(source, result, excluded)
+
+
+def test_global_mask_is_not_used_as_source(pruned_image):
+    """A red block next to a hole fills it, unless the block is globally masked."""
+    source = np.array(pruned_image)
+    source[200:300, 20:120] = (255, 0, 0)
+    mask = np.zeros(source.shape[:2], dtype=np.uint8)
+    mask[210:290, 120:160] = 1
+    global_mask = np.zeros_like(mask)
+    global_mask[200:300, 20:120] = 1
+
+    def red_in_hole(result: np.ndarray) -> bool:
+        red = (result[..., 0] > 150) & (result[..., 1] < 80) & (result[..., 2] < 80)
+        return bool(red[mask == 1].any())
+
+    assert red_in_hole(patchmatch.inpaint(source, mask, patch_size=3))
+
+    result = patchmatch.inpaint(source, mask, global_mask=global_mask, patch_size=3)
+    assert not red_in_hole(result)
+    excluded = global_mask == 1
+    np.testing.assert_array_equal(result[excluded], source[excluded])
 
 
 @pytest.mark.parametrize("hole_value", [1, 255])

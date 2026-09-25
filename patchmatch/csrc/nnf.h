@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cassert>
+#include <cmath>
 #include <opencv2/core.hpp>
 #include "masked_image.h"
 
@@ -86,6 +88,9 @@ public:
     }
 
     void minimize(int nr_pass);
+
+    // Seeds the random search of the calling thread.
+    static void seed_random(unsigned int seed);
 
 private:
     inline int _distance(int source_y, int source_x, int target_y, int target_x)

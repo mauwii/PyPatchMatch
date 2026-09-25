@@ -3,7 +3,7 @@
 The patchmatch library only needs opencv_core. Linking it statically keeps the
 wheels small and free of OpenCV's GUI/codec dependencies.
 
-Usage: python build_opencv.py [PREFIX]  (default: $OpenCV_ROOT)
+Usage: python build_opencv.py  (installs into $OpenCV_ROOT)
 """
 
 import os
@@ -36,9 +36,14 @@ CMAKE_OPTIONS = {
     "BUILD_opencv_apps": "OFF",
     "BUILD_opencv_python3": "OFF",
     "OPENCV_GENERATE_PKGCONFIG": "OFF",
+    # CMakeLists.txt ships the licenses from here with the wheels
+    "OPENCV_LICENSES_INSTALL_PATH": "licenses",
     # only core is built, so disable every optional backend and codec
     "WITH_ADE": "OFF",
     "WITH_AVIF": "OFF",
+    # ARM HAL libraries, patchmatch uses no function they accelerate
+    "WITH_CAROTENE": "OFF",
+    "WITH_KLEIDICV": "OFF",
     "WITH_EIGEN": "OFF",
     "WITH_FFMPEG": "OFF",
     "WITH_GSTREAMER": "OFF",
@@ -84,8 +89,10 @@ def find_cmake() -> str:
 
 def main() -> None:
     # OpenCV_ROOT is the variable CMake's find_package(OpenCV) looks for.
-    default = os.environ.get("OpenCV_ROOT")  # noqa: SIM112
-    prefix = Path(sys.argv[1] if len(sys.argv) > 1 else default)
+    root = os.environ.get("OpenCV_ROOT")  # noqa: SIM112
+    if not root:
+        sys.exit("OpenCV_ROOT must be set to the installation prefix")
+    prefix = Path(root)
     if any(prefix.rglob("OpenCVConfig.cmake")):
         print(f"OpenCV already installed in {prefix}")
         return
@@ -114,6 +121,11 @@ def main() -> None:
             [cmake, "--build", build, "--config", "Release", "--parallel"], check=True
         )
         subprocess.run([cmake, "--install", build, "--config", "Release"], check=True)
+
+        # OpenCV installs only the licenses of its 3rdparty code
+        licenses = prefix / CMAKE_OPTIONS["OPENCV_LICENSES_INSTALL_PATH"]
+        licenses.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source / "LICENSE", licenses / "opencv-LICENSE")
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 import ctypes
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pytest
@@ -83,9 +84,10 @@ def test_inpaint_explicit_mask(image, hole_mask):
 def test_inpaint_global_mask(image, hole_mask):
     global_mask = np.zeros_like(hole_mask)
     global_mask[:8] = 1
-    assert_filled(
-        patchmatch.inpaint(image, global_mask=global_mask, patch_size=3), image
-    )
+    result = patchmatch.inpaint(image, global_mask=global_mask, patch_size=3)
+    assert_filled(result, image)
+    # excluded pixels keep their values instead of the zeros of the pyramid
+    np.testing.assert_array_equal(result[:8], image[:8])
 
 
 @pytest.mark.parametrize("patch_size", [1, 3, 7])
@@ -106,6 +108,17 @@ def test_inpaint_is_deterministic_with_seed(image):
     patchmatch.set_random_seed(42)
     second = patchmatch.inpaint(image, patch_size=3)
     np.testing.assert_array_equal(first, second)
+
+
+def test_concurrent_inpaint_is_deterministic(image):
+    # the native code runs without the GIL, so the threads really overlap
+    expected = patchmatch.inpaint(image, patch_size=3)
+    with ThreadPoolExecutor(4) as pool:
+        results = list(
+            pool.map(lambda _: patchmatch.inpaint(image, patch_size=3), range(16))
+        )
+    for result in results:
+        np.testing.assert_array_equal(result, expected)
 
 
 @pytest.mark.parametrize("verbose", [True, False])
@@ -230,14 +243,27 @@ def test_mask_size_must_match_image(image, ijmap, func, argument):
         func(image, **kwargs)
 
 
+@pytest.mark.parametrize("patch_size", [0, -1])
+@pytest.mark.parametrize(
+    "func",
+    [patchmatch.inpaint, patchmatch.inpaint_regularity],
+    ids=lambda f: f.__name__,
+)
+def test_invalid_patch_size(image, ijmap, func, patch_size):
+    kwargs = {"ijmap": ijmap} if func is patchmatch.inpaint_regularity else {}
+    with pytest.raises(ValueError, match="patch_size"):
+        func(image, None, patch_size=patch_size, **kwargs)
+
+
 @pytest.mark.parametrize(
     "bad_ijmap",
     [
         np.zeros((HEIGHT, WIDTH, 3), dtype=np.float64),
         np.zeros((HEIGHT, WIDTH, 2), dtype=np.float32),
+        np.zeros((0, WIDTH, 3), dtype=np.float32),
         [[[0.0, 0.0, 0.0]]],
     ],
-    ids=["float64", "2-channel", "list"],
+    ids=["float64", "2-channel", "empty", "list"],
 )
 def test_inpaint_regularity_invalid_ijmap(image, bad_ijmap):
     with pytest.raises(ValueError, match="ijmap"):

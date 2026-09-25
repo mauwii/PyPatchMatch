@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <opencv2/core.hpp>
 
 class MaskedImage
