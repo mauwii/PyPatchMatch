@@ -3,7 +3,7 @@
 The patchmatch library only needs opencv_core. Linking it statically keeps the
 wheels small and free of OpenCV's GUI/codec dependencies.
 
-Usage: python build_opencv.py [PREFIX]  (default: $OpenCV_ROOT)
+Usage: python build_opencv.py  (installs into $OpenCV_ROOT)
 """
 
 import os
@@ -89,8 +89,10 @@ def find_cmake() -> str:
 
 def main() -> None:
     # OpenCV_ROOT is the variable CMake's find_package(OpenCV) looks for.
-    default = os.environ.get("OpenCV_ROOT")  # noqa: SIM112
-    prefix = Path(sys.argv[1] if len(sys.argv) > 1 else default)
+    root = os.environ.get("OpenCV_ROOT")  # noqa: SIM112
+    if not root:
+        sys.exit("OpenCV_ROOT must be set to the installation prefix")
+    prefix = Path(root)
     if any(prefix.rglob("OpenCVConfig.cmake")):
         print(f"OpenCV already installed in {prefix}")
         return
