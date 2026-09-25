@@ -36,9 +36,14 @@ CMAKE_OPTIONS = {
     "BUILD_opencv_apps": "OFF",
     "BUILD_opencv_python3": "OFF",
     "OPENCV_GENERATE_PKGCONFIG": "OFF",
+    # CMakeLists.txt ships the licenses from here with the wheels
+    "OPENCV_LICENSES_INSTALL_PATH": "licenses",
     # only core is built, so disable every optional backend and codec
     "WITH_ADE": "OFF",
     "WITH_AVIF": "OFF",
+    # ARM HAL libraries, patchmatch uses no function they accelerate
+    "WITH_CAROTENE": "OFF",
+    "WITH_KLEIDICV": "OFF",
     "WITH_EIGEN": "OFF",
     "WITH_FFMPEG": "OFF",
     "WITH_GSTREAMER": "OFF",
@@ -114,6 +119,11 @@ def main() -> None:
             [cmake, "--build", build, "--config", "Release", "--parallel"], check=True
         )
         subprocess.run([cmake, "--install", build, "--config", "Release"], check=True)
+
+        # OpenCV installs only the licenses of its 3rdparty code
+        licenses = prefix / CMAKE_OPTIONS["OPENCV_LICENSES_INSTALL_PATH"]
+        licenses.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source / "LICENSE", licenses / "opencv-LICENSE")
 
 
 if __name__ == "__main__":
