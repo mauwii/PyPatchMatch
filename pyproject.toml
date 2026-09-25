@@ -1,6 +1,6 @@
 [build-system]
-build-backend = "setuptools.build_meta"
-requires = ["setuptools>=77"]
+build-backend = "scikit_build_core.build"
+requires = ["scikit-build-core>=0.11"]
 
 [project]
 name = "PyPatchMatch"
@@ -26,23 +26,56 @@ classifiers = [
     "Topic :: Multimedia :: Graphics",
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
-dependencies = ["numpy", "pillow", "tqdm"]
+dependencies = ["numpy", "pillow"]
 dynamic = ["version"]
 
 [project.urls]
 "Source Code" = "https://github.com/mauwii/PyPatchMatch"
 
 [dependency-groups]
-dev = ["pre-commit", "pytest", "pytest-cov", "ruff"]
+dev = [{ include-group = "test" }, "pre-commit", "ruff"]
+test = ["pytest", "pytest-cov"]
 
-[tool.setuptools.dynamic]
-version = { attr = "patchmatch.__version__" }
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+build-dir = "build/{wheel_tag}"
+# The library is loaded via ctypes and does not use the CPython ABI,
+# so one wheel per platform serves every Python version.
+wheel.py-api = "py3"
+wheel.packages = ["patchmatch"]
+wheel.exclude = ["patchmatch/csrc/**"]
+sdist.exclude = [".*", "examples", "tests", "uv.lock"]
 
-[tool.setuptools.packages.find]
-include = ["patchmatch", "patchmatch.csrc"]
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "patchmatch/__init__.py"
 
-[tool.setuptools.package-data]
-"patchmatch" = ["Makefile", "csrc/*"]
+[tool.cibuildwheel]
+# The wheels are Python-version independent (py3-none-<platform>), so each platform
+# is built and tested once; the CI workflow covers the other Python versions.
+build = "cp310-*"
+skip = "*-musllinux_*"
+test-groups = ["test"]
+test-command = "pytest {project}/tests --no-cov"
+before-all = "python {project}/scripts/build_opencv.py"
+environment = { OpenCV_ROOT = "/tmp/opencv" }
+
+[tool.cibuildwheel.linux]
+before-all = "/opt/python/cp312-cp312/bin/python {project}/scripts/build_opencv.py"
+
+[tool.cibuildwheel.macos]
+environment = { OpenCV_ROOT = "/tmp/opencv", MACOSX_DEPLOYMENT_TARGET = "11.0" }
+
+[tool.cibuildwheel.windows]
+environment = { OpenCV_ROOT = "C:/opencv" }
+
+[tool.uv]
+# Rebuild the native library whenever its sources change.
+cache-keys = [
+    { file = "CMakeLists.txt" },
+    { file = "patchmatch/csrc/*" },
+    { file = "pyproject.toml" },
+]
 
 [tool.ruff]
 extend-exclude = ["patchmatch/csrc"]

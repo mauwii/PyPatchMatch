@@ -1,0 +1,103 @@
+"""Build a minimal static OpenCV (core module only) for the release wheels.
+
+The patchmatch library only needs opencv_core. Linking it statically keeps the
+wheels small and free of OpenCV's GUI/codec dependencies.
+
+Usage: python build_opencv.py [PREFIX]  (default: $OpenCV_ROOT)
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import urllib.request
+from pathlib import Path
+
+OPENCV_VERSION = "4.14.0"
+OPENCV_URL = (
+    f"https://github.com/opencv/opencv/archive/refs/tags/{OPENCV_VERSION}.tar.gz"
+)
+
+CMAKE_OPTIONS = {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_POSITION_INDEPENDENT_CODE": "ON",
+    "BUILD_LIST": "core",
+    "BUILD_SHARED_LIBS": "OFF",
+    # patchmatch links the static MSVC runtime as well, see pyproject.toml
+    "BUILD_WITH_STATIC_CRT": "ON",
+    "BUILD_ZLIB": "ON",
+    "BUILD_TESTS": "OFF",
+    "BUILD_PERF_TESTS": "OFF",
+    "BUILD_EXAMPLES": "OFF",
+    "BUILD_DOCS": "OFF",
+    "BUILD_JAVA": "OFF",
+    "BUILD_opencv_apps": "OFF",
+    "BUILD_opencv_python3": "OFF",
+    "OPENCV_GENERATE_PKGCONFIG": "OFF",
+    # only core is built, so disable every optional backend and codec
+    "WITH_ADE": "OFF",
+    "WITH_AVIF": "OFF",
+    "WITH_EIGEN": "OFF",
+    "WITH_FFMPEG": "OFF",
+    "WITH_GSTREAMER": "OFF",
+    "WITH_GTK": "OFF",
+    "WITH_JASPER": "OFF",
+    "WITH_JPEG": "OFF",
+    "WITH_OPENEXR": "OFF",
+    "WITH_OPENGL": "OFF",
+    "WITH_OPENJPEG": "OFF",
+    "WITH_PNG": "OFF",
+    "WITH_PROTOBUF": "OFF",
+    "WITH_QT": "OFF",
+    "WITH_TIFF": "OFF",
+    "WITH_V4L": "OFF",
+    "WITH_WEBP": "OFF",
+    "WITH_IPP": "OFF",
+    "WITH_ITT": "OFF",
+    "WITH_LAPACK": "OFF",
+    "WITH_OPENCL": "OFF",
+    "WITH_OPENMP": "OFF",
+    "WITH_TBB": "OFF",
+}
+
+
+def find_cmake() -> str:
+    cmake = shutil.which("cmake")
+    if cmake:
+        return cmake
+    subprocess.run([sys.executable, "-m", "pip", "install", "cmake"], check=True)
+    scripts = Path(sys.executable).parent
+    return str(scripts / ("cmake.exe" if os.name == "nt" else "cmake"))
+
+
+def main() -> None:
+    # OpenCV_ROOT is the variable CMake's find_package(OpenCV) looks for.
+    default = os.environ.get("OpenCV_ROOT")  # noqa: SIM112
+    prefix = Path(sys.argv[1] if len(sys.argv) > 1 else default)
+    if any(prefix.rglob("OpenCVConfig.cmake")):
+        print(f"OpenCV already installed in {prefix}")
+        return
+
+    cmake = find_cmake()
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / "opencv.tar.gz"
+        print(f"Downloading {OPENCV_URL}", flush=True)
+        urllib.request.urlretrieve(OPENCV_URL, archive)
+        with tarfile.open(archive) as tar:
+            tar.extractall(tmp, filter="data")
+
+        source = Path(tmp) / f"opencv-{OPENCV_VERSION}"
+        build = Path(tmp) / "build"
+        options = {**CMAKE_OPTIONS, "CMAKE_INSTALL_PREFIX": prefix.as_posix()}
+        defines = [f"-D{key}={value}" for key, value in options.items()]
+        subprocess.run([cmake, "-S", source, "-B", build, *defines], check=True)
+        subprocess.run(
+            [cmake, "--build", build, "--config", "Release", "--parallel"], check=True
+        )
+        subprocess.run([cmake, "--install", build, "--config", "Release"], check=True)
+
+
+if __name__ == "__main__":
+    main()

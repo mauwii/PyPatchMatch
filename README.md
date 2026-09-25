@@ -10,43 +10,57 @@ and Python interfaces. This implementation is heavily based on the implementatio
 Younesse ANDAM: [younesse-cv/PatchMatch](https://github.com/younesse-cv/PatchMatch),
 with some bug fixes, and updates.
 
-## Usage
+## Installation
 
-You need to first install OpenCV to compile the C++ libraries. Then, run `make` to
-compile the shared library `libpatchmatch.so`.
-
-For Python users (example available at `examples/py_example.py`)
-
-```python
-import patch_match
-
-if patch_match.patchmatch_available:
-    image = ...  # either a numpy ndarray or a PIL Image object.
-    mask = ...  # either a numpy ndarray or a PIL Image object.
-    result = patch_match.inpaint(image, mask, patch_size=3)
+```sh
+pip install PyPatchMatch
 ```
 
-For C++ users (examples available at `examples/cpp_example.cpp`)
+Wheels for Linux, macOS and Windows ship the compiled library including the required
+OpenCV runtime, so no compiler or OpenCV installation is needed. On other platforms pip
+builds from the source distribution, which requires a C++17 compiler, CMake and the
+OpenCV development files (e.g. `apt install libopencv-dev` or `brew install opencv`).
+
+## Usage
+
+Python (see [examples/py_example.py](examples/py_example.py)):
+
+```python
+import patchmatch
+
+image = ...  # HxWx3 uint8 numpy array or PIL image
+mask = ...  # HxW uint8 numpy array or PIL image, non-zero marks the holes
+result = patchmatch.inpaint(image, mask, patch_size=3)
+```
+
+If `mask` is omitted, all pure white pixels are treated as holes.
+`patchmatch.patchmatch_available` tells whether the native library could be loaded.
+The previous import path `from patchmatch import patch_match` keeps working.
+
+C++ (see [examples/cpp_example.cpp](examples/cpp_example.cpp), build and run it with
+[examples/cpp_example_run.sh](examples/cpp_example_run.sh)):
 
 ```cpp
 #include "inpaint.h"
 
 int main() {
-    cv::Mat image = ...
-    cv::Mat mask = ...
+    cv::Mat image = ...;
+    cv::Mat mask = ...;
 
-    cv::Mat result = Inpainting(image, mask, 5).run();
-
-    return 0;
+    auto metric = PatchSSDDistanceMetric(5);
+    cv::Mat result = Inpainting(image, mask, &metric).run();
 }
 ```
+
+The library is built with CMake; `PATCHMATCH_BUILD_EXAMPLES` builds the example and
+`PATCHMATCH_WITH_HIGHGUI` enables the debug visualization of `Inpainting::run`.
 
 ## Development
 
 The project is managed with [uv](https://docs.astral.sh/uv/):
 
 ```sh
-uv sync                        # create .venv and install dev dependencies
+uv sync                        # create .venv, build the library, install dev deps
 uv run pre-commit install      # enable ruff and the other hooks on commit
 uv run pytest                  # run the test suite
 ```
