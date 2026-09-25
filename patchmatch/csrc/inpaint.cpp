@@ -9,13 +9,11 @@
 
 namespace
 {
-    static std::vector<double> kDistance2Similarity;
-
-    void init_kDistance2Similarity()
+    std::vector<double> make_distance2similarity()
     {
         double base[11] = {1.0, 0.99, 0.96, 0.83, 0.38, 0.11, 0.02, 0.005, 0.0006, 0.0001, 0};
         int length = (PatchDistanceMetric::kDistanceScale + 1);
-        kDistance2Similarity.resize(length);
+        std::vector<double> table(length);
         for (int i = 0; i < length; ++i)
         {
             double t = (double)i / length;
@@ -23,8 +21,17 @@ namespace
             int k = j + 1;
             double vj = (j < 11) ? base[j] : 0;
             double vk = (k < 11) ? base[k] : 0;
-            kDistance2Similarity[i] = vj + (100 * t - j) * (vk - vj);
+            table[i] = vj + (100 * t - j) * (vk - vj);
         }
+        return table;
+    }
+
+    // Built on first use. The initialization of a local static is thread-safe, which
+    // matters because the Python bindings release the GIL during inpainting.
+    const std::vector<double> &distance2similarity()
+    {
+        static const std::vector<double> table = make_distance2similarity();
+        return table;
     }
 
     inline void _weighted_copy(const MaskedImage &source, int ys, int xs, cv::Mat &target, int yt, int xt, double weight)
@@ -68,11 +75,6 @@ void Inpainting::_initialize_pyramid()
     {
         source = source.downsample();
         m_pyramid.push_back(source);
-    }
-
-    if (kDistance2Similarity.size() == 0)
-    {
-        init_kDistance2Similarity();
     }
 }
 
@@ -211,6 +213,7 @@ void Inpainting::_expectation_step(
     auto source_size = nnf.source_size();
     auto target_size = nnf.target_size();
     const int patch_size = m_distance_metric->patch_size();
+    const auto &kDistance2Similarity = distance2similarity();
 
     for (int i = 0; i < source_size.height; ++i)
     {
