@@ -61,6 +61,16 @@ jobs:
           name: wheel-${{ matrix.os }}
           path: wheelhouse/*.whl
 
+  # Single required status check for branch protection, independent of the matrix.
+  wheels-ok:
+    if: always()
+    needs: [sdist, wheels]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
+
   publish:
     needs: [wheels, sdist]
     if: github.event_name == 'release' && github.repository == 'mauwii/PyPatchMatch'
