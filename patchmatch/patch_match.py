@@ -83,7 +83,7 @@ def inpaint(
         The repaired image, with the same shape as ``image``.
     """
     lib = _get_lib()
-    image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
+    image, mask, global_mask = _prepare_inputs(image, mask, global_mask, patch_size)
 
     if global_mask is None:
         return _call(lib.PM_inpaint, image, mask, ctypes.c_int(patch_size))
@@ -107,15 +107,16 @@ def inpaint_regularity(
         guide_weight: weight of the regularity term relative to the patch distance.
     """
     lib = _get_lib()
-    image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
+    image, mask, global_mask = _prepare_inputs(image, mask, global_mask, patch_size)
 
     if not (
         isinstance(ijmap, np.ndarray)
         and ijmap.ndim == 3
         and ijmap.shape[2] == 3
         and ijmap.dtype == np.float32
+        and ijmap.size > 0
     ):
-        raise ValueError("ijmap must be an HxWx3 float32 array")
+        raise ValueError("ijmap must be a non-empty HxWx3 float32 array")
     ijmap = np.ascontiguousarray(ijmap)
 
     args = (ijmap, ctypes.c_int(patch_size), ctypes.c_float(guide_weight))
@@ -125,9 +126,16 @@ def inpaint_regularity(
 
 
 def _prepare_inputs(
-    image: ImageLike, mask: ImageLike | None, global_mask: ImageLike | None
+    image: ImageLike,
+    mask: ImageLike | None,
+    global_mask: ImageLike | None,
+    patch_size: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """Validate the inputs and convert them to contiguous arrays."""
+    # the native code crashes for 0 and never terminates for negative sizes
+    if patch_size < 1:
+        raise ValueError(f"patch_size must be at least 1, got {patch_size}")
+
     image = _canonize_image_array(image)
     mask = _default_mask(image) if mask is None else _canonize_mask_array(mask)
     if global_mask is not None:

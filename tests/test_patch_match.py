@@ -230,14 +230,27 @@ def test_mask_size_must_match_image(image, ijmap, func, argument):
         func(image, **kwargs)
 
 
+@pytest.mark.parametrize("patch_size", [0, -1])
+@pytest.mark.parametrize(
+    "func",
+    [patchmatch.inpaint, patchmatch.inpaint_regularity],
+    ids=lambda f: f.__name__,
+)
+def test_invalid_patch_size(image, ijmap, func, patch_size):
+    kwargs = {"ijmap": ijmap} if func is patchmatch.inpaint_regularity else {}
+    with pytest.raises(ValueError, match="patch_size"):
+        func(image, None, patch_size=patch_size, **kwargs)
+
+
 @pytest.mark.parametrize(
     "bad_ijmap",
     [
         np.zeros((HEIGHT, WIDTH, 3), dtype=np.float64),
         np.zeros((HEIGHT, WIDTH, 2), dtype=np.float32),
+        np.zeros((0, WIDTH, 3), dtype=np.float32),
         [[[0.0, 0.0, 0.0]]],
     ],
-    ids=["float64", "2-channel", "list"],
+    ids=["float64", "2-channel", "empty", "list"],
 )
 def test_inpaint_regularity_invalid_ijmap(image, bad_ijmap):
     with pytest.raises(ValueError, match="ijmap"):
