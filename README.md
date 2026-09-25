@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blueviolet.svg)](https://github.com/mauwii/PyPatchMatch/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/PyPatchMatch)](https://pypi.org/project/PyPatchMatch/)
-[![Downloads](https://static.pepy.tech/badge/pypatchmatch)](https://pepy.tech/project/pypatchmatch)
+[![Downloads](https://static.pepy.tech/badge/pypatchmatch)](https://pepy.tech/projects/pypatchmatch)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 This library implements the PatchMatch based inpainting algorithm. It provides both C++
@@ -16,14 +16,16 @@ with some bug fixes, and updates.
 pip install PyPatchMatch
 ```
 
-Wheels for Linux, macOS and Windows ship the compiled library including the required
-OpenCV runtime, so no compiler or OpenCV installation is needed. On other platforms pip
-builds from the source distribution, which requires a C++17 compiler, CMake and the
+Wheels for Linux (glibc, x86_64 and aarch64), macOS 11+ (arm64 and x86_64) and Windows
+(x64) ship the compiled library with a statically linked OpenCV, so no compiler or
+OpenCV installation is needed. On other platforms, e.g. Alpine Linux or Windows on ARM,
+pip builds from the source distribution, which requires a C++17 compiler, CMake and the
 OpenCV development files (e.g. `apt install libopencv-dev` or `brew install opencv`).
 
 ## Usage
 
-Python (see [examples/py_example.py](examples/py_example.py)):
+Python (see
+[examples/py_example.py](https://github.com/mauwii/PyPatchMatch/blob/main/examples/py_example.py)):
 
 ```python
 import patchmatch
@@ -38,8 +40,15 @@ pure white pixels are treated as holes.
 `patchmatch.patchmatch_available` tells whether the native library could be loaded.
 The previous import path `from patchmatch import patch_match` keeps working.
 
-C++ (see [examples/cpp_example.cpp](examples/cpp_example.cpp), build and run it with
-[examples/cpp_example_run.sh](examples/cpp_example_run.sh)):
+`patchmatch.set_random_seed(seed)` sets the seed of the randomized search and
+`patchmatch.set_verbose(True)` prints the progress of the native code to stderr.
+`patchmatch.inpaint_regularity(image, mask, ijmap)` additionally guides the search with
+a regularity map, an HxWx3 float32 array with the regularity coordinates of each pixel.
+
+C++ (see
+[examples/cpp_example.cpp](https://github.com/mauwii/PyPatchMatch/blob/main/examples/cpp_example.cpp),
+build and run it with
+[examples/cpp_example_run.sh](https://github.com/mauwii/PyPatchMatch/blob/main/examples/cpp_example_run.sh)):
 
 ```cpp
 #include "inpaint.h"
@@ -68,13 +77,21 @@ uv run pytest -m "not e2e"     # only the fast unit tests
 ```
 
 Releases are published to PyPI by creating a GitHub release; the version is taken from
-its tag (e.g. `v1.1.0`).
+its tag (e.g. `v2.0.0`).
+
+## License
+
+PyPatchMatch is released under the
+[MIT License](https://github.com/mauwii/PyPatchMatch/blob/main/LICENSE). The wheels
+contain a statically linked build of OpenCV core (Apache-2.0) and its bundled
+third-party code; their licenses are included in the `licenses/opencv` directory of the
+wheel's `.dist-info`.
 
 ## README and COPYRIGHT by Younesse ANDAM
 
 @Author: Younesse ANDAM
 
-@Contact: younesse.andam@gmail.com
+@Contact: <younesse.andam@gmail.com>
 
 Description:
 
@@ -85,12 +102,6 @@ C.Barnes, E.Shechtman, A.Finkelstein and Dan B.Goldman ACM Transactions on Graph
 (Proc. SIGGRAPH), vol.28, aug-2009
 
 For more information please refer to
-http://www.cs.princeton.edu/gfx/pubs/Barnes_2009_PAR/index.php
+<https://gfx.cs.princeton.edu/pubs/Barnes_2009_PAR/>
 
 Copyright (c) 2010-2011
-
-## Requirements
-
-To run the project you need to install Opencv library and link it to your project.
-Opencv can be download it here
-http://opencv.org/downloads.html

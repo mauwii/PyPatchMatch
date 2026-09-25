@@ -10,12 +10,18 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [
     { name = "The InvokeAI Project", email = "lincoln.stein@gmail.com" },
+    { name = "Jiayuan Mao", email = "maojiayuan@gmail.com" },
     { name = "Kyle Schouviller", email = "kyle0654@hotmail.com" },
     { name = "Matthias Wild", email = "mauwii@outlook.de" },
     { name = "Younesse ANDAM", email = "younesse.andam@gmail.com" },
 ]
 requires-python = ">=3.10"
+keywords = ["inpainting", "patchmatch", "image-processing", "opencv"]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: C++",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -25,12 +31,15 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Multimedia :: Graphics",
     "Topic :: Scientific/Engineering :: Image Processing",
+    "Typing :: Typed",
 ]
 dependencies = ["numpy", "pillow"]
 dynamic = ["version"]
 
 [project.urls]
 "Source Code" = "https://github.com/mauwii/PyPatchMatch"
+Issues = "https://github.com/mauwii/PyPatchMatch/issues"
+"Release Notes" = "https://github.com/mauwii/PyPatchMatch/releases"
 
 [dependency-groups]
 dev = [{ include-group = "test" }, "pre-commit", "ruff"]
