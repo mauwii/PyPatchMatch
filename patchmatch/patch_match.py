@@ -73,27 +73,21 @@ def inpaint(
 
     Args:
         image: 3-channel uint8 RGB/BGR image.
-        mask: 1-channel mask of the hole(s) to fill (non-zero = hole). If ``None``,
-            all pure white pixels (255, 255, 255) are treated as holes.
-        global_mask: 1-channel mask of pixels that must not be used as a source.
+        mask: 1-channel uint8 or bool mask of the hole(s) to fill (non-zero = hole),
+            with the same height and width as ``image``. If ``None``, all pure
+            white pixels (255, 255, 255) are treated as holes.
+        global_mask: mask like ``mask`` of pixels that must not be used as a source.
         patch_size: patch size for the inpainting algorithm.
 
     Returns:
         The repaired image, with the same shape as ``image``.
     """
     lib = _get_lib()
-    image = _canonize_image_array(image)
-    mask = _default_mask(image) if mask is None else _canonize_mask_array(mask)
+    image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
 
     if global_mask is None:
         return _call(lib.PM_inpaint, image, mask, ctypes.c_int(patch_size))
-    return _call(
-        lib.PM_inpaint2,
-        image,
-        mask,
-        _canonize_mask_array(global_mask),
-        ctypes.c_int(patch_size),
-    )
+    return _call(lib.PM_inpaint2, image, mask, global_mask, ctypes.c_int(patch_size))
 
 
 def inpaint_regularity(
@@ -108,12 +102,12 @@ def inpaint_regularity(
     """Like :func:`inpaint`, additionally guided by a regularity map.
 
     Args:
-        ijmap: HxWx3 float32 array with the regularity coordinates of each pixel.
+        ijmap: HxWx3 float32 array with the regularity coordinates of each pixel;
+            a map of a different size is scaled to the image.
         guide_weight: weight of the regularity term relative to the patch distance.
     """
     lib = _get_lib()
-    image = _canonize_image_array(image)
-    mask = _default_mask(image) if mask is None else _canonize_mask_array(mask)
+    image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
 
     if not (
         isinstance(ijmap, np.ndarray)
@@ -127,13 +121,26 @@ def inpaint_regularity(
     args = (ijmap, ctypes.c_int(patch_size), ctypes.c_float(guide_weight))
     if global_mask is None:
         return _call(lib.PM_inpaint_regularity, image, mask, *args)
-    return _call(
-        lib.PM_inpaint2_regularity,
-        image,
-        mask,
-        _canonize_mask_array(global_mask),
-        *args,
-    )
+    return _call(lib.PM_inpaint2_regularity, image, mask, global_mask, *args)
+
+
+def _prepare_inputs(
+    image: ImageLike, mask: ImageLike | None, global_mask: ImageLike | None
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """Validate the inputs and convert them to contiguous arrays."""
+    image = _canonize_image_array(image)
+    mask = _default_mask(image) if mask is None else _canonize_mask_array(mask)
+    if global_mask is not None:
+        global_mask = _canonize_mask_array(global_mask)
+
+    # the native code indexes the masks with the image coordinates
+    for name, m in (("mask", mask), ("global_mask", global_mask)):
+        if m is not None and m.shape[:2] != image.shape[:2]:
+            raise ValueError(
+                f"{name} must have the same height and width as the image, "
+                f"got {m.shape[:2]} for an image of {image.shape[:2]}"
+            )
+    return image, mask, global_mask
 
 
 def _call(func: Callable[..., CMatT], *args: object) -> np.ndarray:
@@ -158,6 +165,8 @@ def _canonize_image_array(image: ImageLike) -> np.ndarray:
 
 def _canonize_mask_array(mask: ImageLike) -> np.ndarray:
     mask = np.asarray(mask)
+    if mask.dtype == np.bool_:  # e.g. boolean arrays or PIL images in mode "1"
+        mask = mask.astype(np.uint8)
     if mask.ndim == 2:
         mask = mask[..., np.newaxis]
     if not (mask.ndim == 3 and mask.shape[2] == 1 and mask.dtype == np.uint8):
