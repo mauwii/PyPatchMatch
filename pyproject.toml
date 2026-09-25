@@ -1,71 +1,105 @@
 [build-system]
-build-backend="setuptools.build_meta"
-requires=["setuptools == 67.1.0", "wheel"]
+build-backend = "scikit_build_core.build"
+requires = ["scikit-build-core>=0.11", "setuptools-scm>=8"]
 
 [project]
-authors=[
-    {name="The InvokeAI Project", email="lincoln.stein@gmail.com"},
-
-    {name="Kyle Schouviller", email="kyle0654@hotmail.com"},
-    {name="Matthias Wild", email="mauwii@outlook.de"},
-    {name="Younesse ANDAM", email="younesse.andam@gmail.com"},
+name = "PyPatchMatch"
+description = "This library implements the PatchMatch based inpainting algorithm."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "The InvokeAI Project", email = "lincoln.stein@gmail.com" },
+    { name = "Kyle Schouviller", email = "kyle0654@hotmail.com" },
+    { name = "Matthias Wild", email = "mauwii@outlook.de" },
+    { name = "Younesse ANDAM", email = "younesse.andam@gmail.com" },
 ]
-dependencies=["numpy", "pillow", "tqdm"]
-description='This library implements the PatchMatch based inpainting algorithm.'
-dynamic=["version"]
-license={file="LICENSE"}
-name='PyPatchMatch'
-readme={content-type="text/markdown", file="README.md"}
-requires-python=">=3.9,<3.13"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+dependencies = ["numpy", "pillow"]
+dynamic = ["version"]
 
 [project.urls]
-'Source Code'='https://github.com/mauwii/PyPatchMatch'
+"Source Code" = "https://github.com/mauwii/PyPatchMatch"
 
-[tool.setuptools.dynamic]
-version={attr="patchmatch.__version__"}
+[dependency-groups]
+dev = [{ include-group = "test" }, "pre-commit", "ruff"]
+test = ["pytest", "pytest-cov"]
 
-[tool.setuptools.packages.find]
-include=["patchmatch", "patchmatch.csrc"]
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+build-dir = "build/{wheel_tag}"
+# The library is loaded via ctypes and does not use the CPython ABI,
+# so one wheel per platform serves every Python version.
+wheel.py-api = "py3"
+wheel.packages = ["patchmatch"]
+wheel.exclude = ["patchmatch/csrc/**"]
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+# The release wheels are built from the sdist, so it has to contain the tests
+# and their input image; _version.py is generated and therefore git-ignored.
+sdist.include = ["examples/images/forest_pruned.bmp", "patchmatch/_version.py"]
+sdist.exclude = [".*", "examples", "uv.lock"]
 
-[tool.setuptools.package-data]
-"patchmatch"=['Makefile', 'csrc/*', 'travis.sh']
+[tool.setuptools_scm]
+version_file = "patchmatch/_version.py"
+# used when building without git metadata, e.g. from a GitHub source archive
+fallback_version = "0.0.0"
 
-[project.optional-dependencies]
-"dev"=["black", "flake8", "flake8-black", "isort", "pre-commit", "pylance"]
-"dist"=[
-    "auditwheel; sys_platform=='linux'",
-    "build",
-    "delocate; sys_platform=='darwin'",
-    "pip-tools",
-    "pipdeptree",
-    "requests",
-    "twine",
+[tool.cibuildwheel]
+# The wheels are Python-version independent (py3-none-<platform>), so each platform
+# is built and tested once; the CI workflow covers the other Python versions.
+build = "cp310-*"
+skip = "*-musllinux_*"
+# OpenCV is built once per job in before-all, only for the runner's native arch
+archs = ["native"]
+test-groups = ["test"]
+test-command = "pytest {project}/tests --no-cov"
+before-all = "python {project}/scripts/build_opencv.py"
+environment = { OpenCV_ROOT = "/tmp/opencv" }
+
+[tool.cibuildwheel.linux]
+before-all = "/opt/python/cp312-cp312/bin/python {project}/scripts/build_opencv.py"
+
+[tool.cibuildwheel.macos]
+environment = { OpenCV_ROOT = "/tmp/opencv", MACOSX_DEPLOYMENT_TARGET = "11.0" }
+
+[tool.cibuildwheel.windows]
+environment = { OpenCV_ROOT = "C:/opencv" }
+
+[tool.uv]
+# Rebuild the package whenever the native sources or the git version change.
+cache-keys = [
+    { file = "CMakeLists.txt" },
+    { file = "patchmatch/csrc/*" },
+    { file = "pyproject.toml" },
+    { git = { commit = true, tags = true } },
 ]
-"test"=["pytest", "pytest-coverage"]
 
-[tool.black]
-exclude='''
-/(
-    .git
-    | .venv
-    | build
-    | csrc
-    | dist
-)/
-'''
-include='.pyi?$'
-line-length=88
-source=['examples', 'patchmatch']
-target-version=['py39']
+[tool.ruff]
+extend-exclude = ["patchmatch/csrc"]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["B", "C4", "E", "F", "I", "RUF", "SIM", "UP", "W"]
+ignore = ["E501"]  # line length is enforced by ruff-format
 
 [tool.coverage.report]
-fail_under=75
-
-[tool.isort]
-profile="black"
+fail_under = 75
 
 [tool.pytest.ini_options]
-addopts=["--cov-branch", "--cov-report=term:skip-covered", "--cov=patchmatch"]
-minversion="6.0"
-python_files=["test_*.py"]
-testpaths=["tests"]
+addopts = ["--cov-branch", "--cov-report=term:skip-covered", "--cov=patchmatch"]
+markers = ["e2e: end-to-end tests of the user workflows (deselect with -m 'not e2e')"]
+minversion = "6.0"
+python_files = ["test_*.py"]
+testpaths = ["tests"]

@@ -150,7 +150,6 @@ void MaskedImage::compute_image_gradients()
 
     for (int i = 1; i < size.height - 1; ++i)
     {
-        const auto *ptr = m_image.ptr<unsigned char>(i, 0);
         const auto *ptry1 = m_image.ptr<unsigned char>(i + 1, 0);
         const auto *ptry2 = m_image.ptr<unsigned char>(i - 1, 0);
         const auto *ptrx1 = m_image.ptr<unsigned char>(i, 0) + 3;
