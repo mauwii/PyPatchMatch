@@ -78,21 +78,16 @@ def test_remove_white_regions(pruned_image, tmp_path, as_array):
     assert_plausible_fill(np.array(pruned_image), saved)
 
 
-def test_global_mask(pruned_image, capfd):
+def test_global_mask(pruned_image):
     """examples/py_example_global_mask.py: extra hole excluded as patch source."""
     source = np.array(pruned_image)
     source[:100, :100] = 255
     global_mask = np.zeros_like(source[..., 0])
     global_mask[:100, :100] = 1
 
-    patchmatch.set_verbose(True)
-    try:
-        result = patchmatch.inpaint(source, global_mask=global_mask, patch_size=3)
-    finally:
-        patchmatch.set_verbose(False)
+    result = patchmatch.inpaint(source, global_mask=global_mask, patch_size=3)
 
     assert_plausible_fill(source, result)
-    assert "Inpainting level" in capfd.readouterr().err
 
 
 @pytest.mark.parametrize("hole_value", [1, 255])

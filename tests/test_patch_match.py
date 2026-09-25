@@ -1,6 +1,8 @@
 """Unit tests of the Python API on small synthetic images."""
 
 import ctypes
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -106,16 +108,22 @@ def test_inpaint_is_deterministic_with_seed(image):
     np.testing.assert_array_equal(first, second)
 
 
-def test_set_verbose_prints_progress(image, capfd):
-    patchmatch.set_verbose(True)
-    try:
-        patchmatch.inpaint(image, patch_size=3)
-    finally:
-        patchmatch.set_verbose(False)
-    assert "Inpainting level" in capfd.readouterr().err
-
-    patchmatch.inpaint(image, patch_size=3)
-    assert capfd.readouterr().err == ""
+@pytest.mark.parametrize("verbose", [True, False])
+def test_set_verbose_prints_progress(verbose):
+    # The native code writes to its own C runtime's stderr. On Windows the DLL
+    # links the static runtime, whose stderr is not redirected by pytest's capfd,
+    # so the output is checked in a separate process.
+    code = (
+        "import numpy as np, patchmatch\n"
+        "img = np.full((32, 32, 3), 100, dtype=np.uint8)\n"
+        "img[8:16, 8:16] = 255\n"
+        f"patchmatch.set_verbose({verbose})\n"
+        "patchmatch.inpaint(img, patch_size=3)\n"
+    )
+    process = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert ("Inpainting level" in process.stderr) is verbose
 
 
 # --- inpaint_regularity -----------------------------------------------------
