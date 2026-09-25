@@ -115,8 +115,7 @@ int _dtype_cv_to_py(int dtype_cv)
 
 cv::Mat _py_to_cv2(PM_mat_t pymat)
 {
-    int dtype = _dtype_py_to_cv(pymat.dtype);
-    dtype = CV_MAKETYPE(pymat.dtype, pymat.shape.channels);
+    int dtype = CV_MAKETYPE(_dtype_py_to_cv(pymat.dtype), pymat.shape.channels);
     return cv::Mat(cv::Size(pymat.shape.width, pymat.shape.height), dtype, pymat.data_ptr).clone();
 }
 
