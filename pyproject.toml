@@ -55,6 +55,8 @@ input = "patchmatch/__init__.py"
 # is built and tested once; the CI workflow covers the other Python versions.
 build = "cp310-*"
 skip = "*-musllinux_*"
+# OpenCV is built once per job in before-all, only for the runner's native arch
+archs = ["native"]
 test-groups = ["test"]
 test-command = "pytest {project}/tests --no-cov"
 before-all = "python {project}/scripts/build_opencv.py"

@@ -25,7 +25,7 @@ CMAKE_OPTIONS = {
     "CMAKE_POSITION_INDEPENDENT_CODE": "ON",
     "BUILD_LIST": "core",
     "BUILD_SHARED_LIBS": "OFF",
-    # patchmatch links the static MSVC runtime as well, see pyproject.toml
+    # patchmatch links the static MSVC runtime as well, see CMakeLists.txt
     "BUILD_WITH_STATIC_CRT": "ON",
     "BUILD_ZLIB": "ON",
     "BUILD_TESTS": "OFF",
@@ -36,11 +36,6 @@ CMAKE_OPTIONS = {
     "BUILD_opencv_apps": "OFF",
     "BUILD_opencv_python3": "OFF",
     "OPENCV_GENERATE_PKGCONFIG": "OFF",
-    # Windows only: install a plain CMake config instead of the "Windows pack"
-    # wrapper, which guesses the <arch>/<vc runtime>/ subdirectory from the
-    # consuming compiler and fails for newer MSVC versions or static builds.
-    "OPENCV_INSTALL_BINARIES_PREFIX": "",
-    "OPENCV_SKIP_CMAKE_ROOT_CONFIG": "ON",
     # only core is built, so disable every optional backend and codec
     "WITH_ADE": "OFF",
     "WITH_AVIF": "OFF",
@@ -65,6 +60,16 @@ CMAKE_OPTIONS = {
     "WITH_OPENCL": "OFF",
     "WITH_OPENMP": "OFF",
     "WITH_TBB": "OFF",
+}
+
+# Install a plain CMake config instead of OpenCV's "Windows pack" wrapper, which
+# guesses the <arch>/<vc runtime>/ subdirectory from the consuming compiler and
+# fails for newer MSVC versions and static builds. The config must not be in the
+# install root: CMake would then resolve the import prefix one level too high.
+WINDOWS_CMAKE_OPTIONS = {
+    "OPENCV_CONFIG_INSTALL_PATH": "cmake",
+    "OPENCV_INSTALL_BINARIES_PREFIX": "",
+    "OPENCV_SKIP_CMAKE_ROOT_CONFIG": "ON",
 }
 
 
@@ -101,6 +106,8 @@ def main() -> None:
         source = Path(tmp) / f"opencv-{OPENCV_VERSION}"
         build = Path(tmp) / "build"
         options = {**CMAKE_OPTIONS, "CMAKE_INSTALL_PREFIX": prefix.as_posix()}
+        if sys.platform == "win32":
+            options.update(WINDOWS_CMAKE_OPTIONS)
         defines = [f"-D{key}={value}" for key, value in options.items()]
         subprocess.run([cmake, "-S", source, "-B", build, *defines], check=True)
         subprocess.run(
