@@ -36,6 +36,11 @@ CMAKE_OPTIONS = {
     "BUILD_opencv_apps": "OFF",
     "BUILD_opencv_python3": "OFF",
     "OPENCV_GENERATE_PKGCONFIG": "OFF",
+    # Windows only: install a plain CMake config instead of the "Windows pack"
+    # wrapper, which guesses the <arch>/<vc runtime>/ subdirectory from the
+    # consuming compiler and fails for newer MSVC versions or static builds.
+    "OPENCV_INSTALL_BINARIES_PREFIX": "",
+    "OPENCV_SKIP_CMAKE_ROOT_CONFIG": "ON",
     # only core is built, so disable every optional backend and codec
     "WITH_ADE": "OFF",
     "WITH_AVIF": "OFF",
@@ -86,7 +91,12 @@ def main() -> None:
         print(f"Downloading {OPENCV_URL}", flush=True)
         urllib.request.urlretrieve(OPENCV_URL, archive)
         with tarfile.open(archive) as tar:
-            tar.extractall(tmp, filter="data")
+            # extraction filters are missing on older patch releases, e.g. the
+            # last Windows installer of Python 3.10 (3.10.11)
+            if hasattr(tarfile, "data_filter"):
+                tar.extractall(tmp, filter="data")
+            else:
+                tar.extractall(tmp)
 
         source = Path(tmp) / f"opencv-{OPENCV_VERSION}"
         build = Path(tmp) / "build"
