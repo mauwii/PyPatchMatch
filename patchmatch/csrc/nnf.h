@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cassert>
+#include <cmath>
 #include <opencv2/core.hpp>
 #include "masked_image.h"
 

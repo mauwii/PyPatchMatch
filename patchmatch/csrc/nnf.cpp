@@ -20,6 +20,7 @@ T clamp(T value, T min_value, T max_value)
 void NearestNeighborField::_randomize_field(int max_retry, bool reset)
 {
     auto this_size = source_size();
+    auto this_target_size = target_size();
     for (int i = 0; i < this_size.height; ++i)
     {
         for (int j = 0; j < this_size.width; ++j)
@@ -37,8 +38,8 @@ void NearestNeighborField::_randomize_field(int max_retry, bool reset)
             int i_target = 0, j_target = 0;
             for (int t = 0; t < max_retry; ++t)
             {
-                i_target = rand() % this_size.height;
-                j_target = rand() % this_size.width;
+                i_target = rand() % this_target_size.height;
+                j_target = rand() % this_target_size.width;
                 if (m_target.is_globally_masked(i_target, j_target))
                     continue;
 
@@ -201,10 +202,9 @@ namespace
             const unsigned char *p_sgm = nullptr;
             const unsigned char *p_tgm = nullptr;
             if (!source.global_mask().empty())
-            {
                 p_sgm = source.global_mask().ptr<unsigned char>(yys, 0);
+            if (!target.global_mask().empty())
                 p_tgm = target.global_mask().ptr<unsigned char>(yyt, 0);
-            }
 
             const auto *p_sgy = source.grady().ptr<unsigned char>(yys, 0);
             const auto *p_tgy = target.grady().ptr<unsigned char>(yyt, 0);
@@ -216,7 +216,7 @@ namespace
                 int xxs = xs + dx, xxt = xt + dx;
                 wsum += 1;
 
-                if (xxs <= 0 || xxs >= source_size.width - 1 || xxt <= 0 || xxt >= source_size.width - 1)
+                if (xxs <= 0 || xxs >= source_size.width - 1 || xxt <= 0 || xxt >= target_size.width - 1)
                 {
                     distance += PatchSSDDistanceMetric::kSSDScale;
                     continue;
