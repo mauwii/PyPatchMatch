@@ -21,19 +21,26 @@ T clamp(T value, T min_value, T max_value)
 namespace
 {
     // One generator per thread, so concurrent inpaintings with the same seed give the
-    // same results. The modulo instead of std::uniform_int_distribution keeps the
-    // sequence identical on all platforms.
-    thread_local std::mt19937 random_engine;
+    // same results. It only drives the randomized search, which has to be reproducible
+    // from a seed, so a standard generator is the right choice. SonarCloud's PRNG rule
+    // (cpp:S2245) flags every declaration of its type, hence the NOSONAR markers.
+    std::mt19937 &random_engine() // NOSONAR
+    {
+        thread_local std::mt19937 engine; // NOSONAR
+        return engine;
+    }
 
+    // The modulo instead of std::uniform_int_distribution keeps the sequence identical
+    // on all platforms.
     inline int random_int(int n)
     {
-        return static_cast<int>(random_engine() % static_cast<unsigned int>(n));
+        return static_cast<int>(random_engine()() % static_cast<unsigned int>(n));
     }
 }
 
 void NearestNeighborField::seed_random(unsigned int seed)
 {
-    random_engine.seed(seed);
+    random_engine().seed(seed);
 }
 
 void NearestNeighborField::_randomize_field(int max_retry, bool reset)
