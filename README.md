@@ -29,11 +29,12 @@ Python (see [examples/py_example.py](examples/py_example.py)):
 import patchmatch
 
 image = ...  # HxWx3 uint8 numpy array or PIL image
-mask = ...  # HxW uint8 numpy array or PIL image, non-zero marks the holes
+mask = ...  # HxW uint8 or bool numpy array or PIL image, non-zero marks the holes
 result = patchmatch.inpaint(image, mask, patch_size=3)
 ```
 
-If `mask` is omitted, all pure white pixels are treated as holes.
+The mask must have the same height and width as the image. If `mask` is omitted, all
+pure white pixels are treated as holes.
 `patchmatch.patchmatch_available` tells whether the native library could be loaded.
 The previous import path `from patchmatch import patch_match` keeps working.
 
@@ -63,7 +64,11 @@ The project is managed with [uv](https://docs.astral.sh/uv/):
 uv sync                        # create .venv, build the library, install dev deps
 uv run pre-commit install      # enable ruff and the other hooks on commit
 uv run pytest                  # run the test suite
+uv run pytest -m "not e2e"     # only the fast unit tests
 ```
+
+Releases are published to PyPI by creating a GitHub release; the version is taken from
+its tag (e.g. `v1.1.0`).
 
 ## README and COPYRIGHT by Younesse ANDAM
 
