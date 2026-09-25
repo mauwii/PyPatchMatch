@@ -76,7 +76,8 @@ def inpaint(
         mask: 1-channel uint8 or bool mask of the hole(s) to fill (non-zero = hole),
             with the same height and width as ``image``. If ``None``, all pure
             white pixels (255, 255, 255) are treated as holes.
-        global_mask: mask like ``mask`` of pixels that must not be used as a source.
+        global_mask: mask like ``mask`` of pixels that are neither filled nor used as
+            a source; they keep their values from ``image``.
         patch_size: patch size for the inpainting algorithm.
 
     Returns:

@@ -126,7 +126,12 @@ cv::Mat Inpainting::run(bool verbose, bool verbose_visualize, unsigned int rando
         target = _expectation_maximization(source, target, level, verbose);
     }
 
-    return target.image();
+    // Globally masked pixels are neither filled nor used as a source, so the pyramid
+    // leaves them black. Keep their input values instead.
+    cv::Mat result = target.image();
+    if (!m_initial.global_mask().empty())
+        m_initial.image().copyTo(result, m_initial.global_mask());
+    return result;
 }
 
 // EM-Like algorithm (see "PatchMatch" - page 6).

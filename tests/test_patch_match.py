@@ -84,9 +84,10 @@ def test_inpaint_explicit_mask(image, hole_mask):
 def test_inpaint_global_mask(image, hole_mask):
     global_mask = np.zeros_like(hole_mask)
     global_mask[:8] = 1
-    assert_filled(
-        patchmatch.inpaint(image, global_mask=global_mask, patch_size=3), image
-    )
+    result = patchmatch.inpaint(image, global_mask=global_mask, patch_size=3)
+    assert_filled(result, image)
+    # excluded pixels keep their values instead of the zeros of the pyramid
+    np.testing.assert_array_equal(result[:8], image[:8])
 
 
 @pytest.mark.parametrize("patch_size", [1, 3, 7])
