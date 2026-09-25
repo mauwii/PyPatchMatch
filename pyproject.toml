@@ -99,6 +99,7 @@ fail_under = 75
 
 [tool.pytest.ini_options]
 addopts = ["--cov-branch", "--cov-report=term:skip-covered", "--cov=patchmatch"]
+markers = ["e2e: end-to-end tests of the user workflows (deselect with -m 'not e2e')"]
 minversion = "6.0"
 python_files = ["test_*.py"]
 testpaths = ["tests"]
