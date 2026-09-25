@@ -1,7 +1,6 @@
 """PatchMatch based inpainting."""
 
-__version__ = "1.1.0"
-
+from ._version import __version__
 from .patch_match import (
     inpaint,
     inpaint_regularity,

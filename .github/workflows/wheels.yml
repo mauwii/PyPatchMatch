@@ -16,8 +16,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # setuptools-scm derives the version from the git tags
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv build --sdist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  # The wheels are built from the sdist, which already carries the version, so no
+  # git metadata is needed on the runners or inside the manylinux containers.
   wheels:
     name: wheel (${{ matrix.os }})
+    needs: sdist
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -29,23 +45,21 @@ jobs:
           - macos-15-intel
           - windows-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: sdist
+          path: dist/
+      - name: Locate sdist
+        id: sdist
+        shell: bash
+        run: echo "path=$(ls dist/*.tar.gz)" >> "$GITHUB_OUTPUT"
       - uses: pypa/cibuildwheel@v4.2.1
+        with:
+          package-dir: ${{ steps.sdist.outputs.path }}
       - uses: actions/upload-artifact@v7
         with:
           name: wheel-${{ matrix.os }}
           path: wheelhouse/*.whl
-
-  sdist:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-      - run: uv build --sdist
-      - uses: actions/upload-artifact@v7
-        with:
-          name: sdist
-          path: dist/*.tar.gz
 
   publish:
     needs: [wheels, sdist]

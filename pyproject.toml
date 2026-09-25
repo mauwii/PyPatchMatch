@@ -1,6 +1,6 @@
 [build-system]
 build-backend = "scikit_build_core.build"
-requires = ["scikit-build-core>=0.11"]
+requires = ["scikit-build-core>=0.11", "setuptools-scm>=8"]
 
 [project]
 name = "PyPatchMatch"
@@ -44,11 +44,16 @@ build-dir = "build/{wheel_tag}"
 wheel.py-api = "py3"
 wheel.packages = ["patchmatch"]
 wheel.exclude = ["patchmatch/csrc/**"]
-sdist.exclude = [".*", "examples", "tests", "uv.lock"]
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+# The release wheels are built from the sdist, so it has to contain the tests
+# and their input image; _version.py is generated and therefore git-ignored.
+sdist.include = ["examples/images/forest_pruned.bmp", "patchmatch/_version.py"]
+sdist.exclude = [".*", "examples", "uv.lock"]
 
-[tool.scikit-build.metadata.version]
-provider = "scikit_build_core.metadata.regex"
-input = "patchmatch/__init__.py"
+[tool.setuptools_scm]
+version_file = "patchmatch/_version.py"
+# used when building without git metadata, e.g. from a GitHub source archive
+fallback_version = "0.0.0"
 
 [tool.cibuildwheel]
 # The wheels are Python-version independent (py3-none-<platform>), so each platform
@@ -72,11 +77,12 @@ environment = { OpenCV_ROOT = "/tmp/opencv", MACOSX_DEPLOYMENT_TARGET = "11.0" }
 environment = { OpenCV_ROOT = "C:/opencv" }
 
 [tool.uv]
-# Rebuild the native library whenever its sources change.
+# Rebuild the package whenever the native sources or the git version change.
 cache-keys = [
     { file = "CMakeLists.txt" },
     { file = "patchmatch/csrc/*" },
     { file = "pyproject.toml" },
+    { git = { commit = true, tags = true } },
 ]
 
 [tool.ruff]
