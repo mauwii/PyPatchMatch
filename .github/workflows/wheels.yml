@@ -64,8 +64,9 @@ jobs:
 
   # Without a matching wheel, pip builds the sdist. If that fails, the override in
   # pyproject.toml builds a wheel without the native library instead of blocking the
-  # installation. This job keeps that working. It uploads nothing, so the pure wheel
-  # never reaches the publish job.
+  # installation. This job keeps that working; test_import_without_native_library
+  # covers the import of such a wheel. It uploads nothing, so the pure wheel never
+  # reaches the publish job.
   sdist-fallback:
     needs: sdist
     runs-on: ubuntu-latest
@@ -81,11 +82,12 @@ jobs:
         run: >-
           uv build --wheel dist/*.tar.gz --out-dir fallback
           -C cmake.define.CMAKE_DISABLE_FIND_PACKAGE_OpenCV=ON
-      - name: Check that the pure wheel installs and reports the missing library
+      - name: Check that it is a pure wheel with the package but without the library
         run: |
-          ls fallback/*-py3-none-any.whl
-          uv run --no-project --with fallback/*.whl python -c \
-            "import patchmatch; assert not patchmatch.patchmatch_available"
+          wheel=$(ls fallback/*-py3-none-any.whl)
+          unzip -l "$wheel" | tee contents.txt
+          grep -q "patchmatch/patch_match.py" contents.txt
+          if grep -q "libpatchmatch" contents.txt; then exit 1; fi
 
   # Single required status check for branch protection, independent of the matrix.
   wheels-ok:

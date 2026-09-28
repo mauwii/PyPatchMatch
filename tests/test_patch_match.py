@@ -356,6 +356,27 @@ def test_find_library_reports_missing_file(monkeypatch):
         _lib.find_library()
 
 
+def test_import_without_native_library():
+    """A failed build from the sdist installs the package without the library.
+
+    The import has to work and explain how to fix it, see the overrides in
+    pyproject.toml. The module is reloaded in a separate process, so the other
+    tests keep the loaded library.
+    """
+    code = (
+        "import importlib\n"
+        "from patchmatch import _lib, patch_match\n"
+        "_lib.LIBRARY_NAME = 'missing-library'\n"
+        "importlib.reload(patch_match)\n"
+        "assert not patch_match.patchmatch_available\n"
+    )
+    process = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert "missing-library not found" in process.stderr
+    assert "--no-cache-dir" in process.stderr
+
+
 # --- ctypes conversion ------------------------------------------------------
 
 
