@@ -128,13 +128,19 @@ cv::Mat Inpainting::run(bool verbose, bool verbose_visualize, unsigned int rando
     // Only the holes are filled. The votes of overlapping patches also change the known
     // pixels near the holes, and the pyramid leaves globally masked pixels black, which
     // are neither filled nor used as a source. Keep the input values of both.
+    // A plain loop instead of OpenCV matrix expressions: those pull OpenCV's whole
+    // expression module into the statically linked library, 40 % more on disk.
     cv::Mat result = target.image();
-    if (result.empty()) // OpenCV rejects empty operands in matrix expressions
-        return result;
-    cv::Mat keep = m_initial.mask() == 0;
-    if (!m_initial.global_mask().empty())
-        keep |= m_initial.global_mask() != 0;
-    m_initial.image().copyTo(result, keep);
+    for (int y = 0; y < result.rows; ++y)
+    {
+        for (int x = 0; x < result.cols; ++x)
+        {
+            if (m_initial.is_masked(y, x) && !m_initial.is_globally_masked(y, x))
+                continue;
+            const unsigned char *input = m_initial.get_image(y, x);
+            std::copy(input, input + 3, result.ptr<unsigned char>(y, x));
+        }
+    }
     return result;
 }
 
