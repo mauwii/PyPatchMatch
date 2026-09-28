@@ -1,70 +1,145 @@
+#include <atomic>
+#include <cstring>
+#include <exception>
+#include <memory>
+#include <string>
+
 #include "pyinterface.h"
 #include "inpaint.h"
-
-static unsigned int PM_seed = 1212;
-static bool PM_verbose = false;
 
 int _dtype_py_to_cv(int dtype_py);
 int _dtype_cv_to_py(int dtype_cv);
 cv::Mat _py_to_cv2(PM_mat_t pymat);
 PM_mat_t _cv2_to_py(cv::Mat cvmat);
 
+namespace
+{
+    // The settings are set by one thread while others may be inpainting, since ctypes
+    // releases the GIL.
+    std::atomic<unsigned int> &random_seed()
+    {
+        static std::atomic value{1212u};
+        return value;
+    }
+
+    std::atomic<bool> &verbose()
+    {
+        static std::atomic value{false};
+        return value;
+    }
+
+    // Message of the last failed call on the calling thread, see PM_last_error.
+    std::string &last_error()
+    {
+        thread_local std::string message;
+        return message;
+    }
+
+    void set_last_error(const char *message) noexcept
+    {
+        try
+        {
+            last_error() = message;
+        }
+        catch (...)
+        {
+            last_error().clear();
+        }
+    }
+
+    // A C++ exception must not propagate through the C interface into ctypes, which
+    // would abort the process. Report it with an empty result instead.
+    template <typename Func>
+    PM_mat_t guarded(Func &&func) noexcept
+    {
+        try
+        {
+            return func();
+        }
+        catch (const std::exception &e)
+        {
+            set_last_error(e.what());
+        }
+        catch (...)
+        {
+            set_last_error("unknown error");
+        }
+        return PM_mat_t{nullptr, {0, 0, 0}, 0};
+    }
+}
+
+const char *PM_last_error()
+{
+    return last_error().c_str();
+}
+
 void PM_set_random_seed(unsigned int seed)
 {
-    PM_seed = seed;
+    random_seed().store(seed);
 }
 
 void PM_set_verbose(int value)
 {
-    PM_verbose = static_cast<bool>(value);
+    verbose().store(value != 0);
 }
 
 void PM_free_pymat(PM_mat_t pymat)
 {
-    free(pymat.data_ptr);
+    // Takes back the ownership of the buffer that _cv2_to_py released. The buffer
+    // crosses the C interface as a plain pointer, so it cannot be a std::vector
+    // (SonarCloud cpp:S5945).
+    std::unique_ptr<unsigned char[]> data(static_cast<unsigned char *>(pymat.data_ptr)); // NOSONAR
 }
 
 PM_mat_t PM_inpaint(PM_mat_t source_py, PM_mat_t mask_py, int patch_size)
 {
-    cv::Mat source = _py_to_cv2(source_py);
-    cv::Mat mask = _py_to_cv2(mask_py);
-    auto metric = PatchSSDDistanceMetric(patch_size);
-    cv::Mat result = Inpainting(source, mask, &metric).run(PM_verbose, false, PM_seed);
-    return _cv2_to_py(result);
+    return guarded([source_py, mask_py, patch_size] {
+        cv::Mat source = _py_to_cv2(source_py);
+        cv::Mat mask = _py_to_cv2(mask_py);
+        auto metric = PatchSSDDistanceMetric(patch_size);
+        cv::Mat result = Inpainting(source, mask, &metric).run(verbose().load(), false, random_seed().load());
+        return _cv2_to_py(result);
+    });
 }
 
 PM_mat_t PM_inpaint_regularity(PM_mat_t source_py, PM_mat_t mask_py, PM_mat_t ijmap_py, int patch_size, float guide_weight)
 {
-    cv::Mat source = _py_to_cv2(source_py);
-    cv::Mat mask = _py_to_cv2(mask_py);
-    cv::Mat ijmap = _py_to_cv2(ijmap_py);
+    return guarded([source_py, mask_py, ijmap_py, patch_size, guide_weight] {
+        cv::Mat source = _py_to_cv2(source_py);
+        cv::Mat mask = _py_to_cv2(mask_py);
+        cv::Mat ijmap = _py_to_cv2(ijmap_py);
 
-    auto metric = RegularityGuidedPatchDistanceMetricV2(patch_size, ijmap, guide_weight);
-    cv::Mat result = Inpainting(source, mask, &metric).run(PM_verbose, false, PM_seed);
-    return _cv2_to_py(result);
+        auto metric = RegularityGuidedPatchDistanceMetricV2(patch_size, ijmap, guide_weight);
+        cv::Mat result = Inpainting(source, mask, &metric).run(verbose().load(), false, random_seed().load());
+        return _cv2_to_py(result);
+    });
 }
 
 PM_mat_t PM_inpaint2(PM_mat_t source_py, PM_mat_t mask_py, PM_mat_t global_mask_py, int patch_size)
 {
-    cv::Mat source = _py_to_cv2(source_py);
-    cv::Mat mask = _py_to_cv2(mask_py);
-    cv::Mat global_mask = _py_to_cv2(global_mask_py);
+    return guarded([source_py, mask_py, global_mask_py, patch_size] {
+        cv::Mat source = _py_to_cv2(source_py);
+        cv::Mat mask = _py_to_cv2(mask_py);
+        cv::Mat global_mask = _py_to_cv2(global_mask_py);
 
-    auto metric = PatchSSDDistanceMetric(patch_size);
-    cv::Mat result = Inpainting(source, mask, global_mask, &metric).run(PM_verbose, false, PM_seed);
-    return _cv2_to_py(result);
+        auto metric = PatchSSDDistanceMetric(patch_size);
+        cv::Mat result = Inpainting(source, mask, global_mask, &metric).run(verbose().load(), false, random_seed().load());
+        return _cv2_to_py(result);
+    });
 }
 
 PM_mat_t PM_inpaint2_regularity(PM_mat_t source_py, PM_mat_t mask_py, PM_mat_t global_mask_py, PM_mat_t ijmap_py, int patch_size, float guide_weight)
 {
-    cv::Mat source = _py_to_cv2(source_py);
-    cv::Mat mask = _py_to_cv2(mask_py);
-    cv::Mat global_mask = _py_to_cv2(global_mask_py);
-    cv::Mat ijmap = _py_to_cv2(ijmap_py);
+    return guarded([source_py, mask_py, global_mask_py, ijmap_py, patch_size, guide_weight] {
+        cv::Mat source = _py_to_cv2(source_py);
+        cv::Mat mask = _py_to_cv2(mask_py);
+        cv::Mat global_mask = _py_to_cv2(global_mask_py);
+        cv::Mat ijmap = _py_to_cv2(ijmap_py);
 
-    auto metric = RegularityGuidedPatchDistanceMetricV2(patch_size, ijmap, guide_weight);
-    cv::Mat result = Inpainting(source, mask, global_mask, &metric).run(PM_verbose, false, PM_seed);
-    return _cv2_to_py(result);
+        auto metric = RegularityGuidedPatchDistanceMetricV2(patch_size, ijmap, guide_weight);
+        cv::Mat result = Inpainting(source, mask, global_mask, &metric).run(verbose().load(), false, random_seed().load());
+        return _cv2_to_py(result);
+    });
 }
 
 int _dtype_py_to_cv(int dtype_py)
@@ -121,12 +196,19 @@ cv::Mat _py_to_cv2(PM_mat_t pymat)
 
 PM_mat_t _cv2_to_py(cv::Mat cvmat)
 {
+    if (!cvmat.isContinuous())
+        cvmat = cvmat.clone();
+
     PM_shape_t shape = {cvmat.size().width, cvmat.size().height, cvmat.channels()};
     int dtype = _dtype_cv_to_py(cvmat.depth());
     size_t dsize = cvmat.total() * cvmat.elemSize();
 
-    void *data_ptr = reinterpret_cast<void *>(malloc(dsize));
-    memcpy(data_ptr, reinterpret_cast<void *>(cvmat.data), dsize);
+    // A null pointer reports an error to Python, so allocate at least one byte. A failed
+    // allocation throws std::bad_alloc, which guarded() reports.
+    auto data = std::make_unique<unsigned char[]>(dsize > 0 ? dsize : 1);
+    if (dsize > 0)
+        std::memcpy(data.get(), cvmat.data, dsize);
 
-    return PM_mat_t{data_ptr, shape, dtype};
+    // Python passes the buffer back to PM_free_pymat, which frees it.
+    return PM_mat_t{data.release(), shape, dtype};
 }

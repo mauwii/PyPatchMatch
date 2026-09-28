@@ -44,7 +44,6 @@ namespace
         auto source_ptr = source.get_image(ys, xs);
         auto target_ptr = target.ptr<double>(yt, xt);
 
-#pragma unroll
         for (int c = 0; c < 3; ++c)
             target_ptr[c] += static_cast<double>(source_ptr[c]) * weight;
         target_ptr[3] += weight;
@@ -126,11 +125,16 @@ cv::Mat Inpainting::run(bool verbose, bool verbose_visualize, unsigned int rando
         target = _expectation_maximization(source, target, level, verbose);
     }
 
-    // Globally masked pixels are neither filled nor used as a source, so the pyramid
-    // leaves them black. Keep their input values instead.
+    // Only the holes are filled. The votes of overlapping patches also change the known
+    // pixels near the holes, and the pyramid leaves globally masked pixels black, which
+    // are neither filled nor used as a source. Keep the input values of both.
     cv::Mat result = target.image();
+    if (result.empty()) // OpenCV rejects empty operands in matrix expressions
+        return result;
+    cv::Mat keep = m_initial.mask() == 0;
     if (!m_initial.global_mask().empty())
-        m_initial.image().copyTo(result, m_initial.global_mask());
+        keep |= m_initial.global_mask() != 0;
+    m_initial.image().copyTo(result, keep);
     return result;
 }
 

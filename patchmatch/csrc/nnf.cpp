@@ -287,27 +287,6 @@ int PatchSSDDistanceMetric::operator()(const MaskedImage &source, int source_y, 
     return distance_masked_images(source, source_y, source_x, target, target_y, target_x, m_patch_size);
 }
 
-int DebugPatchSSDDistanceMetric::operator()(const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const
-{
-    fprintf(stderr, "DebugPatchSSDDistanceMetric: %d %d %d %d\n", source.size().width, source.size().height, m_width, m_height);
-    return distance_masked_images(source, source_y, source_x, target, target_y, target_x, m_patch_size);
-}
-
-int RegularityGuidedPatchDistanceMetricV1::operator()(const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const
-{
-    double dx = remainder(double(source_x - target_x) / source.size().width, m_dx1);
-    double dy = remainder(double(source_y - target_y) / source.size().height, m_dy2);
-
-    double score1 = sqrt(dx * dx + dy * dy) / m_scale;
-    if (score1 < 0 || score1 > 1)
-        score1 = 1;
-    score1 *= PatchDistanceMetric::kDistanceScale;
-
-    double score2 = distance_masked_images(source, source_y, source_x, target, target_y, target_x, m_patch_size);
-    double score = score1 * m_weight + score2 / (1 + m_weight);
-    return static_cast<int>(score / (1 + m_weight));
-}
-
 int RegularityGuidedPatchDistanceMetricV2::operator()(const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const
 {
     if (target_y < 0 || target_y >= target.size().height || target_x < 0 || target_x >= target.size().width)
@@ -338,6 +317,11 @@ int RegularityGuidedPatchDistanceMetricV2::operator()(const MaskedImage &source,
     }
 
     double score2 = distance_masked_images(source, source_y, source_x, target, target_y, target_x, m_patch_size);
-    double score = score1 * m_weight + score2;
-    return int(score / (1 + m_weight));
+    double score = (score1 * m_weight + score2) / (1 + m_weight);
+    // The distance indexes the similarity table in Inpainting, so keep it in range.
+    if (!(score > 0))
+        return 0;
+    if (score >= PatchDistanceMetric::kDistanceScale)
+        return PatchDistanceMetric::kDistanceScale;
+    return static_cast<int>(score);
 }

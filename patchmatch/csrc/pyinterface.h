@@ -1,3 +1,5 @@
+#pragma once
+
 #include <opencv2/core.hpp>
 #include <cstdlib>
 #include <cstdio>
@@ -28,6 +30,10 @@ extern "C"
         PM_shape_t shape;
         int dtype;
     };
+
+    // The PM_inpaint* functions return a null data_ptr on failure; this returns the
+    // error message of the last failure on the calling thread.
+    const char *PM_last_error(void);
 
     void PM_set_random_seed(unsigned int seed);
     void PM_set_verbose(int value);

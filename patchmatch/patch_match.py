@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import math
+import operator
 from collections.abc import Callable
 from typing import TypeAlias
 
@@ -46,6 +48,9 @@ except OSError as e:
 
 # True if the native library was loaded successfully.
 patchmatch_available = _lib is not None
+
+# The native code computes 2 * patch_size + 1 as a C int.
+_MAX_PATCH_SIZE = (2**31 - 2) // 2
 
 
 def _get_lib() -> ctypes.CDLL:
@@ -78,13 +83,17 @@ def inpaint(
             white pixels (255, 255, 255) are treated as holes.
         global_mask: mask like ``mask`` of pixels that are neither filled nor used as
             a source; they keep their values from ``image``.
-        patch_size: patch size for the inpainting algorithm.
+        patch_size: radius of the compared patches, which span
+            ``(2 * patch_size + 1) ** 2`` pixels. Larger patches follow larger
+            structures but are much slower; the examples use 3.
 
     Returns:
-        The repaired image, with the same shape as ``image``.
+        The repaired image, with the same shape as ``image``. Only the holes are
+        filled; all other pixels keep their values from ``image``.
     """
     lib = _get_lib()
-    image, mask, global_mask = _prepare_inputs(image, mask, global_mask, patch_size)
+    patch_size = _check_patch_size(patch_size)
+    image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
 
     if global_mask is None:
         return _call(lib.PM_inpaint, image, mask, ctypes.c_int(patch_size))
@@ -103,12 +112,15 @@ def inpaint_regularity(
     """Like :func:`inpaint`, additionally guided by a regularity map.
 
     Args:
-        ijmap: HxWx3 float32 array with the regularity coordinates of each pixel;
-            a map of a different size is scaled to the image.
-        guide_weight: weight of the regularity term relative to the patch distance.
+        ijmap: HxWx3 float32 array of finite values with the regularity coordinates
+            of each pixel in the first two channels; the third channel is unused.
+            A map of a different size is scaled to the image.
+        guide_weight: non-negative weight of the regularity term relative to the
+            patch distance.
     """
     lib = _get_lib()
-    image, mask, global_mask = _prepare_inputs(image, mask, global_mask, patch_size)
+    patch_size = _check_patch_size(patch_size)
+    image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
 
     if not (
         isinstance(ijmap, np.ndarray)
@@ -118,7 +130,17 @@ def inpaint_regularity(
         and ijmap.size > 0
     ):
         raise ValueError("ijmap must be a non-empty HxWx3 float32 array")
+    # NaN and infinity turn into out-of-range patch distances in the native code
+    if not np.isfinite(ijmap).all():
+        raise ValueError("ijmap must only contain finite values")
     ijmap = np.ascontiguousarray(ijmap)
+
+    # the native code divides by 1 + guide_weight and indexes a table with the result
+    guide_weight = float(guide_weight)
+    if not (math.isfinite(guide_weight) and guide_weight >= 0):
+        raise ValueError(
+            f"guide_weight must be a finite number >= 0, got {guide_weight}"
+        )
 
     args = (ijmap, ctypes.c_int(patch_size), ctypes.c_float(guide_weight))
     if global_mask is None:
@@ -126,17 +148,28 @@ def inpaint_regularity(
     return _call(lib.PM_inpaint2_regularity, image, mask, global_mask, *args)
 
 
+def _check_patch_size(patch_size: int) -> int:
+    try:
+        patch_size = operator.index(patch_size)
+    except TypeError:
+        raise TypeError(
+            f"patch_size must be an integer, got {type(patch_size).__name__}"
+        ) from None
+    # The native code crashes for 0 and never terminates for negative sizes. ctypes
+    # silently wraps larger values into the C int range, e.g. 2**31 to a negative size.
+    if not 1 <= patch_size <= _MAX_PATCH_SIZE:
+        raise ValueError(
+            f"patch_size must be between 1 and {_MAX_PATCH_SIZE}, got {patch_size}"
+        )
+    return patch_size
+
+
 def _prepare_inputs(
     image: ImageLike,
     mask: ImageLike | None,
     global_mask: ImageLike | None,
-    patch_size: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """Validate the inputs and convert them to contiguous arrays."""
-    # the native code crashes for 0 and never terminates for negative sizes
-    if patch_size < 1:
-        raise ValueError(f"patch_size must be at least 1, got {patch_size}")
-
     image = _canonize_image_array(image)
     mask = _default_mask(image) if mask is None else _canonize_mask_array(mask)
     if global_mask is not None:
@@ -154,12 +187,17 @@ def _prepare_inputs(
 
 def _call(func: Callable[..., CMatT], *args: object) -> np.ndarray:
     """Call ``func`` with arrays converted to pymats and copy the result."""
+    lib = _get_lib()
     c_args = [np_to_pymat(a) if isinstance(a, np.ndarray) else a for a in args]
     ret = func(*c_args)
+    if not ret.data_ptr:
+        # the error message is kept per thread, like the call itself
+        message = lib.PM_last_error().decode(errors="replace").strip()
+        raise RuntimeError(f"patchmatch failed: {message}")
     try:
         return pymat_to_np(ret)
     finally:
-        _get_lib().PM_free_pymat(ret)
+        lib.PM_free_pymat(ret)
 
 
 def _canonize_image_array(image: ImageLike) -> np.ndarray:

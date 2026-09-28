@@ -45,9 +45,13 @@ def seed():
 
 
 def assert_filled(result: np.ndarray, source: np.ndarray) -> None:
+    """The hole is filled and all other pixels keep their values."""
     assert result.shape == source.shape
     assert result.dtype == np.uint8
     assert not (result[HOLE] == 255).all(axis=-1).any()
+    known = np.ones(source.shape[:2], dtype=bool)
+    known[HOLE] = False
+    np.testing.assert_array_equal(result[known], source[known])
 
 
 # --- package ----------------------------------------------------------------
@@ -79,6 +83,8 @@ def test_inpaint_explicit_mask(image, hole_mask):
     result = patchmatch.inpaint(image, hole_mask, patch_size=3)
     assert result.shape == image.shape
     assert (result[HOLE] != 0).any()
+    known = hole_mask == 0
+    np.testing.assert_array_equal(result[known], image[known])
 
 
 def test_inpaint_global_mask(image, hole_mask):
@@ -88,6 +94,14 @@ def test_inpaint_global_mask(image, hole_mask):
     assert_filled(result, image)
     # excluded pixels keep their values instead of the zeros of the pyramid
     np.testing.assert_array_equal(result[:8], image[:8])
+
+
+@pytest.mark.parametrize("shape", [(0, 0, 3), (0, 10, 3), (10, 0, 3)])
+def test_inpaint_empty_image(shape):
+    empty = np.zeros(shape, dtype=np.uint8)
+    global_mask = np.zeros(shape[:2], dtype=np.uint8)
+    assert patchmatch.inpaint(empty, patch_size=3).shape == shape
+    assert patchmatch.inpaint(empty, global_mask=global_mask).shape == shape
 
 
 @pytest.mark.parametrize("patch_size", [1, 3, 7])
@@ -243,7 +257,8 @@ def test_mask_size_must_match_image(image, ijmap, func, argument):
         func(image, **kwargs)
 
 
-@pytest.mark.parametrize("patch_size", [0, -1])
+# 2**31 wrapped to a negative C int, which never terminated
+@pytest.mark.parametrize("patch_size", [0, -1, 2**30, 2**31])
 @pytest.mark.parametrize(
     "func",
     [patchmatch.inpaint, patchmatch.inpaint_regularity],
@@ -255,6 +270,18 @@ def test_invalid_patch_size(image, ijmap, func, patch_size):
         func(image, None, patch_size=patch_size, **kwargs)
 
 
+def test_patch_size_must_be_an_integer(image):
+    with pytest.raises(TypeError, match="patch_size must be an integer"):
+        patchmatch.inpaint(image, patch_size=3.0)
+
+
+def test_patch_size_accepts_numpy_integers(image):
+    expected = patchmatch.inpaint(image, patch_size=3)
+    np.testing.assert_array_equal(
+        patchmatch.inpaint(image, patch_size=np.int64(3)), expected
+    )
+
+
 @pytest.mark.parametrize(
     "bad_ijmap",
     [
@@ -262,12 +289,44 @@ def test_invalid_patch_size(image, ijmap, func, patch_size):
         np.zeros((HEIGHT, WIDTH, 2), dtype=np.float32),
         np.zeros((0, WIDTH, 3), dtype=np.float32),
         [[[0.0, 0.0, 0.0]]],
+        np.full((HEIGHT, WIDTH, 3), np.nan, dtype=np.float32),
+        np.full((HEIGHT, WIDTH, 3), np.inf, dtype=np.float32),
     ],
-    ids=["float64", "2-channel", "empty", "list"],
+    ids=["float64", "2-channel", "empty", "list", "nan", "inf"],
 )
 def test_inpaint_regularity_invalid_ijmap(image, bad_ijmap):
     with pytest.raises(ValueError, match="ijmap"):
         patchmatch.inpaint_regularity(image, None, bad_ijmap)
+
+
+@pytest.mark.parametrize("guide_weight", [-1.0, -0.5, float("nan"), float("inf")])
+def test_inpaint_regularity_invalid_guide_weight(image, ijmap, guide_weight):
+    # a weight of -1 used to crash the native code, other negative weights made it
+    # read outside of the similarity table
+    with pytest.raises(ValueError, match="guide_weight"):
+        patchmatch.inpaint_regularity(image, None, ijmap, guide_weight=guide_weight)
+
+
+# --- native errors ----------------------------------------------------------
+
+
+def test_native_exception_raises_runtime_error():
+    # A null data pointer with a non-empty shape fails an OpenCV assertion. The
+    # exception must not propagate through the C interface and abort the process.
+    lib = patch_match._get_lib()
+    bad = _lib.CMatT(None, _lib.CShapeT(4, 4, 3), 0)
+    args = (bad, bad, ctypes.c_int(3))
+    with pytest.raises(RuntimeError, match=r"patchmatch failed: .*Assertion failed"):
+        patch_match._call(lib.PM_inpaint, *args)
+
+
+def test_native_rejects_negative_guide_weight(image, hole_mask, ijmap):
+    """The C++ metric checks the weight as well, for callers that bypass Python."""
+    lib = patch_match._get_lib()
+    mask = hole_mask[..., np.newaxis]
+    args = (image, mask, ijmap, ctypes.c_int(3), ctypes.c_float(-1))
+    with pytest.raises(RuntimeError, match="guide weight must be >= 0"):
+        patch_match._call(lib.PM_inpaint_regularity, *args)
 
 
 # --- missing native library -------------------------------------------------
@@ -295,6 +354,27 @@ def test_find_library_reports_missing_file(monkeypatch):
     monkeypatch.setattr(_lib, "LIBRARY_NAME", "does-not-exist.so")
     with pytest.raises(OSError, match=r"does-not-exist\.so not found"):
         _lib.find_library()
+
+
+def test_import_without_native_library():
+    """A failed build from the sdist installs the package without the library.
+
+    The import has to work and explain how to fix it, see the overrides in
+    pyproject.toml. The module is reloaded in a separate process, so the other
+    tests keep the loaded library.
+    """
+    code = (
+        "import importlib\n"
+        "from patchmatch import _lib, patch_match\n"
+        "_lib.LIBRARY_NAME = 'missing-library'\n"
+        "importlib.reload(patch_match)\n"
+        "assert not patch_match.patchmatch_available\n"
+    )
+    process = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert "missing-library not found" in process.stderr
+    assert "--no-cache-dir" in process.stderr
 
 
 # --- ctypes conversion ------------------------------------------------------
