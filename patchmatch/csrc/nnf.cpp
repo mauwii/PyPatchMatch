@@ -338,6 +338,11 @@ int RegularityGuidedPatchDistanceMetricV2::operator()(const MaskedImage &source,
     }
 
     double score2 = distance_masked_images(source, source_y, source_x, target, target_y, target_x, m_patch_size);
-    double score = score1 * m_weight + score2;
-    return int(score / (1 + m_weight));
+    double score = (score1 * m_weight + score2) / (1 + m_weight);
+    // The distance indexes the similarity table in Inpainting, so keep it in range.
+    if (!(score > 0))
+        return 0;
+    if (score >= PatchDistanceMetric::kDistanceScale)
+        return PatchDistanceMetric::kDistanceScale;
+    return static_cast<int>(score);
 }

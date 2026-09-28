@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import math
 from collections.abc import Callable
 from typing import TypeAlias
 
@@ -103,9 +104,11 @@ def inpaint_regularity(
     """Like :func:`inpaint`, additionally guided by a regularity map.
 
     Args:
-        ijmap: HxWx3 float32 array with the regularity coordinates of each pixel;
-            a map of a different size is scaled to the image.
-        guide_weight: weight of the regularity term relative to the patch distance.
+        ijmap: HxWx3 float32 array of finite values with the regularity coordinates
+            of each pixel in the first two channels; the third channel is unused.
+            A map of a different size is scaled to the image.
+        guide_weight: non-negative weight of the regularity term relative to the
+            patch distance.
     """
     lib = _get_lib()
     image, mask, global_mask = _prepare_inputs(image, mask, global_mask, patch_size)
@@ -118,7 +121,17 @@ def inpaint_regularity(
         and ijmap.size > 0
     ):
         raise ValueError("ijmap must be a non-empty HxWx3 float32 array")
+    # NaN and infinity turn into out-of-range patch distances in the native code
+    if not np.isfinite(ijmap).all():
+        raise ValueError("ijmap must only contain finite values")
     ijmap = np.ascontiguousarray(ijmap)
+
+    # the native code divides by 1 + guide_weight and indexes a table with the result
+    guide_weight = float(guide_weight)
+    if not (math.isfinite(guide_weight) and guide_weight >= 0):
+        raise ValueError(
+            f"guide_weight must be a finite number >= 0, got {guide_weight}"
+        )
 
     args = (ijmap, ctypes.c_int(patch_size), ctypes.c_float(guide_weight))
     if global_mask is None:

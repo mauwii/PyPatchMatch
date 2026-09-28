@@ -262,12 +262,22 @@ def test_invalid_patch_size(image, ijmap, func, patch_size):
         np.zeros((HEIGHT, WIDTH, 2), dtype=np.float32),
         np.zeros((0, WIDTH, 3), dtype=np.float32),
         [[[0.0, 0.0, 0.0]]],
+        np.full((HEIGHT, WIDTH, 3), np.nan, dtype=np.float32),
+        np.full((HEIGHT, WIDTH, 3), np.inf, dtype=np.float32),
     ],
-    ids=["float64", "2-channel", "empty", "list"],
+    ids=["float64", "2-channel", "empty", "list", "nan", "inf"],
 )
 def test_inpaint_regularity_invalid_ijmap(image, bad_ijmap):
     with pytest.raises(ValueError, match="ijmap"):
         patchmatch.inpaint_regularity(image, None, bad_ijmap)
+
+
+@pytest.mark.parametrize("guide_weight", [-1.0, -0.5, float("nan"), float("inf")])
+def test_inpaint_regularity_invalid_guide_weight(image, ijmap, guide_weight):
+    # a weight of -1 used to crash the native code, other negative weights made it
+    # read outside of the similarity table
+    with pytest.raises(ValueError, match="guide_weight"):
+        patchmatch.inpaint_regularity(image, None, ijmap, guide_weight=guide_weight)
 
 
 # --- missing native library -------------------------------------------------

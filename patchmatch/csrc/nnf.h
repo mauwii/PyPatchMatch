@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <stdexcept>
 #include <opencv2/core.hpp>
 #include "masked_image.h"
 
@@ -150,6 +151,9 @@ public:
     RegularityGuidedPatchDistanceMetricV2(int patch_size, cv::Mat ijmap, double weight)
         : PatchDistanceMetric(patch_size), m_ijmap(ijmap), m_weight(weight)
     {
+        // The distance is divided by 1 + weight, so a negative weight flips its sign.
+        if (!(weight >= 0))
+            throw std::invalid_argument("the guide weight must be >= 0");
     }
     virtual int operator()(const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const;
 
