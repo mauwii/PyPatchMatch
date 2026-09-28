@@ -18,6 +18,7 @@ from __future__ import annotations
 import ctypes
 import logging
 import math
+import operator
 from collections.abc import Callable
 from typing import TypeAlias
 
@@ -47,6 +48,9 @@ except OSError as e:
 
 # True if the native library was loaded successfully.
 patchmatch_available = _lib is not None
+
+# The native code computes 2 * patch_size + 1 as a C int.
+_MAX_PATCH_SIZE = (2**31 - 2) // 2
 
 
 def _get_lib() -> ctypes.CDLL:
@@ -85,7 +89,8 @@ def inpaint(
         The repaired image, with the same shape as ``image``.
     """
     lib = _get_lib()
-    image, mask, global_mask = _prepare_inputs(image, mask, global_mask, patch_size)
+    patch_size = _check_patch_size(patch_size)
+    image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
 
     if global_mask is None:
         return _call(lib.PM_inpaint, image, mask, ctypes.c_int(patch_size))
@@ -111,7 +116,8 @@ def inpaint_regularity(
             patch distance.
     """
     lib = _get_lib()
-    image, mask, global_mask = _prepare_inputs(image, mask, global_mask, patch_size)
+    patch_size = _check_patch_size(patch_size)
+    image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
 
     if not (
         isinstance(ijmap, np.ndarray)
@@ -139,17 +145,28 @@ def inpaint_regularity(
     return _call(lib.PM_inpaint2_regularity, image, mask, global_mask, *args)
 
 
+def _check_patch_size(patch_size: int) -> int:
+    try:
+        patch_size = operator.index(patch_size)
+    except TypeError:
+        raise TypeError(
+            f"patch_size must be an integer, got {type(patch_size).__name__}"
+        ) from None
+    # The native code crashes for 0 and never terminates for negative sizes. ctypes
+    # silently wraps larger values into the C int range, e.g. 2**31 to a negative size.
+    if not 1 <= patch_size <= _MAX_PATCH_SIZE:
+        raise ValueError(
+            f"patch_size must be between 1 and {_MAX_PATCH_SIZE}, got {patch_size}"
+        )
+    return patch_size
+
+
 def _prepare_inputs(
     image: ImageLike,
     mask: ImageLike | None,
     global_mask: ImageLike | None,
-    patch_size: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """Validate the inputs and convert them to contiguous arrays."""
-    # the native code crashes for 0 and never terminates for negative sizes
-    if patch_size < 1:
-        raise ValueError(f"patch_size must be at least 1, got {patch_size}")
-
     image = _canonize_image_array(image)
     mask = _default_mask(image) if mask is None else _canonize_mask_array(mask)
     if global_mask is not None:

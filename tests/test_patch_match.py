@@ -243,7 +243,8 @@ def test_mask_size_must_match_image(image, ijmap, func, argument):
         func(image, **kwargs)
 
 
-@pytest.mark.parametrize("patch_size", [0, -1])
+# 2**31 wrapped to a negative C int, which never terminated
+@pytest.mark.parametrize("patch_size", [0, -1, 2**30, 2**31])
 @pytest.mark.parametrize(
     "func",
     [patchmatch.inpaint, patchmatch.inpaint_regularity],
@@ -253,6 +254,18 @@ def test_invalid_patch_size(image, ijmap, func, patch_size):
     kwargs = {"ijmap": ijmap} if func is patchmatch.inpaint_regularity else {}
     with pytest.raises(ValueError, match="patch_size"):
         func(image, None, patch_size=patch_size, **kwargs)
+
+
+def test_patch_size_must_be_an_integer(image):
+    with pytest.raises(TypeError, match="patch_size must be an integer"):
+        patchmatch.inpaint(image, patch_size=3.0)
+
+
+def test_patch_size_accepts_numpy_integers(image):
+    expected = patchmatch.inpaint(image, patch_size=3)
+    np.testing.assert_array_equal(
+        patchmatch.inpaint(image, patch_size=np.int64(3)), expected
+    )
 
 
 @pytest.mark.parametrize(
