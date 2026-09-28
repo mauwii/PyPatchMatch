@@ -22,6 +22,15 @@ OpenCV installation is needed. On other platforms, e.g. Alpine Linux or Windows 
 pip builds from the source distribution, which requires a C++17 compiler, CMake and the
 OpenCV development files (e.g. `apt install libopencv-dev` or `brew install opencv`).
 
+If that build fails, PyPatchMatch is installed without the native library instead of
+blocking the installation: `patchmatch.patchmatch_available` is `False` and the
+inpainting functions raise `RuntimeError`. After installing the missing tools, reinstall
+it without the cached build:
+
+```sh
+pip install --force-reinstall --no-deps --no-cache-dir PyPatchMatch
+```
+
 ## Usage
 
 Python (see

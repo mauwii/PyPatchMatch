@@ -59,6 +59,15 @@ metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
 sdist.include = ["examples/images/forest_pruned.bmp", "patchmatch/_version.py"]
 sdist.exclude = [".*", "examples", "uv.lock"]
 
+# Without a matching wheel, pip builds the sdist, which needs a C++ compiler, CMake and
+# OpenCV. If that fails, build a wheel without the native library instead of failing
+# the installation; patchmatch_available is then False, as with 1.x. Builds from the
+# source tree still fail, and cibuildwheel rejects the pure wheel of a failed build.
+[[tool.scikit-build.overrides]]
+if.from-sdist = true
+if.failed = true
+wheel.cmake = false
+
 [tool.setuptools_scm]
 version_file = "patchmatch/_version.py"
 # used when building without git metadata, e.g. from a GitHub source archive

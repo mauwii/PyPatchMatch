@@ -80,9 +80,13 @@ def find_library() -> Path:
         candidate = Path(directory) / LIBRARY_NAME
         if candidate.is_file():
             return candidate
+    # Without a wheel for the platform, a failed build from the sdist installs the
+    # package without the library, see the overrides in pyproject.toml.
     raise OSError(
-        f"{LIBRARY_NAME} not found in {list(package.__path__)}; "
-        "reinstall PyPatchMatch or build it from source with OpenCV available"
+        f"{LIBRARY_NAME} not found in {list(package.__path__)}. Without a wheel for "
+        "this platform, PyPatchMatch is built from source, which needs a C++ "
+        "compiler, CMake and OpenCV. Install them and reinstall it without the "
+        "cache: pip install --force-reinstall --no-deps --no-cache-dir pypatchmatch"
     )
 
 
