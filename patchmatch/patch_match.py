@@ -83,7 +83,9 @@ def inpaint(
             white pixels (255, 255, 255) are treated as holes.
         global_mask: mask like ``mask`` of pixels that are neither filled nor used as
             a source; they keep their values from ``image``.
-        patch_size: patch size for the inpainting algorithm.
+        patch_size: radius of the compared patches, which span
+            ``(2 * patch_size + 1) ** 2`` pixels. Larger patches follow larger
+            structures but are much slower; the examples use 3.
 
     Returns:
         The repaired image, with the same shape as ``image``. Only the holes are

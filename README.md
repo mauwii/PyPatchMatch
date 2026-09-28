@@ -43,10 +43,15 @@ pixels that are neither filled nor used as a source; they keep their values as w
 `patchmatch.patchmatch_available` tells whether the native library could be loaded.
 The previous import path `from patchmatch import patch_match` keeps working.
 
+`patch_size` is the radius of the compared patches, which span `2 * patch_size + 1`
+pixels in each direction. Larger patches follow larger structures but are much slower;
+the default of 15 compares 31x31 patches, the examples use 3.
+
 `patchmatch.set_random_seed(seed)` sets the seed of the randomized search and
 `patchmatch.set_verbose(True)` prints the progress of the native code to stderr.
 `patchmatch.inpaint_regularity(image, mask, ijmap)` additionally guides the search with
-a regularity map, an HxWx3 float32 array with the regularity coordinates of each pixel.
+a regularity map, an HxWx3 float32 array with the regularity coordinates of each pixel
+in its first two channels. Its `guide_weight` must be at least 0.
 
 C++ (see
 [examples/cpp_example.cpp](https://github.com/mauwii/PyPatchMatch/blob/main/examples/cpp_example.cpp),
