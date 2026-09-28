@@ -315,16 +315,18 @@ def test_native_exception_raises_runtime_error():
     # exception must not propagate through the C interface and abort the process.
     lib = patch_match._get_lib()
     bad = _lib.CMatT(None, _lib.CShapeT(4, 4, 3), 0)
+    args = (bad, bad, ctypes.c_int(3))
     with pytest.raises(RuntimeError, match=r"patchmatch failed: .*Assertion failed"):
-        patch_match._call(lib.PM_inpaint, bad, bad, ctypes.c_int(3))
+        patch_match._call(lib.PM_inpaint, *args)
 
 
 def test_native_rejects_negative_guide_weight(image, hole_mask, ijmap):
     """The C++ metric checks the weight as well, for callers that bypass Python."""
     lib = patch_match._get_lib()
-    args = (image, hole_mask[..., np.newaxis], ijmap, ctypes.c_int(3))
+    mask = hole_mask[..., np.newaxis]
+    args = (image, mask, ijmap, ctypes.c_int(3), ctypes.c_float(-1))
     with pytest.raises(RuntimeError, match="guide weight must be >= 0"):
-        patch_match._call(lib.PM_inpaint_regularity, *args, ctypes.c_float(-1))
+        patch_match._call(lib.PM_inpaint_regularity, *args)
 
 
 # --- missing native library -------------------------------------------------
