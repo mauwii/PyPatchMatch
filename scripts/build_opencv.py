@@ -6,6 +6,7 @@ wheels small and free of OpenCV's GUI/codec dependencies.
 Usage: python build_opencv.py  (installs into $OpenCV_ROOT)
 """
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -19,6 +20,9 @@ OPENCV_VERSION = "4.14.0"
 OPENCV_URL = (
     f"https://github.com/opencv/opencv/archive/refs/tags/{OPENCV_VERSION}.tar.gz"
 )
+# The wheels link this code statically, so the archive is pinned by its SHA-256.
+# Update it together with the version, e.g. with `sha256sum` or `shasum -a 256`.
+OPENCV_SHA256 = "ee8fb9b30eb60850431b4656447080e3737b56e45719c92b67f245950609f86e"
 
 CMAKE_OPTIONS = {
     "CMAKE_BUILD_TYPE": "Release",
@@ -87,6 +91,18 @@ def find_cmake() -> str:
     return str(scripts / ("cmake.exe" if os.name == "nt" else "cmake"))
 
 
+def verify_archive(archive: Path) -> None:
+    sha256 = hashlib.sha256()
+    with archive.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            sha256.update(chunk)
+    if sha256.hexdigest() != OPENCV_SHA256:
+        sys.exit(
+            f"SHA-256 mismatch for {OPENCV_URL}: "
+            f"expected {OPENCV_SHA256}, got {sha256.hexdigest()}"
+        )
+
+
 def main() -> None:
     # OpenCV_ROOT is the variable CMake's find_package(OpenCV) looks for.
     root = os.environ.get("OpenCV_ROOT")  # noqa: SIM112
@@ -102,6 +118,7 @@ def main() -> None:
         archive = Path(tmp) / "opencv.tar.gz"
         print(f"Downloading {OPENCV_URL}", flush=True)
         urllib.request.urlretrieve(OPENCV_URL, archive)
+        verify_archive(archive)
         with tarfile.open(archive) as tar:
             # extraction filters are missing on older patch releases, e.g. the
             # last Windows installer of Python 3.10 (3.10.11)
