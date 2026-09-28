@@ -85,8 +85,10 @@ void PM_set_verbose(int value)
 
 void PM_free_pymat(PM_mat_t pymat)
 {
-    // Takes back the ownership of the buffer that _cv2_to_py released.
-    std::unique_ptr<unsigned char[]> data(static_cast<unsigned char *>(pymat.data_ptr));
+    // Takes back the ownership of the buffer that _cv2_to_py released. The buffer
+    // crosses the C interface as a plain pointer, so it cannot be a std::vector
+    // (SonarCloud cpp:S5945).
+    std::unique_ptr<unsigned char[]> data(static_cast<unsigned char *>(pymat.data_ptr)); // NOSONAR
 }
 
 PM_mat_t PM_inpaint(PM_mat_t source_py, PM_mat_t mask_py, int patch_size)
