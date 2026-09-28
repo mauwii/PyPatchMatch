@@ -184,12 +184,17 @@ def _prepare_inputs(
 
 def _call(func: Callable[..., CMatT], *args: object) -> np.ndarray:
     """Call ``func`` with arrays converted to pymats and copy the result."""
+    lib = _get_lib()
     c_args = [np_to_pymat(a) if isinstance(a, np.ndarray) else a for a in args]
     ret = func(*c_args)
+    if not ret.data_ptr:
+        # the error message is kept per thread, like the call itself
+        message = lib.PM_last_error().decode(errors="replace").strip()
+        raise RuntimeError(f"patchmatch failed: {message}")
     try:
         return pymat_to_np(ret)
     finally:
-        _get_lib().PM_free_pymat(ret)
+        lib.PM_free_pymat(ret)
 
 
 def _canonize_image_array(image: ImageLike) -> np.ndarray:

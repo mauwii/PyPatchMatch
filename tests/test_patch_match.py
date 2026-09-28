@@ -293,6 +293,26 @@ def test_inpaint_regularity_invalid_guide_weight(image, ijmap, guide_weight):
         patchmatch.inpaint_regularity(image, None, ijmap, guide_weight=guide_weight)
 
 
+# --- native errors ----------------------------------------------------------
+
+
+def test_native_exception_raises_runtime_error():
+    # A null data pointer with a non-empty shape fails an OpenCV assertion. The
+    # exception must not propagate through the C interface and abort the process.
+    lib = patch_match._get_lib()
+    bad = _lib.CMatT(None, _lib.CShapeT(4, 4, 3), 0)
+    with pytest.raises(RuntimeError, match=r"patchmatch failed: .*Assertion failed"):
+        patch_match._call(lib.PM_inpaint, bad, bad, ctypes.c_int(3))
+
+
+def test_native_rejects_negative_guide_weight(image, hole_mask, ijmap):
+    """The C++ metric checks the weight as well, for callers that bypass Python."""
+    lib = patch_match._get_lib()
+    args = (image, hole_mask[..., np.newaxis], ijmap, ctypes.c_int(3))
+    with pytest.raises(RuntimeError, match="guide weight must be >= 0"):
+        patch_match._call(lib.PM_inpaint_regularity, *args, ctypes.c_float(-1))
+
+
 # --- missing native library -------------------------------------------------
 
 

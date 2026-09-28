@@ -95,6 +95,8 @@ def load_library() -> ctypes.CDLL:
     lib.PM_set_verbose.restype = None
     lib.PM_free_pymat.argtypes = [CMatT]
     lib.PM_free_pymat.restype = None
+    lib.PM_last_error.argtypes = []
+    lib.PM_last_error.restype = ctypes.c_char_p
 
     lib.PM_inpaint.argtypes = [CMatT, CMatT, ctypes.c_int]
     lib.PM_inpaint2.argtypes = [CMatT, CMatT, CMatT, ctypes.c_int]
