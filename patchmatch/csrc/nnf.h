@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cassert>
-#include <cmath>
 #include <stdexcept>
 #include <opencv2/core.hpp>
 #include "masked_image.h"
@@ -117,34 +115,6 @@ public:
     static const int kSSDScale;
 };
 
-class DebugPatchSSDDistanceMetric : public PatchDistanceMetric
-{
-public:
-    DebugPatchSSDDistanceMetric(int patch_size, int width, int height) : PatchDistanceMetric(patch_size), m_width(width), m_height(height) {}
-    virtual int operator()(const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const;
-
-protected:
-    int m_width, m_height;
-};
-
-class RegularityGuidedPatchDistanceMetricV1 : public PatchDistanceMetric
-{
-public:
-    RegularityGuidedPatchDistanceMetricV1(int patch_size, double dx1, double dy1, double dx2, double dy2, double weight)
-        : PatchDistanceMetric(patch_size), m_dx1(dx1), m_dy1(dy1), m_dx2(dx2), m_dy2(dy2), m_weight(weight)
-    {
-
-        assert(m_dy1 == 0);
-        assert(m_dx2 == 0);
-        m_scale = sqrt(m_dx1 * m_dx1 + m_dy2 * m_dy2) / 4;
-    }
-    virtual int operator()(const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const;
-
-protected:
-    double m_dx1, m_dy1, m_dx2, m_dy2;
-    double m_scale, m_weight;
-};
-
 class RegularityGuidedPatchDistanceMetricV2 : public PatchDistanceMetric
 {
 public:
@@ -159,5 +129,5 @@ public:
 
 protected:
     cv::Mat m_ijmap;
-    double m_width, m_height, m_weight;
+    double m_weight;
 };
