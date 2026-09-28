@@ -1,3 +1,4 @@
+#include <atomic>
 #include <exception>
 #include <new>
 #include <string>
@@ -5,8 +6,9 @@
 #include "pyinterface.h"
 #include "inpaint.h"
 
-static unsigned int PM_seed = 1212;
-static bool PM_verbose = false;
+// Set by one thread while others may be inpainting, since ctypes releases the GIL.
+static std::atomic<unsigned int> PM_seed{1212};
+static std::atomic<bool> PM_verbose{false};
 
 int _dtype_py_to_cv(int dtype_py);
 int _dtype_cv_to_py(int dtype_cv);
