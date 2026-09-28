@@ -86,7 +86,8 @@ def inpaint(
         patch_size: patch size for the inpainting algorithm.
 
     Returns:
-        The repaired image, with the same shape as ``image``.
+        The repaired image, with the same shape as ``image``. Only the holes are
+        filled; all other pixels keep their values from ``image``.
     """
     lib = _get_lib()
     patch_size = _check_patch_size(patch_size)

@@ -41,9 +41,8 @@ def assert_plausible_fill(
 
     assert not white_pixels(result)[holes].any(), "holes were not filled"
 
-    # the known part of the image is reconstructed almost unchanged
-    outside = np.abs(result[~holes].astype(float) - source[~holes]).mean()
-    assert outside < 1, outside
+    # only the holes are filled
+    np.testing.assert_array_equal(result[~holes], source[~holes])
 
     # the filling blends in with its surroundings
     band = surrounding(holes) & ~excluded

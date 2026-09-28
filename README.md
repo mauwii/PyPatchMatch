@@ -36,9 +36,9 @@ result = patchmatch.inpaint(image, mask, patch_size=3)
 ```
 
 The mask must have the same height and width as the image. If `mask` is omitted, all
-pure white pixels are treated as holes. The optional keyword argument `global_mask`, in
-the same format, marks pixels that are neither filled nor used as a source; they keep
-their values (see
+pure white pixels are treated as holes. Only the holes are filled; all other pixels keep
+their values. The optional keyword argument `global_mask`, in the same format, marks
+pixels that are neither filled nor used as a source; they keep their values as well (see
 [examples/py_example_global_mask.py](https://github.com/mauwii/PyPatchMatch/blob/main/examples/py_example_global_mask.py)).
 `patchmatch.patchmatch_available` tells whether the native library could be loaded.
 The previous import path `from patchmatch import patch_match` keeps working.

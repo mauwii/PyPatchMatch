@@ -45,9 +45,13 @@ def seed():
 
 
 def assert_filled(result: np.ndarray, source: np.ndarray) -> None:
+    """The hole is filled and all other pixels keep their values."""
     assert result.shape == source.shape
     assert result.dtype == np.uint8
     assert not (result[HOLE] == 255).all(axis=-1).any()
+    known = np.ones(source.shape[:2], dtype=bool)
+    known[HOLE] = False
+    np.testing.assert_array_equal(result[known], source[known])
 
 
 # --- package ----------------------------------------------------------------
@@ -79,6 +83,8 @@ def test_inpaint_explicit_mask(image, hole_mask):
     result = patchmatch.inpaint(image, hole_mask, patch_size=3)
     assert result.shape == image.shape
     assert (result[HOLE] != 0).any()
+    known = hole_mask == 0
+    np.testing.assert_array_equal(result[known], image[known])
 
 
 def test_inpaint_global_mask(image, hole_mask):
@@ -88,6 +94,14 @@ def test_inpaint_global_mask(image, hole_mask):
     assert_filled(result, image)
     # excluded pixels keep their values instead of the zeros of the pyramid
     np.testing.assert_array_equal(result[:8], image[:8])
+
+
+@pytest.mark.parametrize("shape", [(0, 0, 3), (0, 10, 3), (10, 0, 3)])
+def test_inpaint_empty_image(shape):
+    empty = np.zeros(shape, dtype=np.uint8)
+    global_mask = np.zeros(shape[:2], dtype=np.uint8)
+    assert patchmatch.inpaint(empty, patch_size=3).shape == shape
+    assert patchmatch.inpaint(empty, global_mask=global_mask).shape == shape
 
 
 @pytest.mark.parametrize("patch_size", [1, 3, 7])
