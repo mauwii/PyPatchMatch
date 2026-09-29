@@ -1,5 +1,6 @@
 """End-to-end tests of the user workflows shown in examples/ and the README."""
 
+import importlib.util
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,7 @@ from PIL import Image, ImageFilter
 import patchmatch
 
 IMAGES = Path(__file__).parents[1] / "examples" / "images"
+SCRIPTS = Path(__file__).parents[1] / "scripts"
 
 pytestmark = pytest.mark.e2e
 
@@ -50,16 +52,16 @@ def assert_plausible_fill(
     assert color_diff.max() < 10, color_diff
 
 
-def neighbor_difference(
-    image: np.ndarray, first: np.ndarray, second: np.ndarray
-) -> float:
-    """Mean color difference of adjacent pixels, one in ``first``, one in ``second``."""
-    pixels = image.astype(int)
-    dx = np.abs(pixels[:, 1:] - pixels[:, :-1]).sum(axis=2)
-    dy = np.abs(pixels[1:] - pixels[:-1]).sum(axis=2)
-    pairs_x = (first[:, 1:] & second[:, :-1]) | (second[:, 1:] & first[:, :-1])
-    pairs_y = (first[1:] & second[:-1]) | (second[1:] & first[:-1])
-    return float(np.concatenate([dx[pairs_x], dy[pairs_y]]).mean())
+def load_evaluation():
+    """scripts/evaluate_inpainting.py, whose measures the quality tests share."""
+    path = SCRIPTS / "evaluate_inpainting.py"
+    spec = importlib.util.spec_from_file_location("evaluate_inpainting", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+evaluation = load_evaluation()
 
 
 def coarse_error(image: np.ndarray, truth: np.ndarray, mask: np.ndarray) -> float:
@@ -131,37 +133,27 @@ def test_global_mask_is_not_used_as_source(pruned_image):
 
 
 def test_fill_is_as_detailed_as_its_surroundings(pruned_image):
-    """The weighted mean of all overlapping patches blurred the fill (ratio 0.7)."""
+    """The weighted mean of all overlapping patches blurred the fill (detail 0.69)."""
     source = np.array(pruned_image)
     holes = white_pixels(source)
-    inside = holes & ~surrounding(~holes, 3)
-    band = surrounding(holes, 20)
 
     result = patchmatch.inpaint(source, patch_size=3)
 
-    detail = neighbor_difference(result, inside, inside)
-    assert detail > 0.8 * neighbor_difference(result, band, band)
+    assert evaluation.measure(result, holes)["detail"] > 0.8
 
 
 def test_no_seam_at_the_hole_border(pruned_image):
     """Known pixels changed during the iterations and restored at the end left a seam.
 
-    The difference across the border of the holes was more than twice the difference
-    of neighbors on either side of it.
+    The difference across the border of the holes was about twice the difference of
+    neighbors on either side of it (seam 2.03).
     """
     source = np.array(pruned_image)
     holes = white_pixels(source)
-    inner_ring = holes & surrounding(~holes, 8)
-    outer_ring = surrounding(holes, 8)
 
     result = patchmatch.inpaint(source, patch_size=3)
 
-    across = neighbor_difference(result, holes, ~holes)
-    along = (
-        neighbor_difference(result, inner_ring, inner_ring)
-        + neighbor_difference(result, outer_ring, outer_ring)
-    ) / 2
-    assert across < 1.9 * along
+    assert evaluation.measure(result, holes)["seam"] < 1.9
 
 
 @pytest.mark.parametrize("hole_value", [1, 255])

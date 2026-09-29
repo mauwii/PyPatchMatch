@@ -34,9 +34,7 @@ namespace
         return table;
     }
 
-    // Adds a vote to the pixel, or with best_only replaces its vote if the new one weighs
-    // more. The maximization step divides by the weight in both cases.
-    inline void _weighted_copy(const MaskedImage &source, int ys, int xs, cv::Mat &target, int yt, int xt, double weight, bool best_only)
+    inline void _weighted_copy(const MaskedImage &source, int ys, int xs, cv::Mat &target, int yt, int xt, double weight)
     {
         if (source.is_masked(ys, xs))
             return;
@@ -46,19 +44,28 @@ namespace
         auto source_ptr = source.get_image(ys, xs);
         auto target_ptr = target.ptr<double>(yt, xt);
 
-        if (best_only)
-        {
-            if (weight <= target_ptr[3])
-                return;
-            for (int c = 0; c < 3; ++c)
-                target_ptr[c] = static_cast<double>(source_ptr[c]) * weight;
-            target_ptr[3] = weight;
-            return;
-        }
-
         for (int c = 0; c < 3; ++c)
             target_ptr[c] += static_cast<double>(source_ptr[c]) * weight;
         target_ptr[3] += weight;
+    }
+
+    // Replaces the vote of the pixel if the new one weighs more. It is stored like the
+    // sums of _weighted_copy, so the maximization step divides it by its weight.
+    inline void _best_copy(const MaskedImage &source, int ys, int xs, cv::Mat &target, int yt, int xt, double weight)
+    {
+        if (source.is_masked(ys, xs))
+            return;
+        if (source.is_globally_masked(ys, xs))
+            return;
+
+        auto source_ptr = source.get_image(ys, xs);
+        auto target_ptr = target.ptr<double>(yt, xt);
+        if (weight <= target_ptr[3])
+            return;
+
+        for (int c = 0; c < 3; ++c)
+            target_ptr[c] = static_cast<double>(source_ptr[c]) * weight;
+        target_ptr[3] = weight;
     }
 }
 
@@ -223,10 +230,10 @@ MaskedImage Inpainting::_expectation_maximization(MaskedImage source, MaskedImag
         const bool best_only = level == 0 && iter_em == nr_iters_em - 1;
 
         // Votes for best patch from NNF Source->Target (completeness) and Target->Source (coherence).
-        _expectation_step(m_source2target, 1, vote, new_source, upscaled, best_only);
+        _expectation_step(m_source2target, true, vote, new_source, upscaled, best_only);
         if (verbose)
             std::cerr << "  Expectation source to target finished." << std::endl;
-        _expectation_step(m_target2source, 0, vote, new_source, upscaled, best_only);
+        _expectation_step(m_target2source, false, vote, new_source, upscaled, best_only);
         if (verbose)
             std::cerr << "  Expectation target to source finished." << std::endl;
 
@@ -254,6 +261,15 @@ void Inpainting::_expectation_step(
     const int patch_size = m_distance_metric->patch_size();
     const auto &kDistance2Similarity = distance2similarity();
 
+    double w = 0;
+    auto copy = [&](int ys, int xs, int yt, int xt)
+    {
+        if (best_only)
+            _best_copy(source, ys, xs, vote, yt, xt, w);
+        else
+            _weighted_copy(source, ys, xs, vote, yt, xt, w);
+    };
+
     for (int i = 0; i < source_size.height; ++i)
     {
         for (int j = 0; j < source_size.width; ++j)
@@ -261,7 +277,7 @@ void Inpainting::_expectation_step(
             if (nnf.source().is_globally_masked(i, j))
                 continue;
             int yp = nnf.at(i, j, 0), xp = nnf.at(i, j, 1), dp = nnf.at(i, j, 2);
-            double w = kDistance2Similarity[dp];
+            w = kDistance2Similarity[dp];
 
             for (int di = -patch_size; di <= patch_size; ++di)
             {
@@ -289,13 +305,13 @@ void Inpainting::_expectation_step(
                         {
                             for (int ux = 0; ux < 2; ++ux)
                             {
-                                _weighted_copy(source, 2 * ys + uy, 2 * xs + ux, vote, 2 * yt + uy, 2 * xt + ux, w, best_only);
+                                copy(2 * ys + uy, 2 * xs + ux, 2 * yt + uy, 2 * xt + ux);
                             }
                         }
                     }
                     else
                     {
-                        _weighted_copy(source, ys, xs, vote, yt, xt, w, best_only);
+                        copy(ys, xs, yt, xt);
                     }
                 }
             }
@@ -304,7 +320,7 @@ void Inpainting::_expectation_step(
 }
 
 // Maximization Step: maximum likelihood of target pixel.
-void Inpainting::_maximization_step(MaskedImage &target, const cv::Mat &vote, const MaskedImage &source, bool keep_known)
+void Inpainting::_maximization_step(MaskedImage &target, const cv::Mat &vote, const MaskedImage &source, bool keep_known) const
 {
     auto target_size = target.size();
     for (int i = 0; i < target_size.height; ++i)

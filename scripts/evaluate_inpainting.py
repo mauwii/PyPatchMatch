@@ -9,6 +9,9 @@ Usage:
     uv run python scripts/evaluate_inpainting.py
     uv run python scripts/evaluate_inpainting.py --library main/libpatchmatch.dylib
     uv run python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1 --cases brick
+    uv run python scripts/evaluate_inpainting.py --save  # fills to examples/images/local/out
+
+The e2e tests use measure() to check the seam and the detail of forest_pruned.bmp.
 
 Columns, means over the seeds:
     seam    color difference of neighbors across the border of the holes, relative to
@@ -120,8 +123,11 @@ def coarse_error(image: np.ndarray, truth: np.ndarray, holes: np.ndarray) -> flo
     return float(np.abs(reduce(image)[cells] - reduce(truth)[cells]).mean())
 
 
-def measure(result: np.ndarray, case: Case) -> dict[str, float]:
-    holes, known = case.holes, ~case.holes
+def measure(
+    result: np.ndarray, holes: np.ndarray, truth: np.ndarray | None = None
+) -> dict[str, float]:
+    """The columns of the table for the fill ``result`` of ``holes``."""
+    known = ~holes
     inner_ring = holes & grow(known, 8)
     outer_ring = known & grow(holes, 8)
     inside = holes & ~grow(known, 2)
@@ -135,8 +141,8 @@ def measure(result: np.ndarray, case: Case) -> dict[str, float]:
         "detail": neighbor_difference(result, inside, inside)
         / neighbor_difference(result, around, around),
     }
-    if case.truth is not None:
-        values["error"] = coarse_error(result, case.truth, holes)
+    if truth is not None:
+        values["error"] = coarse_error(result, truth, holes)
     return values
 
 
@@ -152,14 +158,16 @@ def main() -> None:
     parser.add_argument("--patch-size", type=int, default=3)
     parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--cases", help="comma-separated names, default: all")
-    parser.add_argument("--out", type=Path, help="directory for the fills of seed 0")
+    parser.add_argument("--save", action="store_true", help="save the fills of seed 0")
     args = parser.parse_args()
 
     if args.library:
         use_library(args.library.resolve())
     selected = set(args.cases.split(",")) if args.cases else None
-    if args.out:
-        args.out.mkdir(parents=True, exist_ok=True)
+    # A fixed, git-ignored directory rather than one from the command line.
+    out = LOCAL / "out"
+    if args.save:
+        out.mkdir(parents=True, exist_ok=True)
 
     print(f"patch_size={args.patch_size} seeds={args.seeds}")
     print(f"{'case':10} {'seam':>6} {'detail':>7} {'error':>6} {'time':>7}")
@@ -172,9 +180,9 @@ def main() -> None:
             patchmatch.set_random_seed(seed)
             mask = case.holes.astype(np.uint8)
             result = patchmatch.inpaint(case.image, mask, patch_size=args.patch_size)
-            rows.append(measure(result, case))
-            if args.out and seed == 0:
-                Image.fromarray(result).save(args.out / f"{case.name}.png")
+            rows.append(measure(result, case.holes, case.truth))
+            if args.save and seed == 0:
+                Image.fromarray(result).save(out / f"{case.name}.png")
         seconds = (time.perf_counter() - start) / args.seeds
         mean = {key: np.mean([row[key] for row in rows]) for key in rows[0]}
         error = f"{mean['error']:6.2f}" if "error" in mean else f"{'':6}"
