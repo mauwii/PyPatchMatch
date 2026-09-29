@@ -62,9 +62,12 @@ jobs:
           path: ${{ env.OpenCV_ROOT }}
           key: opencv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_opencv.py') }}
 
+      # The project can only be built once OpenCV is installed, so this step runs in the
+      # locked dev group without it, which the next step installs anyway. --no-project
+      # would lock nothing (SonarCloud S8544).
       - name: Build OpenCV
         if: steps.cache-opencv.outputs.cache-hit != 'true'
-        run: uv run --no-project --no-build python scripts/build_opencv.py
+        run: uv run --locked --no-build --only-group dev python scripts/build_opencv.py
 
       - run: uv run --locked --no-build pytest
 
