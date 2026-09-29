@@ -329,6 +329,15 @@ def test_native_rejects_negative_guide_weight(image, hole_mask, ijmap):
         patch_match._call(lib.PM_inpaint_regularity, *args)
 
 
+def test_native_rejects_unsupported_dtype(image, hole_mask):
+    lib = patch_match._get_lib()
+    source = _lib.np_to_pymat(image)
+    source.dtype = len(_lib._PYMAT_DTYPES)
+    args = (source, hole_mask[..., np.newaxis], ctypes.c_int(3))
+    with pytest.raises(RuntimeError, match="unsupported dtype"):
+        patch_match._call(lib.PM_inpaint, *args)
+
+
 # --- missing native library -------------------------------------------------
 
 
@@ -380,10 +389,7 @@ def test_import_without_native_library():
 # --- ctypes conversion ------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [np.uint8, np.int8, np.uint16, np.int16, np.int32, np.float32, np.float64],
-)
+@pytest.mark.parametrize("dtype", [np.uint8, np.float32])
 def test_pymat_roundtrip(dtype):
     npmat = (np.arange(10 * 20 * 3) % 100).astype(dtype).reshape(10, 20, 3)
     pymat = _lib.np_to_pymat(npmat)

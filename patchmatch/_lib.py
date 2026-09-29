@@ -33,15 +33,7 @@ class CMatT(ctypes.Structure):
 
 
 # Order matches the PM_dtype_e enum in csrc/pyinterface.h.
-_PYMAT_DTYPES = [
-    np.dtype(np.uint8),
-    np.dtype(np.int8),
-    np.dtype(np.uint16),
-    np.dtype(np.int16),
-    np.dtype(np.int32),
-    np.dtype(np.float32),
-    np.dtype(np.float64),
-]
+_PYMAT_DTYPES = [np.dtype(np.uint8), np.dtype(np.float32)]
 _PYMAT_DTYPE_IDS = {dtype: i for i, dtype in enumerate(_PYMAT_DTYPES)}
 
 

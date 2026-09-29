@@ -16,12 +16,7 @@ extern "C"
     enum PM_dtype_e
     {
         PM_UINT8,
-        PM_INT8,
-        PM_UINT16,
-        PM_INT16,
-        PM_INT32,
         PM_FLOAT32,
-        PM_FLOAT64,
     };
 
     struct PM_mat_t
