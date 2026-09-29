@@ -1,5 +1,6 @@
 """End-to-end tests of the user workflows shown in examples/ and the README."""
 
+import importlib.util
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,7 @@ from PIL import Image, ImageFilter
 import patchmatch
 
 IMAGES = Path(__file__).parents[1] / "examples" / "images"
+SCRIPTS = Path(__file__).parents[1] / "scripts"
 
 pytestmark = pytest.mark.e2e
 
@@ -48,6 +50,18 @@ def assert_plausible_fill(
     band = surrounding(holes) & ~excluded
     color_diff = np.abs(result[holes].mean(axis=0) - source[band].mean(axis=0))
     assert color_diff.max() < 10, color_diff
+
+
+def load_evaluation():
+    """scripts/evaluate_inpainting.py, whose measures the quality tests share."""
+    path = SCRIPTS / "evaluate_inpainting.py"
+    spec = importlib.util.spec_from_file_location("evaluate_inpainting", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+evaluation = load_evaluation()
 
 
 def coarse_error(image: np.ndarray, truth: np.ndarray, mask: np.ndarray) -> float:
@@ -116,6 +130,30 @@ def test_global_mask_is_not_used_as_source(pruned_image):
     assert not red_in_hole(result)
     excluded = global_mask == 1
     np.testing.assert_array_equal(result[excluded], source[excluded])
+
+
+def test_fill_is_as_detailed_as_its_surroundings(pruned_image):
+    """The weighted mean of all overlapping patches blurred the fill (detail 0.69)."""
+    source = np.array(pruned_image)
+    holes = white_pixels(source)
+
+    result = patchmatch.inpaint(source, patch_size=3)
+
+    assert evaluation.measure(result, holes)["detail"] > 0.8
+
+
+def test_no_seam_at_the_hole_border(pruned_image):
+    """Known pixels changed during the iterations and restored at the end left a seam.
+
+    The difference across the border of the holes was about twice the difference of
+    neighbors on either side of it (seam 2.03).
+    """
+    source = np.array(pruned_image)
+    holes = white_pixels(source)
+
+    result = patchmatch.inpaint(source, patch_size=3)
+
+    assert evaluation.measure(result, holes)["seam"] < 1.9
 
 
 @pytest.mark.parametrize("hole_value", [1, 255])

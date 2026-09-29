@@ -48,6 +48,25 @@ namespace
             target_ptr[c] += static_cast<double>(source_ptr[c]) * weight;
         target_ptr[3] += weight;
     }
+
+    // Replaces the vote of the pixel if the new one weighs more. It is stored like the
+    // sums of _weighted_copy, so the maximization step divides it by its weight.
+    inline void _best_copy(const MaskedImage &source, int ys, int xs, cv::Mat &target, int yt, int xt, double weight)
+    {
+        if (source.is_masked(ys, xs))
+            return;
+        if (source.is_globally_masked(ys, xs))
+            return;
+
+        auto source_ptr = source.get_image(ys, xs);
+        auto target_ptr = target.ptr<double>(yt, xt);
+        if (weight <= target_ptr[3])
+            return;
+
+        for (int c = 0; c < 3; ++c)
+            target_ptr[c] = static_cast<double>(source_ptr[c]) * weight;
+        target_ptr[3] = weight;
+    }
 }
 
 /**
@@ -125,9 +144,9 @@ cv::Mat Inpainting::run(bool verbose, bool verbose_visualize, unsigned int rando
         target = _expectation_maximization(source, target, level, verbose);
     }
 
-    // Only the holes are filled. The votes of overlapping patches also change the known
-    // pixels near the holes, and the pyramid leaves globally masked pixels black, which
-    // are neither filled nor used as a source. Keep the input values of both.
+    // Only the holes are filled. The maximization step of level 0 keeps the known pixels,
+    // but the pyramid leaves globally masked pixels black, which are neither filled nor
+    // used as a source. Copy every pixel outside the holes from the input.
     // A plain loop instead of OpenCV matrix expressions: those pull OpenCV's whole
     // expression module into the statically linked library, 40 % more on disk.
     cv::Mat result = target.image();
@@ -203,16 +222,28 @@ MaskedImage Inpainting::_expectation_maximization(MaskedImage source, MaskedImag
         auto vote = cv::Mat(new_target.size(), CV_64FC4);
         vote.setTo(cv::Scalar::all(0));
 
+        // The weighted mean of all overlapping patches blurs the fill, so in the last
+        // iteration of the finest level each pixel takes the value of its most similar
+        // patch instead (similar to "Space-Time Completion of Video", which takes the
+        // mode of the votes). On coarser levels the mean is kept: it lays out the smooth
+        // structure that the finer levels refine, the best vote there makes seams.
+        const bool best_only = level == 0 && iter_em == nr_iters_em - 1;
+
         // Votes for best patch from NNF Source->Target (completeness) and Target->Source (coherence).
-        _expectation_step(m_source2target, 1, vote, new_source, upscaled);
+        _expectation_step(m_source2target, true, vote, new_source, upscaled, best_only);
         if (verbose)
             std::cerr << "  Expectation source to target finished." << std::endl;
-        _expectation_step(m_target2source, 0, vote, new_source, upscaled);
+        _expectation_step(m_target2source, false, vote, new_source, upscaled, best_only);
         if (verbose)
             std::cerr << "  Expectation target to source finished." << std::endl;
 
         // Compile votes and update pixel values.
-        _maximization_step(new_target, vote);
+        // Known pixels are kept on the two finest levels only. On coarser levels those
+        // next to the holes average only the known part of their downsampling kernel,
+        // estimates that reach into the holes; keeping them there made the fills copy
+        // smooth regions, e.g. a concrete wall into the foliage above it.
+        const int new_level = upscaled ? level - 1 : level;
+        _maximization_step(new_target, vote, new_source, new_level <= 1);
         if (verbose)
             std::cerr << "  Minimization step finished." << std::endl;
     }
@@ -223,12 +254,21 @@ MaskedImage Inpainting::_expectation_maximization(MaskedImage source, MaskedImag
 // Expectation step: vote for best estimations of each pixel.
 void Inpainting::_expectation_step(
     const NearestNeighborField &nnf, bool source2target,
-    cv::Mat &vote, const MaskedImage &source, bool upscaled)
+    cv::Mat &vote, const MaskedImage &source, bool upscaled, bool best_only)
 {
     auto source_size = nnf.source_size();
     auto target_size = nnf.target_size();
     const int patch_size = m_distance_metric->patch_size();
     const auto &kDistance2Similarity = distance2similarity();
+
+    double w = 0;
+    auto copy = [&](int ys, int xs, int yt, int xt)
+    {
+        if (best_only)
+            _best_copy(source, ys, xs, vote, yt, xt, w);
+        else
+            _weighted_copy(source, ys, xs, vote, yt, xt, w);
+    };
 
     for (int i = 0; i < source_size.height; ++i)
     {
@@ -237,7 +277,7 @@ void Inpainting::_expectation_step(
             if (nnf.source().is_globally_masked(i, j))
                 continue;
             int yp = nnf.at(i, j, 0), xp = nnf.at(i, j, 1), dp = nnf.at(i, j, 2);
-            double w = kDistance2Similarity[dp];
+            w = kDistance2Similarity[dp];
 
             for (int di = -patch_size; di <= patch_size; ++di)
             {
@@ -265,13 +305,13 @@ void Inpainting::_expectation_step(
                         {
                             for (int ux = 0; ux < 2; ++ux)
                             {
-                                _weighted_copy(source, 2 * ys + uy, 2 * xs + ux, vote, 2 * yt + uy, 2 * xt + ux, w);
+                                copy(2 * ys + uy, 2 * xs + ux, 2 * yt + uy, 2 * xt + ux);
                             }
                         }
                     }
                     else
                     {
-                        _weighted_copy(source, ys, xs, vote, yt, xt, w);
+                        copy(ys, xs, yt, xt);
                     }
                 }
             }
@@ -280,7 +320,7 @@ void Inpainting::_expectation_step(
 }
 
 // Maximization Step: maximum likelihood of target pixel.
-void Inpainting::_maximization_step(MaskedImage &target, const cv::Mat &vote)
+void Inpainting::_maximization_step(MaskedImage &target, const cv::Mat &vote, const MaskedImage &source, bool keep_known) const
 {
     auto target_size = target.size();
     for (int i = 0; i < target_size.height; ++i)
@@ -292,6 +332,16 @@ void Inpainting::_maximization_step(MaskedImage &target, const cv::Mat &vote)
 
             if (target.is_globally_masked(i, j))
             {
+                continue;
+            }
+
+            // Known pixels keep their values. Otherwise the votes of patches that overlap
+            // a hole change them, the holes are filled to match the changed surroundings,
+            // and a seam appears once the known pixels are restored at the end.
+            if (keep_known && !source.is_masked(i, j))
+            {
+                const unsigned char *known = source.get_image(i, j);
+                std::copy(known, known + 3, target_ptr);
                 continue;
             }
 

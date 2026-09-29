@@ -46,7 +46,10 @@ result = patchmatch.inpaint(image, mask, patch_size=3)
 
 The mask must have the same height and width as the image. If `mask` is omitted, all
 pure white pixels are treated as holes. Only the holes are filled; all other pixels keep
-their values. The optional keyword argument `global_mask`, in the same format, marks
+their values. Holes need hard edges: an anti-aliased brush leaves light pixels along
+the edge of its strokes that are not pure white, so they count as known and the fill
+continues them. Paint without anti-aliasing or pass a mask that covers those pixels as
+well. The optional keyword argument `global_mask`, in the same format, marks
 pixels that are neither filled nor used as a source; they keep their values as well (see
 [examples/py_example_global_mask.py](https://github.com/mauwii/PyPatchMatch/blob/main/examples/py_example_global_mask.py)).
 `patchmatch.patchmatch_available` tells whether the native library could be loaded.
@@ -91,7 +94,13 @@ uv sync                        # create .venv, build the library, install dev de
 uv run pre-commit install      # enable ruff and the other hooks on commit
 uv run pytest                  # run the test suite
 uv run pytest -m "not e2e"     # only the fast unit tests
+uv run python scripts/evaluate_inpainting.py  # measure the fill quality
 ```
+
+The evaluation cuts holes into the images of `examples/images`, compares the fills with
+the original content and writes `examples/images/evaluation.html`, which shows them side
+by side. `--baseline` evaluates another build of the library as well, e.g. of the main
+branch; the docstring of the script explains the columns.
 
 Releases are published to PyPI by creating a GitHub release; the version is taken from
 its tag (e.g. `v2.0.0`).
