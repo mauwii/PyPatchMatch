@@ -18,6 +18,15 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        # like the lint job, without building the library, which needs OpenCV
+        entry: uv run --locked --no-build --only-group dev mypy
+        language: system
+        types: [python]
+        pass_filenames: false
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.12.18
     hooks:
