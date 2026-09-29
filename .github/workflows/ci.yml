@@ -89,14 +89,12 @@ jobs:
       - *opencv-cache
       - *opencv-build
 
-      # Python is not instrumented, so the ASan runtime is preloaded, for pytest only,
-      # not for uv and the build. Its leak check would report the interpreter's own
-      # allocations. With --capture=sys the report of an abort reaches the log; pytest's
-      # default capture of the file descriptors keeps it.
+      # Python is not instrumented. ASan needs libstdc++ loaded to intercept exceptions,
+      # and --capture=sys lets its report of an abort reach the log.
       - name: Test with sanitizers
         run: >-
           uv run --locked --no-build
-          env LD_PRELOAD="$(gcc -print-file-name=libasan.so)"
+          env LD_PRELOAD="$(gcc -print-file-name=libasan.so) $(gcc -print-file-name=libstdc++.so)"
           pytest --no-cov --capture=sys
         env:
           ASAN_OPTIONS: detect_leaks=0
