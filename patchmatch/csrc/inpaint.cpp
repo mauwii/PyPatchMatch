@@ -18,13 +18,10 @@ namespace
         for (std::size_t i = 0; i < length; ++i)
         {
             const double t = static_cast<double>(i) / static_cast<double>(length);
-            // Unsigned, so that checking the upper bound is enough (cpp:S3519 assumed an
-            // overflowing j + 1 with signed ints). t < 1 keeps j at most 99.
             const auto j = static_cast<std::size_t>(100 * t);
-            const std::size_t k = j + 1;
-            const double vj = (j < base.size()) ? base[j] : 0;
-            const double vk = (k < base.size()) ? base[k] : 0;
-            table[i] = vj + (100 * t - static_cast<double>(j)) * (vk - vj);
+            if (j >= base.size() - 1)
+                continue; // the table is zero from here on
+            table[i] = base[j] + (100 * t - static_cast<double>(j)) * (base[j + 1] - base[j]);
         }
         return table;
     }

@@ -4,6 +4,7 @@ project(patchmatch LANGUAGES CXX)
 option(PATCHMATCH_BUILD_EXAMPLES "Build the C++ example (requires OpenCV imgcodecs)" OFF)
 option(PATCHMATCH_WITH_HIGHGUI "Enable the debug visualization of Inpainting::run (requires OpenCV highgui)" OFF)
 option(PATCHMATCH_FAST_MATH "Compile with fast-math optimizations" ON)
+option(PATCHMATCH_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer, without fast math (GCC, Clang)" OFF)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -32,9 +33,7 @@ add_library(patchmatch SHARED
 target_include_directories(patchmatch PUBLIC patchmatch/csrc)
 target_link_libraries(patchmatch PUBLIC opencv_core)
 
-# The OpenCV headers come from an imported target, so they are system headers and their
-# warnings are not reported. CI adds -DCMAKE_COMPILE_WARNING_AS_ERROR=ON; builds from
-# the sdist must not fail when a newer compiler adds a warning.
+# CI adds CMAKE_COMPILE_WARNING_AS_ERROR; the OpenCV headers are system headers
 if(MSVC)
   target_compile_options(patchmatch PRIVATE /W4)
 else()
@@ -47,12 +46,23 @@ if(MSVC AND NOT OpenCV_SHARED)
     MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-if(PATCHMATCH_FAST_MATH)
+if(PATCHMATCH_FAST_MATH AND NOT PATCHMATCH_SANITIZE)
   if(MSVC)
     target_compile_options(patchmatch PRIVATE /fp:fast)
   else()
     target_compile_options(patchmatch PRIVATE -ffast-math)
   endif()
+endif()
+
+if(PATCHMATCH_SANITIZE)
+  if(MSVC)
+    message(FATAL_ERROR "PATCHMATCH_SANITIZE needs GCC or Clang")
+  endif()
+  # GCC's -fsanitize=undefined leaves out float-cast-overflow
+  set(PATCHMATCH_SANITIZERS -fsanitize=address,undefined,float-cast-overflow)
+  target_compile_options(patchmatch PRIVATE ${PATCHMATCH_SANITIZERS}
+    -fno-sanitize-recover=all -fno-omit-frame-pointer -g)
+  target_link_options(patchmatch PRIVATE ${PATCHMATCH_SANITIZERS})
 endif()
 
 if(PATCHMATCH_WITH_HIGHGUI)
