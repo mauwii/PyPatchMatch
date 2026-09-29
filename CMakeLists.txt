@@ -33,9 +33,7 @@ add_library(patchmatch SHARED
 target_include_directories(patchmatch PUBLIC patchmatch/csrc)
 target_link_libraries(patchmatch PUBLIC opencv_core)
 
-# The OpenCV headers come from an imported target, so they are system headers and their
-# warnings are not reported. CI adds -DCMAKE_COMPILE_WARNING_AS_ERROR=ON; builds from
-# the sdist must not fail when a newer compiler adds a warning.
+# CI adds CMAKE_COMPILE_WARNING_AS_ERROR; the OpenCV headers are system headers
 if(MSVC)
   target_compile_options(patchmatch PRIVATE /W4)
 else()
@@ -48,8 +46,6 @@ if(MSVC AND NOT OpenCV_SHARED)
     MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-# Fast math lets the compiler assume finite values and drop the checks of the
-# sanitizers, e.g. for a NaN converted to an int.
 if(PATCHMATCH_FAST_MATH AND NOT PATCHMATCH_SANITIZE)
   if(MSVC)
     target_compile_options(patchmatch PRIVATE /fp:fast)
@@ -62,8 +58,7 @@ if(PATCHMATCH_SANITIZE)
   if(MSVC)
     message(FATAL_ERROR "PATCHMATCH_SANITIZE needs GCC or Clang")
   endif()
-  # GCC's -fsanitize=undefined leaves out float-cast-overflow. Every finding aborts, so
-  # a test run fails instead of only printing a report.
+  # GCC's -fsanitize=undefined leaves out float-cast-overflow
   set(PATCHMATCH_SANITIZERS -fsanitize=address,undefined,float-cast-overflow)
   target_compile_options(patchmatch PRIVATE ${PATCHMATCH_SANITIZERS}
     -fno-sanitize-recover=all -fno-omit-frame-pointer -g)

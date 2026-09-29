@@ -31,8 +31,7 @@ public:
         m_mask = cv::Mat(cv::Size(width, height), CV_8U);
         m_mask = cv::Scalar::all(0);
     }
-    // The move assignment of cv::Mat is not noexcept, so the implicit one of this class
-    // would not be either (cpp:S5018). Declaring the moves needs all five (cpp:S3624).
+    // cv::Mat's move assignment is not noexcept, so the implicit one would not be
     MaskedImage(const MaskedImage &) = default;
     MaskedImage(MaskedImage &&) noexcept = default;
     MaskedImage &operator=(const MaskedImage &) = default;
