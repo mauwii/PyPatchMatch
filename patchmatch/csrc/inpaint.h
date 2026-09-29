@@ -10,7 +10,7 @@ class Inpainting
 public:
     Inpainting(cv::Mat image, cv::Mat mask, const PatchDistanceMetric *metric);
     Inpainting(cv::Mat image, cv::Mat mask, cv::Mat global_mask, const PatchDistanceMetric *metric);
-    cv::Mat run(bool verbose = false, bool verbose_visualize = false, unsigned int random_seed = 1212);
+    cv::Mat run(bool verbose = false, unsigned int random_seed = 1212);
 
 private:
     void _initialize_pyramid(void);

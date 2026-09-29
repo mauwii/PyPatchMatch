@@ -84,8 +84,7 @@ int main() {
 }
 ```
 
-The library is built with CMake; `PATCHMATCH_BUILD_EXAMPLES` builds the example and
-`PATCHMATCH_WITH_HIGHGUI` enables the debug visualization of `Inpainting::run`.
+The library is built with CMake; `PATCHMATCH_BUILD_EXAMPLES` builds the example.
 
 ## Development
 

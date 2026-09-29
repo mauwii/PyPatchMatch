@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.21)
 project(patchmatch LANGUAGES CXX)
 
 option(PATCHMATCH_BUILD_EXAMPLES "Build the C++ example (requires OpenCV imgcodecs)" OFF)
-option(PATCHMATCH_WITH_HIGHGUI "Enable the debug visualization of Inpainting::run (requires OpenCV highgui)" OFF)
 option(PATCHMATCH_FAST_MATH "Compile with fast-math optimizations" ON)
 option(PATCHMATCH_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer, without fast math (GCC, Clang)" OFF)
 
@@ -16,9 +15,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 set(PATCHMATCH_OPENCV_COMPONENTS core)
-if(PATCHMATCH_WITH_HIGHGUI)
-  list(APPEND PATCHMATCH_OPENCV_COMPONENTS imgproc highgui)
-endif()
 if(PATCHMATCH_BUILD_EXAMPLES)
   list(APPEND PATCHMATCH_OPENCV_COMPONENTS imgcodecs)
 endif()
@@ -63,11 +59,6 @@ if(PATCHMATCH_SANITIZE)
   target_compile_options(patchmatch PRIVATE ${PATCHMATCH_SANITIZERS}
     -fno-sanitize-recover=all -fno-omit-frame-pointer -g)
   target_link_options(patchmatch PRIVATE ${PATCHMATCH_SANITIZERS})
-endif()
-
-if(PATCHMATCH_WITH_HIGHGUI)
-  target_compile_definitions(patchmatch PRIVATE PATCHMATCH_WITH_HIGHGUI)
-  target_link_libraries(patchmatch PRIVATE opencv_imgproc opencv_highgui)
 endif()
 
 if(PATCHMATCH_BUILD_EXAMPLES)
