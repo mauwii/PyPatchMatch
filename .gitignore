@@ -16,6 +16,9 @@ examples/images/local/
 **/.coverage
 **/.coverage.*
 **/test-results.xml
+coverage.xml
+coverage-cpp.xml
+.scannerwork/
 
 # build artifacts
 **/build/obj/

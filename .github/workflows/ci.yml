@@ -93,22 +93,32 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     env:
-      SKBUILD_CMAKE_DEFINE: PATCHMATCH_COVERAGE=ON
+      SKBUILD_CMAKE_DEFINE: PATCHMATCH_COVERAGE=ON;CMAKE_EXPORT_COMPILE_COMMANDS=ON
+      # a fixed path for sonar.cfamily.compile-commands
+      SKBUILD_BUILD_DIR: build
+      # fork and Dependabot PRs get no secrets
+      HAS_SONAR_TOKEN: ${{ secrets.SONAR_TOKEN != '' }}
     steps:
       - *checkout
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - *opencv-root
       - *opencv-cache
       - *opencv-build
-      - run: uv run --locked --no-build --group coverage pytest --no-cov
+      - run: uv run --locked --no-build --group coverage pytest --cov-report=xml
 
       # the distance loop runs more than 2**32 times, which gcovr takes for a gcov bug
       - name: Check the C++ coverage
         run: >-
           uv run --locked --no-build --group coverage
           gcovr --filter patchmatch/csrc/ --exclude-throw-branches --exclude-unreachable-branches
-          --gcov-suspicious-hits-threshold 0 --print-summary
+          --gcov-suspicious-hits-threshold 0 --print-summary --sonarqube coverage-cpp.xml
           --fail-under-line 95 --fail-under-branch 90
+
+      - name: SonarCloud scan
+        if: env.HAS_SONAR_TOKEN == 'true'
+        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   lowest:
     runs-on: ubuntu-latest

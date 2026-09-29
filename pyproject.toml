@@ -59,7 +59,7 @@ metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
 # The release wheels are built from the sdist, so it has to contain the tests
 # and their input image; _version.py is generated and therefore git-ignored.
 sdist.include = ["examples/images/forest_pruned.bmp", "patchmatch/_version.py"]
-sdist.exclude = [".*", "examples", "uv.lock"]
+sdist.exclude = [".*", "examples", "sonar-project.properties", "uv.lock"]
 
 # Without a matching wheel, pip builds the sdist, which needs a C++ compiler, CMake and
 # OpenCV. If that fails, build a wheel without the native library instead of failing
