@@ -32,6 +32,15 @@ add_library(patchmatch SHARED
 target_include_directories(patchmatch PUBLIC patchmatch/csrc)
 target_link_libraries(patchmatch PUBLIC opencv_core)
 
+# The OpenCV headers come from an imported target, so they are system headers and their
+# warnings are not reported. CI adds -DCMAKE_COMPILE_WARNING_AS_ERROR=ON; builds from
+# the sdist must not fail when a newer compiler adds a warning.
+if(MSVC)
+  target_compile_options(patchmatch PRIVATE /W4)
+else()
+  target_compile_options(patchmatch PRIVATE -Wall -Wextra -Wpedantic -Wshadow)
+endif()
+
 if(MSVC AND NOT OpenCV_SHARED)
   # A static OpenCV (as built by scripts/build_opencv.py) uses the static MSVC runtime.
   set_property(TARGET patchmatch PROPERTY
