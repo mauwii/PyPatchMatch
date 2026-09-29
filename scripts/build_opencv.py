@@ -134,8 +134,13 @@ def main() -> None:
             options.update(WINDOWS_CMAKE_OPTIONS)
         defines = [f"-D{key}={value}" for key, value in options.items()]
         subprocess.run([cmake, "-S", source, "-B", build, *defines], check=True)
+        # Without a job count, the Makefile generator runs `make -j` without a
+        # limit and starts all ~90 compilations at once. On the macOS arm64
+        # runners (3 CPUs, 7 GB) that took up to 14 minutes instead of 20 seconds.
+        jobs = str(os.cpu_count() or 1)
         subprocess.run(
-            [cmake, "--build", build, "--config", "Release", "--parallel"], check=True
+            [cmake, "--build", build, "--config", "Release", "--parallel", jobs],
+            check=True,
         )
         subprocess.run([cmake, "--install", build, "--config", "Release"], check=True)
 
