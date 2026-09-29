@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <iostream>
 #include <random>
 
@@ -202,8 +203,9 @@ namespace
     int distance_masked_images(
         const MaskedImage &source, int ys, int xs, const MaskedImage &target, int yt, int xt, int patch_size)
     {
-        long double distance = 0;
-        long double wsum = 0;
+        // Exact integer sums: long double is emulated in software on Linux aarch64
+        std::int64_t distance = 0;
+        std::int64_t wsum = 0;
 
         source.compute_image_gradients();
         target.compute_image_gradients();
@@ -217,7 +219,7 @@ namespace
 
             if (yys <= 0 || yys >= source_size.height - 1 || yyt <= 0 || yyt >= target_size.height - 1)
             {
-                distance += (long double)(PatchSSDDistanceMetric::kSSDScale) * (2 * patch_size + 1);
+                distance += std::int64_t{PatchSSDDistanceMetric::kSSDScale} * (2 * patch_size + 1);
                 wsum += 2 * patch_size + 1;
                 continue;
             }
@@ -274,9 +276,8 @@ namespace
             }
         }
 
-        distance /= (long double)(PatchSSDDistanceMetric::kSSDScale);
-
-        int res = int(PatchDistanceMetric::kDistanceScale * distance / wsum);
+        const double scaled = static_cast<double>(distance) / PatchSSDDistanceMetric::kSSDScale;
+        const auto res = static_cast<int>(PatchDistanceMetric::kDistanceScale * scaled / static_cast<double>(wsum));
         if (res < 0 || res > PatchDistanceMetric::kDistanceScale)
             return PatchDistanceMetric::kDistanceScale;
         return res;
