@@ -153,7 +153,7 @@ int _dtype_py_to_cv(int dtype_py)
     case PM_FLOAT32:
         return CV_32F;
     default:
-        throw std::invalid_argument("unsupported dtype " + std::to_string(dtype_py));
+        throw std::invalid_argument("unsupported dtype");
     }
 }
 
