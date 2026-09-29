@@ -11,6 +11,7 @@ patchmatch/_version.py
 
 # test results files
 **/.coverage
+**/.coverage.*
 **/test-results.xml
 
 # build artifacts

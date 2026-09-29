@@ -112,8 +112,11 @@ target-version = "py310"
 select = ["B", "C4", "E", "F", "I", "RUF", "SIM", "UP", "W"]
 ignore = ["E501"]  # line length is enforced by ruff-format
 
+[tool.coverage.run]
+patch = ["subprocess"]
+
 [tool.coverage.report]
-fail_under = 75
+fail_under = 95
 
 [tool.pytest.ini_options]
 addopts = ["--cov-branch", "--cov-report=term:skip-covered", "--cov=patchmatch"]
