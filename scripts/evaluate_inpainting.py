@@ -384,7 +384,7 @@ def write_report(
     sections = "".join(section(case, results, labels) for case, results in rows)
     # SonarCloud's path traversal rule for command line arguments (pythonsecurity:S8707)
     # flags the patch size, the seeds and the library paths in the content. The path is
-    # fixed, and they only appear as escaped text, hence the NOSONAR marker.
+    # fixed, and they only appear as escaped text, so the issue is suppressed.
     REPORT.write_text(  # NOSONAR
         "<!doctype html>\n"
         '<html lang="en"><head><meta charset="utf-8">'
