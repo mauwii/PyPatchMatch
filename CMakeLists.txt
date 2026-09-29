@@ -4,6 +4,7 @@ project(patchmatch LANGUAGES CXX)
 option(PATCHMATCH_BUILD_EXAMPLES "Build the C++ example (requires OpenCV imgcodecs)" OFF)
 option(PATCHMATCH_WITH_HIGHGUI "Enable the debug visualization of Inpainting::run (requires OpenCV highgui)" OFF)
 option(PATCHMATCH_FAST_MATH "Compile with fast-math optimizations" ON)
+option(PATCHMATCH_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer, without fast math (GCC, Clang)" OFF)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -47,12 +48,26 @@ if(MSVC AND NOT OpenCV_SHARED)
     MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-if(PATCHMATCH_FAST_MATH)
+# Fast math lets the compiler assume finite values and drop the checks of the
+# sanitizers, e.g. for a NaN converted to an int.
+if(PATCHMATCH_FAST_MATH AND NOT PATCHMATCH_SANITIZE)
   if(MSVC)
     target_compile_options(patchmatch PRIVATE /fp:fast)
   else()
     target_compile_options(patchmatch PRIVATE -ffast-math)
   endif()
+endif()
+
+if(PATCHMATCH_SANITIZE)
+  if(MSVC)
+    message(FATAL_ERROR "PATCHMATCH_SANITIZE needs GCC or Clang")
+  endif()
+  # GCC's -fsanitize=undefined leaves out float-cast-overflow. Every finding aborts, so
+  # a test run fails instead of only printing a report.
+  set(PATCHMATCH_SANITIZERS -fsanitize=address,undefined,float-cast-overflow)
+  target_compile_options(patchmatch PRIVATE ${PATCHMATCH_SANITIZERS}
+    -fno-sanitize-recover=all -fno-omit-frame-pointer -g)
+  target_link_options(patchmatch PRIVATE ${PATCHMATCH_SANITIZERS})
 endif()
 
 if(PATCHMATCH_WITH_HIGHGUI)
