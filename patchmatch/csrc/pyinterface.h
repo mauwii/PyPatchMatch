@@ -20,7 +20,7 @@ extern "C"
     {
         void *data_ptr;
         PM_shape_t shape;
-        int dtype;
+        PM_dtype_e dtype;
     };
 
     // The PM_inpaint* functions return a null data_ptr on failure; this returns the
