@@ -33,7 +33,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Processing",
     "Typing :: Typed",
 ]
-dependencies = ["numpy", "pillow"]
+dependencies = ["numpy>=1.21.6", "pillow>=8.4.0"]
 dynamic = ["version"]
 
 [project.urls]
