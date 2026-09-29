@@ -1,9 +1,9 @@
 #include <iostream>
 #include <opencv2/imgcodecs.hpp>
 
+#include "inpaint.h"
 #include "masked_image.h"
 #include "nnf.h"
-#include "inpaint.h"
 
 int main()
 {

@@ -2,8 +2,8 @@
 #include <array>
 #include <iostream>
 #ifdef PATCHMATCH_WITH_HIGHGUI
-#include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
 #endif
 
 #include "inpaint.h"
@@ -34,7 +34,8 @@ namespace
         return table;
     }
 
-    inline void _weighted_copy(const MaskedImage &source, int ys, int xs, cv::Mat &target, int yt, int xt, double weight)
+    inline void _weighted_copy(
+        const MaskedImage &source, int ys, int xs, cv::Mat &target, int yt, int xt, double weight)
     {
         if (source.is_masked(ys, xs))
             return;
@@ -67,10 +68,10 @@ namespace
             target_ptr[c] = static_cast<double>(source_ptr[c]) * weight;
         target_ptr[3] = weight;
     }
-}
+} // namespace
 
 /**
- * This algorithme uses a version proposed by Xavier Philippeau.
+ * This algorithm uses a version proposed by Xavier Philippeau.
  */
 
 Inpainting::Inpainting(cv::Mat image, cv::Mat mask, const PatchDistanceMetric *metric)
@@ -89,7 +90,8 @@ void Inpainting::_initialize_pyramid()
 {
     auto source = m_initial;
     m_pyramid.push_back(source);
-    while (source.size().height > m_distance_metric->patch_size() && source.size().width > m_distance_metric->patch_size())
+    while (source.size().height > m_distance_metric->patch_size() &&
+           source.size().width > m_distance_metric->patch_size())
     {
         source = source.downsample();
         m_pyramid.push_back(source);
@@ -210,7 +212,8 @@ MaskedImage Inpainting::_expectation_maximization(MaskedImage source, MaskedImag
         if (level >= 1 && iter_em == nr_iters_em - 1)
         {
             new_source = m_pyramid[level - 1];
-            new_target = target.upsample(new_source.size().width, new_source.size().height, m_pyramid[level - 1].global_mask());
+            new_target =
+                target.upsample(new_source.size().width, new_source.size().height, m_pyramid[level - 1].global_mask());
             upscaled = true;
         }
         else
@@ -253,8 +256,8 @@ MaskedImage Inpainting::_expectation_maximization(MaskedImage source, MaskedImag
 
 // Expectation step: vote for best estimations of each pixel.
 void Inpainting::_expectation_step(
-    const NearestNeighborField &nnf, bool source2target,
-    cv::Mat &vote, const MaskedImage &source, bool upscaled, bool best_only)
+    const NearestNeighborField &nnf, bool source2target, cv::Mat &vote, const MaskedImage &source, bool upscaled,
+    bool best_only)
 {
     auto source_size = nnf.source_size();
     auto target_size = nnf.target_size();
@@ -262,8 +265,7 @@ void Inpainting::_expectation_step(
     const auto &kDistance2Similarity = distance2similarity();
 
     double w = 0;
-    auto copy = [&](int ys, int xs, int yt, int xt)
-    {
+    auto copy = [&](int ys, int xs, int yt, int xt) {
         if (best_only)
             _best_copy(source, ys, xs, vote, yt, xt, w);
         else
@@ -320,7 +322,8 @@ void Inpainting::_expectation_step(
 }
 
 // Maximization Step: maximum likelihood of target pixel.
-void Inpainting::_maximization_step(MaskedImage &target, const cv::Mat &vote, const MaskedImage &source, bool keep_known) const
+void Inpainting::_maximization_step(
+    MaskedImage &target, const cv::Mat &vote, const MaskedImage &source, bool keep_known) const
 {
     auto target_size = target.size();
     for (int i = 0; i < target_size.height; ++i)

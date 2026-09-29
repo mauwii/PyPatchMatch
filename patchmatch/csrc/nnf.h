@@ -1,7 +1,8 @@
 #pragma once
 
-#include <stdexcept>
 #include <opencv2/core.hpp>
+#include <stdexcept>
+
 #include "masked_image.h"
 
 class PatchDistanceMetric
@@ -10,8 +11,13 @@ public:
     PatchDistanceMetric(int patch_size) : m_patch_size(patch_size) {}
     virtual ~PatchDistanceMetric() = default;
 
-    inline int patch_size() const { return m_patch_size; }
-    virtual int operator()(const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const = 0;
+    inline int patch_size() const
+    {
+        return m_patch_size;
+    }
+    virtual int operator()(
+        const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
+        int target_x) const = 0;
     static const int kDistanceScale;
 
 protected:
@@ -25,13 +31,16 @@ public:
     {
         // pass
     }
-    NearestNeighborField(const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric, int max_retry = 20)
+    NearestNeighborField(
+        const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric, int max_retry = 20)
         : m_source(source), m_target(target), m_distance_metric(metric)
     {
         m_field = cv::Mat(m_source.size(), CV_32SC3);
         _randomize_field(max_retry);
     }
-    NearestNeighborField(const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric, const NearestNeighborField &other, int max_retry = 20)
+    NearestNeighborField(
+        const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric,
+        const NearestNeighborField &other, int max_retry = 20)
         : m_source(source), m_target(target), m_distance_metric(metric)
     {
         m_field = cv::Mat(m_source.size(), CV_32SC3);
@@ -111,7 +120,9 @@ class PatchSSDDistanceMetric : public PatchDistanceMetric
 {
 public:
     using PatchDistanceMetric::PatchDistanceMetric;
-    virtual int operator()(const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const;
+    virtual int operator()(
+        const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
+        int target_x) const;
     static const int kSSDScale;
 };
 
@@ -125,7 +136,9 @@ public:
         if (!(weight >= 0))
             throw std::invalid_argument("the guide weight must be >= 0");
     }
-    virtual int operator()(const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const;
+    virtual int operator()(
+        const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
+        int target_x) const;
 
 protected:
     cv::Mat m_ijmap;
