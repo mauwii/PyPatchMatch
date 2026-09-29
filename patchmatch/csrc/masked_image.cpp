@@ -1,7 +1,53 @@
 #include "masked_image.h"
 
+#include <algorithm>
+
 const cv::Size MaskedImage::kDownsampleKernelSize = cv::Size(6, 6);
-const int MaskedImage::kDownsampleKernel[6] = {1, 5, 10, 10, 5, 1};
+const std::array<int, 6> MaskedImage::kDownsampleKernel = {1, 5, 10, 10, 5, 1};
+
+namespace
+{
+    struct KernelSum
+    {
+        int r = 0;
+        int g = 0;
+        int b = 0;
+        int weight = 0;
+        bool globally_masked = true;
+    };
+
+    // The known pixels under the downsampling kernel at (y, x), weighted by the kernel.
+    KernelSum sum_kernel(const MaskedImage &image, int y, int x)
+    {
+        const auto &kernel_size = MaskedImage::kDownsampleKernelSize;
+        const auto &kernel = MaskedImage::kDownsampleKernel;
+        const auto size = image.size();
+
+        KernelSum sum;
+        for (int dy = -kernel_size.height / 2 + 1; dy <= kernel_size.height / 2; ++dy)
+        {
+            for (int dx = -kernel_size.width / 2 + 1; dx <= kernel_size.width / 2; ++dx)
+            {
+                const int yy = y + dy;
+                const int xx = x + dx;
+                if (yy < 0 || yy >= size.height || xx < 0 || xx >= size.width)
+                    continue;
+                if (!image.is_globally_masked(yy, xx))
+                    sum.globally_masked = false;
+                if (image.is_masked(yy, xx))
+                    continue;
+
+                const auto *source_ptr = image.get_image(yy, xx);
+                const int k = kernel[kernel_size.height / 2 - 1 + dy] * kernel[kernel_size.width / 2 - 1 + dx];
+                sum.r += source_ptr[0] * k;
+                sum.g += source_ptr[1] * k;
+                sum.b += source_ptr[2] * k;
+                sum.weight += k;
+            }
+        }
+        return sum;
+    }
+} // namespace
 
 bool MaskedImage::contains_mask(int y, int x, int patch_size) const
 {
@@ -10,12 +56,11 @@ bool MaskedImage::contains_mask(int y, int x, int patch_size) const
     {
         for (int dx = -patch_size; dx <= patch_size; ++dx)
         {
-            int yy = y + dy, xx = x + dx;
-            if (yy >= 0 && yy < mask_size.height && xx >= 0 && xx < mask_size.width)
-            {
-                if (is_masked(yy, xx) && !is_globally_masked(yy, xx))
-                    return true;
-            }
+            const int yy = y + dy;
+            const int xx = x + dx;
+            if (yy >= 0 && yy < mask_size.height && xx >= 0 && xx < mask_size.width && is_masked(yy, xx) &&
+                !is_globally_masked(yy, xx))
+                return true;
         }
     }
     return false;
@@ -23,63 +68,28 @@ bool MaskedImage::contains_mask(int y, int x, int patch_size) const
 
 MaskedImage MaskedImage::downsample() const
 {
-    const auto &kernel_size = MaskedImage::kDownsampleKernelSize;
-    const auto &kernel = MaskedImage::kDownsampleKernel;
-
     const auto size = this->size();
-    const auto new_size = cv::Size(size.width / 2, size.height / 2);
-
-    auto ret = MaskedImage(new_size.width, new_size.height);
+    auto ret = MaskedImage(size.width / 2, size.height / 2);
     if (!m_global_mask.empty())
         ret.init_global_mask_mat();
     for (int y = 0; y < size.height - 1; y += 2)
     {
         for (int x = 0; x < size.width - 1; x += 2)
         {
-            int r = 0, g = 0, b = 0, ksum = 0;
-            bool is_gmasked = true;
-
-            for (int dy = -kernel_size.height / 2 + 1; dy <= kernel_size.height / 2; ++dy)
-            {
-                for (int dx = -kernel_size.width / 2 + 1; dx <= kernel_size.width / 2; ++dx)
-                {
-                    int yy = y + dy, xx = x + dx;
-                    if (yy >= 0 && yy < size.height && xx >= 0 && xx < size.width)
-                    {
-                        if (!is_globally_masked(yy, xx))
-                        {
-                            is_gmasked = false;
-                        }
-                        if (!is_masked(yy, xx))
-                        {
-                            auto source_ptr = get_image(yy, xx);
-                            int k = kernel[kernel_size.height / 2 - 1 + dy] * kernel[kernel_size.width / 2 - 1 + dx];
-                            r += source_ptr[0] * k, g += source_ptr[1] * k, b += source_ptr[2] * k;
-                            ksum += k;
-                        }
-                    }
-                }
-            }
-
-            if (ksum > 0)
-                r /= ksum, g /= ksum, b /= ksum;
-
+            const auto sum = sum_kernel(*this, y, x);
             if (!m_global_mask.empty())
+                ret.set_global_mask(y / 2, x / 2, sum.globally_masked);
+            if (sum.weight == 0)
             {
-                ret.set_global_mask(y / 2, x / 2, is_gmasked);
+                ret.set_mask(y / 2, x / 2, true);
+                continue;
             }
-            if (ksum > 0)
-            {
-                auto target_ptr = ret.get_mutable_image(y / 2, x / 2);
-                target_ptr[0] = static_cast<unsigned char>(r);
-                target_ptr[1] = static_cast<unsigned char>(g);
-                target_ptr[2] = static_cast<unsigned char>(b);
-                ret.set_mask(y / 2, x / 2, 0);
-            }
-            else
-            {
-                ret.set_mask(y / 2, x / 2, 1);
-            }
+
+            auto *target_ptr = ret.get_mutable_image(y / 2, x / 2);
+            target_ptr[0] = static_cast<unsigned char>(sum.r / sum.weight);
+            target_ptr[1] = static_cast<unsigned char>(sum.g / sum.weight);
+            target_ptr[2] = static_cast<unsigned char>(sum.b / sum.weight);
+            ret.set_mask(y / 2, x / 2, false);
         }
     }
 
@@ -96,32 +106,25 @@ MaskedImage MaskedImage::upsample(int new_w, int new_h) const
     {
         for (int x = 0; x < new_w; ++x)
         {
-            int yy = y * size.height / new_h;
-            int xx = x * size.width / new_w;
+            const int yy = y * size.height / new_h;
+            const int xx = x * size.width / new_w;
 
             if (is_globally_masked(yy, xx))
             {
-                ret.set_global_mask(y, x, 1);
-                ret.set_mask(y, x, 1);
+                ret.set_global_mask(y, x, true);
+                ret.set_mask(y, x, true);
+                continue;
             }
-            else
+            if (!m_global_mask.empty())
+                ret.set_global_mask(y, x, false);
+            if (is_masked(yy, xx))
             {
-                if (!m_global_mask.empty())
-                    ret.set_global_mask(y, x, 0);
-
-                if (is_masked(yy, xx))
-                {
-                    ret.set_mask(y, x, 1);
-                }
-                else
-                {
-                    auto source_ptr = get_image(yy, xx);
-                    auto target_ptr = ret.get_mutable_image(y, x);
-                    for (int c = 0; c < 3; ++c)
-                        target_ptr[c] = source_ptr[c];
-                    ret.set_mask(y, x, 0);
-                }
+                ret.set_mask(y, x, true);
+                continue;
             }
+
+            std::copy_n(get_image(yy, xx), 3, ret.get_mutable_image(y, x));
+            ret.set_mask(y, x, false);
         }
     }
 
@@ -135,7 +138,7 @@ MaskedImage MaskedImage::upsample(int new_w, int new_h, const cv::Mat &new_globa
     return ret;
 }
 
-void MaskedImage::compute_image_gradients()
+void MaskedImage::compute_image_gradients() const
 {
     if (m_image_grad_computed)
     {
@@ -164,9 +167,4 @@ void MaskedImage::compute_image_gradients()
     }
 
     m_image_grad_computed = true;
-}
-
-void MaskedImage::compute_image_gradients() const
-{
-    const_cast<MaskedImage *>(this)->compute_image_gradients();
 }

@@ -5,10 +5,12 @@ extern "C"
 
     struct PM_shape_t
     {
-        int width, height, channels;
+        int width;
+        int height;
+        int channels;
     };
 
-    enum PM_dtype_e
+    enum class PM_dtype_e : int
     {
         PM_UINT8,
         PM_FLOAT32,
@@ -18,7 +20,7 @@ extern "C"
     {
         void *data_ptr;
         PM_shape_t shape;
-        int dtype;
+        PM_dtype_e dtype;
     };
 
     // The PM_inpaint* functions return a null data_ptr on failure; this returns the

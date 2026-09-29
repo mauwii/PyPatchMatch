@@ -9,7 +9,7 @@
 
 #include "inpaint.h"
 
-int _dtype_py_to_cv(int dtype_py);
+int _dtype_py_to_cv(PM_dtype_e dtype_py);
 cv::Mat _py_to_cv2(PM_mat_t pymat);
 PM_mat_t _cv2_to_py(cv::Mat cvmat);
 
@@ -65,7 +65,7 @@ namespace
         {
             set_last_error("unknown error");
         }
-        return PM_mat_t{nullptr, {0, 0, 0}, 0};
+        return PM_mat_t{nullptr, {0, 0, 0}, PM_dtype_e::PM_UINT8};
     }
 } // namespace
 
@@ -144,13 +144,13 @@ PM_mat_t PM_inpaint2_regularity(
     });
 }
 
-int _dtype_py_to_cv(int dtype_py)
+int _dtype_py_to_cv(PM_dtype_e dtype_py)
 {
     switch (dtype_py)
     {
-    case PM_UINT8:
+    case PM_dtype_e::PM_UINT8:
         return CV_8U;
-    case PM_FLOAT32:
+    case PM_dtype_e::PM_FLOAT32:
         return CV_32F;
     default:
         throw std::invalid_argument("unsupported dtype");
@@ -179,5 +179,5 @@ PM_mat_t _cv2_to_py(cv::Mat cvmat)
         std::memcpy(data.get(), cvmat.data, dsize);
 
     // Python passes the buffer back to PM_free_pymat, which frees it.
-    return PM_mat_t{data.release(), shape, PM_UINT8};
+    return PM_mat_t{data.release(), shape, PM_dtype_e::PM_UINT8};
 }

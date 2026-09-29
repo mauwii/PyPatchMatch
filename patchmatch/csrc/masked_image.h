@@ -1,37 +1,29 @@
 #pragma once
 
+#include <array>
 #include <cassert>
 #include <opencv2/core.hpp>
 
 class MaskedImage
 {
 public:
-    MaskedImage() : m_image(), m_mask(), m_global_mask(), m_image_grady(), m_image_gradx(), m_image_grad_computed(false)
+    MaskedImage() = default;
+    MaskedImage(const cv::Mat &image, const cv::Mat &mask) : m_image(image), m_mask(mask) {}
+    MaskedImage(const cv::Mat &image, const cv::Mat &mask, const cv::Mat &global_mask)
+        : m_image(image), m_mask(mask), m_global_mask(global_mask)
     {
-        // pass
     }
-    MaskedImage(cv::Mat image, cv::Mat mask) : m_image(image), m_mask(mask), m_image_grad_computed(false)
-    {
-        // pass
-    }
-    MaskedImage(cv::Mat image, cv::Mat mask, cv::Mat global_mask)
-        : m_image(image), m_mask(mask), m_global_mask(global_mask), m_image_grad_computed(false)
-    {
-        // pass
-    }
-    MaskedImage(cv::Mat image, cv::Mat mask, cv::Mat global_mask, cv::Mat grady, cv::Mat gradx, bool grad_computed)
+    MaskedImage(
+        const cv::Mat &image, const cv::Mat &mask, const cv::Mat &global_mask, const cv::Mat &grady,
+        const cv::Mat &gradx, bool grad_computed)
         : m_image(image), m_mask(mask), m_global_mask(global_mask), m_image_grady(grady), m_image_gradx(gradx),
           m_image_grad_computed(grad_computed)
     {
-        // pass
     }
-    MaskedImage(int width, int height) : m_global_mask(), m_image_grady(), m_image_gradx()
+    MaskedImage(int width, int height)
+        : m_image(cv::Size(width, height), CV_8UC3, cv::Scalar::all(0)),
+          m_mask(cv::Size(width, height), CV_8U, cv::Scalar::all(0))
     {
-        m_image = cv::Mat(cv::Size(width, height), CV_8UC3);
-        m_image = cv::Scalar::all(0);
-
-        m_mask = cv::Mat(cv::Size(width, height), CV_8U);
-        m_mask = cv::Scalar::all(0);
     }
     // cv::Mat's move assignment is not noexcept, so the implicit one would not be
     MaskedImage(const MaskedImage &) = default;
@@ -40,7 +32,7 @@ public:
     MaskedImage &operator=(MaskedImage &&) noexcept = default;
     ~MaskedImage() = default;
 
-    inline MaskedImage clone()
+    inline MaskedImage clone() const
     {
         return MaskedImage(
             m_image.clone(), m_mask.clone(), m_global_mask.clone(), m_image_grady.clone(), m_image_gradx.clone(),
@@ -118,17 +110,17 @@ public:
     MaskedImage downsample() const;
     MaskedImage upsample(int new_w, int new_h) const;
     MaskedImage upsample(int new_w, int new_h, const cv::Mat &new_global_mask) const;
-    void compute_image_gradients();
     void compute_image_gradients() const;
 
     static const cv::Size kDownsampleKernelSize;
-    static const int kDownsampleKernel[6];
+    static const std::array<int, 6> kDownsampleKernel;
 
 private:
     cv::Mat m_image;
     cv::Mat m_mask;
     cv::Mat m_global_mask;
-    cv::Mat m_image_grady;
-    cv::Mat m_image_gradx;
-    bool m_image_grad_computed = false;
+    // computed on first use by compute_image_gradients
+    mutable cv::Mat m_image_grady;
+    mutable cv::Mat m_image_gradx;
+    mutable bool m_image_grad_computed = false;
 };

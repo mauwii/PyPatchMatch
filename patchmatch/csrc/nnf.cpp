@@ -47,37 +47,37 @@ void NearestNeighborField::seed_random(unsigned int seed)
 void NearestNeighborField::_randomize_field(int max_retry, bool reset)
 {
     auto this_size = source_size();
-    auto this_target_size = target_size();
     for (int i = 0; i < this_size.height; ++i)
     {
         for (int j = 0; j < this_size.width; ++j)
         {
             if (m_source.is_globally_masked(i, j))
                 continue;
-
-            auto this_ptr = mutable_ptr(i, j);
-            int distance = reset ? PatchDistanceMetric::kDistanceScale : this_ptr[2];
-            if (distance < PatchDistanceMetric::kDistanceScale)
-            {
+            if (!reset && at(i, j, 2) < PatchDistanceMetric::kDistanceScale)
                 continue;
-            }
-
-            int i_target = 0, j_target = 0;
-            for (int t = 0; t < max_retry; ++t)
-            {
-                i_target = random_int(this_target_size.height);
-                j_target = random_int(this_target_size.width);
-                if (m_target.is_globally_masked(i_target, j_target))
-                    continue;
-
-                distance = _distance(i, j, i_target, j_target);
-                if (distance < PatchDistanceMetric::kDistanceScale)
-                    break;
-            }
-
-            this_ptr[0] = i_target, this_ptr[1] = j_target, this_ptr[2] = distance;
+            _randomize_link(i, j, max_retry);
         }
     }
+}
+
+void NearestNeighborField::_randomize_link(int y, int x, int max_retry)
+{
+    auto this_target_size = target_size();
+    int y_target = 0;
+    int x_target = 0;
+    int distance = PatchDistanceMetric::kDistanceScale;
+    for (int t = 0; t < max_retry; ++t)
+    {
+        y_target = random_int(this_target_size.height);
+        x_target = random_int(this_target_size.width);
+        if (m_target.is_globally_masked(y_target, x_target))
+            continue;
+
+        distance = _distance(y, x, y_target, x_target);
+        if (distance < PatchDistanceMetric::kDistanceScale)
+            break;
+    }
+    _set(y, x, y_target, x_target, distance);
 }
 
 void NearestNeighborField::_initialize_field_from(const NearestNeighborField &other, int max_retry)
@@ -94,8 +94,8 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
             if (m_source.is_globally_masked(i, j))
                 continue;
 
-            int ilow = static_cast<int>(std::min(i / fi, static_cast<double>(other_size.height - 1)));
-            int jlow = static_cast<int>(std::min(j / fj, static_cast<double>(other_size.width - 1)));
+            auto ilow = static_cast<int>(std::min(i / fi, static_cast<double>(other_size.height - 1)));
+            auto jlow = static_cast<int>(std::min(j / fj, static_cast<double>(other_size.width - 1)));
             auto this_value = mutable_ptr(i, j);
             auto other_value = other.ptr(ilow, jlow);
 
@@ -118,25 +118,19 @@ void NearestNeighborField::minimize(int nr_pass)
     {
         for (int i = 0; i < this_size.height; ++i)
             for (int j = 0; j < this_size.width; ++j)
-            {
-                if (m_source.is_globally_masked(i, j))
-                    continue;
-                if (at(i, j, 2) > 0)
-                    _minimize_link(i, j, +1);
-            }
+                _minimize_link(i, j, +1);
         for (int i = this_size.height - 1; i >= 0; --i)
             for (int j = this_size.width - 1; j >= 0; --j)
-            {
-                if (m_source.is_globally_masked(i, j))
-                    continue;
-                if (at(i, j, 2) > 0)
-                    _minimize_link(i, j, -1);
-            }
+                _minimize_link(i, j, -1);
     }
 }
 
 void NearestNeighborField::_minimize_link(int y, int x, int direction)
 {
+    // Globally masked pixels have no link, and a distance of 0 cannot improve.
+    if (m_source.is_globally_masked(y, x) || at(y, x, 2) <= 0)
+        return;
+
     const auto &this_size = source_size();
     const auto &this_target_size = target_size();
     auto this_ptr = mutable_ptr(y, x);
@@ -146,11 +140,8 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
     {
         int yp = at(y - direction, x, 0) + direction;
         int xp = at(y - direction, x, 1);
-        int dp = _distance(y, x, yp, xp);
-        if (dp < at(y, x, 2))
-        {
-            this_ptr[0] = yp, this_ptr[1] = xp, this_ptr[2] = dp;
-        }
+        if (int dp = _distance(y, x, yp, xp); dp < at(y, x, 2))
+            _set(y, x, yp, xp, dp);
     }
 
     // propagation along the x direction.
@@ -158,11 +149,8 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
     {
         int yp = at(y, x - direction, 0);
         int xp = at(y, x - direction, 1) + direction;
-        int dp = _distance(y, x, yp, xp);
-        if (dp < at(y, x, 2))
-        {
-            this_ptr[0] = yp, this_ptr[1] = xp, this_ptr[2] = dp;
-        }
+        if (int dp = _distance(y, x, yp, xp); dp < at(y, x, 2))
+            _set(y, x, yp, xp, dp);
     }
 
     // random search with a progressive step size.
@@ -179,11 +167,8 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
             random_scale /= 2;
         }
 
-        int dp = _distance(y, x, yp, xp);
-        if (dp < at(y, x, 2))
-        {
-            this_ptr[0] = yp, this_ptr[1] = xp, this_ptr[2] = dp;
-        }
+        if (int dp = _distance(y, x, yp, xp); dp < at(y, x, 2))
+            _set(y, x, yp, xp, dp);
         random_scale /= 2;
     }
 }
@@ -214,7 +199,8 @@ namespace
 
         for (int dy = -patch_size; dy <= patch_size; ++dy)
         {
-            const int yys = ys + dy, yyt = yt + dy;
+            const int yys = ys + dy;
+            const int yyt = yt + dy;
 
             if (yys <= 0 || yys >= source_size.height - 1 || yyt <= 0 || yyt >= target_size.height - 1)
             {
@@ -242,7 +228,8 @@ namespace
 
             for (int dx = -patch_size; dx <= patch_size; ++dx)
             {
-                int xxs = xs + dx, xxt = xt + dx;
+                const int xxs = xs + dx;
+                const int xxt = xt + dx;
                 wsum += 1;
 
                 if (xxs <= 0 || xxs >= source_size.width - 1 || xxt <= 0 || xxt >= target_size.width - 1)
@@ -267,9 +254,9 @@ namespace
                     int s_gx = p_sgx[xxs * 3 + c];
                     int t_gx = p_tgx[xxt * 3 + c];
 
-                    ssd += pow2(static_cast<int>(s_value) - t_value);
-                    ssd += pow2(static_cast<int>(s_gx) - t_gx);
-                    ssd += pow2(static_cast<int>(s_gy) - t_gy);
+                    ssd += pow2(s_value - t_value);
+                    ssd += pow2(s_gx - t_gx);
+                    ssd += pow2(s_gy - t_gy);
                 }
                 distance += ssd;
             }
@@ -287,7 +274,7 @@ namespace
 int PatchSSDDistanceMetric::operator()(
     const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const
 {
-    return distance_masked_images(source, source_y, source_x, target, target_y, target_x, m_patch_size);
+    return distance_masked_images(source, source_y, source_x, target, target_y, target_x, patch_size());
 }
 
 int RegularityGuidedPatchDistanceMetricV2::operator()(
@@ -298,7 +285,8 @@ int RegularityGuidedPatchDistanceMetricV2::operator()(
 
     // Map pyramid-level coordinates to the full-resolution ijmap. Height and width are
     // scaled independently and clamped, since the pyramid sizes are rounded per axis.
-    const int map_h = m_ijmap.size().height, map_w = m_ijmap.size().width;
+    const int map_h = m_ijmap.size().height;
+    const int map_w = m_ijmap.size().width;
     auto map_y = [&](const MaskedImage &img, int y) { return std::min(y * map_h / img.size().height, map_h - 1); };
     auto map_x = [&](const MaskedImage &img, int x) { return std::min(x * map_w / img.size().width, map_w - 1); };
 
@@ -320,7 +308,7 @@ int RegularityGuidedPatchDistanceMetricV2::operator()(
         score1 *= PatchDistanceMetric::kDistanceScale;
     }
 
-    double score2 = distance_masked_images(source, source_y, source_x, target, target_y, target_x, m_patch_size);
+    double score2 = distance_masked_images(source, source_y, source_x, target, target_y, target_x, patch_size());
     double score = (score1 * m_weight + score2) / (1 + m_weight);
     // The distance indexes the similarity table in Inpainting, so keep it in range.
     if (!(score > 0))
