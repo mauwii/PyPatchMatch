@@ -382,25 +382,22 @@ def write_report(
         for case, results in rows
     )
     sections = "".join(section(case, results, labels) for case, results in rows)
-    # SonarCloud's path traversal rule for command line arguments (pythonsecurity:S8707)
-    # flags the patch size, the seeds and the library paths in the content. The path is
-    # fixed, and they only appear as escaped text, so the issue is suppressed.
-    REPORT.write_text(  # NOSONAR
-        "<!doctype html>\n"
-        '<html lang="en"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        f"<title>patchmatch evaluation</title><style>{STYLE}</style></head><body>"
-        f"<main><header><h1>patchmatch evaluation</h1>{meta}</header>"
-        '<div class="controls">'
-        '<label><input type="checkbox" id="whole"> whole images</label>'
-        '<label><input type="checkbox" id="pixels"> show pixels</label>'
-        '<p class="hint">Click an image to enlarge it; click it, &larr; or &rarr; '
-        "switches between the versions, Esc closes.</p></div>"
-        f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
-        f'{sections}</main><div id="viewer" hidden><div class="slot"></div><p></p>'
-        f"</div><script>{SCRIPT}</script></body></html>\n",
-        encoding="utf-8",
-    )
+    with REPORT.open("w", encoding="utf-8") as report:
+        report.write(
+            "<!doctype html>\n"
+            '<html lang="en"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            f"<title>patchmatch evaluation</title><style>{STYLE}</style></head><body>"
+            f"<main><header><h1>patchmatch evaluation</h1>{meta}</header>"
+            '<div class="controls">'
+            '<label><input type="checkbox" id="whole"> whole images</label>'
+            '<label><input type="checkbox" id="pixels"> show pixels</label>'
+            '<p class="hint">Click an image to enlarge it; click it, &larr; or &rarr; '
+            "switches between the versions, Esc closes.</p></div>"
+            f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+            f'{sections}</main><div id="viewer" hidden><div class="slot"></div><p></p>'
+            f"</div><script>{SCRIPT}</script></body></html>\n"
+        )
 
 
 def describe(args: argparse.Namespace, labels: list[str], paths: list[str]) -> str:
