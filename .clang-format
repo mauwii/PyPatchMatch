@@ -1,0 +1,15 @@
+# Microsoft: Allman braces, 4 spaces, 120 columns.
+BasedOnStyle: Microsoft
+AccessModifierOffset: -4
+AlignAfterOpenBracket: AlwaysBreak
+AllowShortFunctionsOnASingleLine: Empty
+AlwaysBreakTemplateDeclarations: Yes
+# The own header first, then <...>, then "...".
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<'
+    Priority: 1
+  - Regex: '^"'
+    Priority: 2
+IndentExternBlock: Indent
+NamespaceIndentation: All
