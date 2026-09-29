@@ -70,7 +70,7 @@ namespace
 }
 
 /**
- * This algorithme uses a version proposed by Xavier Philippeau.
+ * This algorithm uses a version proposed by Xavier Philippeau.
  */
 
 Inpainting::Inpainting(cv::Mat image, cv::Mat mask, const PatchDistanceMetric *metric)

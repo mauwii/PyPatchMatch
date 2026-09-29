@@ -8,7 +8,7 @@
 
 /**
  * Nearest-Neighbor Field (see PatchMatch algorithm).
- * This algorithme uses a version proposed by Xavier Philippeau.
+ * This algorithm uses a version proposed by Xavier Philippeau.
  *
  */
 

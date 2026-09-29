@@ -1,0 +1,4 @@
+# Wrapped at 88 columns like the Python code; table rows cannot be wrapped.
+MD013:
+  line_length: 88
+  tables: false
