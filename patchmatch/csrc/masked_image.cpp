@@ -72,8 +72,11 @@ MaskedImage MaskedImage::downsample() const
             }
             if (ksum > 0)
             {
+                // weighted means of 8-bit values, so the casts keep them
                 auto target_ptr = ret.get_mutable_image(y / 2, x / 2);
-                target_ptr[0] = r, target_ptr[1] = g, target_ptr[2] = b;
+                target_ptr[0] = static_cast<unsigned char>(r);
+                target_ptr[1] = static_cast<unsigned char>(g);
+                target_ptr[2] = static_cast<unsigned char>(b);
                 ret.set_mask(y / 2, x / 2, 0);
             }
             else

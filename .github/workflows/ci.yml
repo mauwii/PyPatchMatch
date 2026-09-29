@@ -21,11 +21,17 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-      - run: uv run --only-group dev pre-commit run --all-files --show-diff-on-failure
+      # --locked fails on an outdated uv.lock and --no-build on a dependency without a
+      # wheel (SonarCloud S8544, S8541); uv still builds the project itself.
+      - run: uv run --locked --no-build --only-group dev pre-commit run --all-files --show-diff-on-failure
 
   test:
     name: test (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    env:
+      # Compiler warnings (flags in CMakeLists.txt) fail the build only here: builds
+      # from the sdist must not break when a newer compiler adds a warning.
+      SKBUILD_CMAKE_DEFINE: CMAKE_COMPILE_WARNING_AS_ERROR=ON
     strategy:
       fail-fast: false
       matrix:
@@ -56,11 +62,14 @@ jobs:
           path: ${{ env.OpenCV_ROOT }}
           key: opencv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_opencv.py') }}
 
+      # The project can only be built once OpenCV is installed, so this step runs in the
+      # locked dev group without it, which the next step installs anyway. --no-project
+      # would lock nothing (SonarCloud S8544).
       - name: Build OpenCV
         if: steps.cache-opencv.outputs.cache-hit != 'true'
-        run: uv run --no-project python scripts/build_opencv.py
+        run: uv run --locked --no-build --only-group dev python scripts/build_opencv.py
 
-      - run: uv run pytest
+      - run: uv run --locked --no-build pytest
 
   # Single required status check for branch protection, independent of the matrix.
   ci-ok:
