@@ -4,6 +4,7 @@ project(patchmatch LANGUAGES CXX)
 option(PATCHMATCH_BUILD_EXAMPLES "Build the C++ example (requires OpenCV imgcodecs)" OFF)
 option(PATCHMATCH_FAST_MATH "Compile with fast-math optimizations" ON)
 option(PATCHMATCH_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer, without fast math (GCC, Clang)" OFF)
+option(PATCHMATCH_COVERAGE "Build with gcov coverage counters at -Og (GCC, Clang)" OFF)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -59,6 +60,15 @@ if(PATCHMATCH_SANITIZE)
   target_compile_options(patchmatch PRIVATE ${PATCHMATCH_SANITIZERS}
     -fno-sanitize-recover=all -fno-omit-frame-pointer -g)
   target_link_options(patchmatch PRIVATE ${PATCHMATCH_SANITIZERS})
+endif()
+
+if(PATCHMATCH_COVERAGE)
+  if(MSVC)
+    message(FATAL_ERROR "PATCHMATCH_COVERAGE needs GCC or Clang")
+  endif()
+  # atomic counters, since a test inpaints in parallel; -O0 would triple the test time
+  target_compile_options(patchmatch PRIVATE --coverage -fprofile-update=atomic -Og)
+  target_link_options(patchmatch PRIVATE --coverage)
 endif()
 
 if(PATCHMATCH_BUILD_EXAMPLES)
