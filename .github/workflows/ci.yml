@@ -110,10 +110,23 @@ jobs:
           --gcov-suspicious-hits-threshold 0 --print-summary
           --fail-under-line 95 --fail-under-branch 90
 
+  lowest:
+    runs-on: ubuntu-latest
+    steps:
+      - *checkout
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.10"
+      - *opencv-root
+      - *opencv-cache
+      - *opencv-build
+      # the lower bounds of the dependencies in pyproject.toml
+      - run: uv run --locked --no-build --with numpy==1.21.6 --with pillow==8.4.0 pytest
+
   # Single required status check for branch protection, independent of the matrix.
   ci-ok:
     if: always()
-    needs: [lint, test, sanitizers, coverage]
+    needs: [lint, test, sanitizers, coverage, lowest]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0

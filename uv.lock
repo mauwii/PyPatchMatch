@@ -1274,8 +1274,8 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numpy" },
-    { name = "pillow" },
+    { name = "numpy", specifier = ">=1.21.6" },
+    { name = "pillow", specifier = ">=8.4.0" },
 ]
 
 [package.metadata.requires-dev]
