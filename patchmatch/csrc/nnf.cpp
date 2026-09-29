@@ -1,10 +1,11 @@
+#include "nnf.h"
+
 #include <algorithm>
-#include <iostream>
 #include <cmath>
+#include <iostream>
 #include <random>
 
 #include "masked_image.h"
-#include "nnf.h"
 
 /**
  * Nearest-Neighbor Field (see PatchMatch algorithm).
@@ -36,7 +37,7 @@ namespace
     {
         return static_cast<int>(random_engine()() % static_cast<unsigned int>(n));
     }
-}
+} // namespace
 
 void NearestNeighborField::seed_random(unsigned int seed)
 {
@@ -199,9 +200,7 @@ namespace
     }
 
     int distance_masked_images(
-        const MaskedImage &source, int ys, int xs,
-        const MaskedImage &target, int yt, int xt,
-        int patch_size)
+        const MaskedImage &source, int ys, int xs, const MaskedImage &target, int yt, int xt, int patch_size)
     {
         long double distance = 0;
         long double wsum = 0;
@@ -283,14 +282,16 @@ namespace
         return res;
     }
 
-}
+} // namespace
 
-int PatchSSDDistanceMetric::operator()(const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const
+int PatchSSDDistanceMetric::operator()(
+    const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const
 {
     return distance_masked_images(source, source_y, source_x, target, target_y, target_x, m_patch_size);
 }
 
-int RegularityGuidedPatchDistanceMetricV2::operator()(const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const
+int RegularityGuidedPatchDistanceMetricV2::operator()(
+    const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const
 {
     if (target_y < 0 || target_y >= target.size().height || target_x < 0 || target_x >= target.size().width)
         return PatchDistanceMetric::kDistanceScale;

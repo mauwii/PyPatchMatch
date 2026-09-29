@@ -15,7 +15,9 @@ public:
 private:
     void _initialize_pyramid(void);
     MaskedImage _expectation_maximization(MaskedImage source, MaskedImage target, int level, bool verbose);
-    void _expectation_step(const NearestNeighborField &nnf, bool source2target, cv::Mat &vote, const MaskedImage &source, bool upscaled, bool best_only);
+    void _expectation_step(
+        const NearestNeighborField &nnf, bool source2target, cv::Mat &vote, const MaskedImage &source, bool upscaled,
+        bool best_only);
     void _maximization_step(MaskedImage &target, const cv::Mat &vote, const MaskedImage &source, bool keep_known) const;
 
     MaskedImage m_initial;

@@ -1,9 +1,9 @@
 #pragma once
 
-#include <opencv2/core.hpp>
-#include <cstdlib>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <opencv2/core.hpp>
 
 extern "C"
 {
@@ -42,6 +42,7 @@ extern "C"
     PM_mat_t PM_inpaint(PM_mat_t image, PM_mat_t mask, int patch_size);
     PM_mat_t PM_inpaint_regularity(PM_mat_t image, PM_mat_t mask, PM_mat_t ijmap, int patch_size, float guide_weight);
     PM_mat_t PM_inpaint2(PM_mat_t image, PM_mat_t mask, PM_mat_t global_mask, int patch_size);
-    PM_mat_t PM_inpaint2_regularity(PM_mat_t image, PM_mat_t mask, PM_mat_t global_mask, PM_mat_t ijmap, int patch_size, float guide_weight);
+    PM_mat_t PM_inpaint2_regularity(
+        PM_mat_t image, PM_mat_t mask, PM_mat_t global_mask, PM_mat_t ijmap, int patch_size, float guide_weight);
 
 } /*  extern "C" */

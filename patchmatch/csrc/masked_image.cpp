@@ -1,4 +1,5 @@
 #include "masked_image.h"
+
 #include <algorithm>
 #include <iostream>
 

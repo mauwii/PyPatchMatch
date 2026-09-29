@@ -14,12 +14,14 @@ public:
     {
         // pass
     }
-    MaskedImage(cv::Mat image, cv::Mat mask, cv::Mat global_mask) : m_image(image), m_mask(mask), m_global_mask(global_mask), m_image_grad_computed(false)
+    MaskedImage(cv::Mat image, cv::Mat mask, cv::Mat global_mask)
+        : m_image(image), m_mask(mask), m_global_mask(global_mask), m_image_grad_computed(false)
     {
         // pass
     }
-    MaskedImage(cv::Mat image, cv::Mat mask, cv::Mat global_mask, cv::Mat grady, cv::Mat gradx, bool grad_computed) : m_image(image), m_mask(mask), m_global_mask(global_mask),
-                                                                                                                      m_image_grady(grady), m_image_gradx(gradx), m_image_grad_computed(grad_computed)
+    MaskedImage(cv::Mat image, cv::Mat mask, cv::Mat global_mask, cv::Mat grady, cv::Mat gradx, bool grad_computed)
+        : m_image(image), m_mask(mask), m_global_mask(global_mask), m_image_grady(grady), m_image_gradx(gradx),
+          m_image_grad_computed(grad_computed)
     {
         // pass
     }
@@ -41,8 +43,8 @@ public:
     inline MaskedImage clone()
     {
         return MaskedImage(
-            m_image.clone(), m_mask.clone(), m_global_mask.clone(),
-            m_image_grady.clone(), m_image_gradx.clone(), m_image_grad_computed);
+            m_image.clone(), m_mask.clone(), m_global_mask.clone(), m_image_grady.clone(), m_image_gradx.clone(),
+            m_image_grad_computed);
     }
 
     inline cv::Size size() const
