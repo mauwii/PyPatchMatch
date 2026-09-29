@@ -1,10 +1,5 @@
 #pragma once
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <opencv2/core.hpp>
-
 extern "C"
 {
 

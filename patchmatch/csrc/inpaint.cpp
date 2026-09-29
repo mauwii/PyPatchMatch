@@ -52,8 +52,6 @@ namespace
     {
         if (source.is_masked(ys, xs))
             return;
-        if (source.is_globally_masked(ys, xs))
-            return;
 
         auto source_ptr = source.get_image(ys, xs);
         auto target_ptr = target.ptr<double>(yt, xt);
