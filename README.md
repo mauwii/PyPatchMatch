@@ -97,9 +97,10 @@ uv run pytest -m "not e2e"     # only the fast unit tests
 uv run python scripts/evaluate_inpainting.py  # measure the fill quality
 ```
 
-The evaluation cuts holes into the images of `examples/images` and compares the fills
-with the original content; `--library` loads another build of the library to compare
-versions, and the docstring of the script explains its columns.
+The evaluation cuts holes into the images of `examples/images`, compares the fills with
+the original content and writes `examples/images/evaluation.html`, which shows them side
+by side. `--baseline` evaluates another build of the library as well, e.g. of the main
+branch; the docstring of the script explains the columns.
 
 Releases are published to PyPI by creating a GitHub release; the version is taken from
 its tag (e.g. `v2.0.0`).
