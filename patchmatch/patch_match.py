@@ -20,13 +20,15 @@ import logging
 import math
 import operator
 from collections.abc import Callable
-from typing import TypeAlias
+from typing import SupportsIndex, TypeAlias
 
 import numpy as np
 from PIL import Image
 
-from ._lib import CMatT, load_library, np_to_pymat, pymat_to_np
-from ._lib import CShapeT as CShapeT  # re-exported for backwards compatibility
+# CMatT and CShapeT are re-exported for backwards compatibility
+from ._lib import CMatT as CMatT
+from ._lib import CShapeT as CShapeT
+from ._lib import load_library, np_to_pymat, pymat_to_np
 
 __all__ = [
     "inpaint",
@@ -72,7 +74,7 @@ def inpaint(
     mask: ImageLike | None = None,
     *,
     global_mask: ImageLike | None = None,
-    patch_size: int = 15,
+    patch_size: SupportsIndex = 15,
 ) -> np.ndarray:
     """Fill the masked regions of ``image`` using PatchMatch.
 
@@ -106,7 +108,7 @@ def inpaint_regularity(
     ijmap: np.ndarray,
     *,
     global_mask: ImageLike | None = None,
-    patch_size: int = 15,
+    patch_size: SupportsIndex = 15,
     guide_weight: float = 0.25,
 ) -> np.ndarray:
     """Like :func:`inpaint`, additionally guided by a regularity map.
@@ -148,7 +150,7 @@ def inpaint_regularity(
     return _call(lib.PM_inpaint2_regularity, image, mask, global_mask, *args)
 
 
-def _check_patch_size(patch_size: int) -> int:
+def _check_patch_size(patch_size: SupportsIndex) -> int:
     try:
         patch_size = operator.index(patch_size)
     except TypeError:

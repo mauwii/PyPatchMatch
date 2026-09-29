@@ -43,7 +43,8 @@ Issues = "https://github.com/mauwii/PyPatchMatch/issues"
 
 [dependency-groups]
 coverage = ["gcovr"]
-dev = [{ include-group = "test" }, "pre-commit", "ruff"]
+# numpy and pillow for mypy, which runs without the project (--only-group dev)
+dev = [{ include-group = "test" }, "mypy", "numpy", "pillow", "pre-commit", "ruff"]
 test = ["pytest", "pytest-cov"]
 
 [tool.scikit-build]
@@ -118,6 +119,22 @@ patch = ["subprocess"]
 
 [tool.coverage.report]
 fail_under = 95
+
+[tool.mypy]
+files = ["patchmatch", "tests"]
+strict = true
+
+[[tool.mypy.overrides]]
+# generated at build time, missing in a fresh checkout
+module = ["patchmatch._version"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# the tests check the typed API; their own helpers need no annotations
+module = ["test_e2e", "test_patch_match"]
+disallow_untyped_calls = false
+disallow_untyped_defs = false
+warn_return_any = false
 
 [tool.pytest.ini_options]
 addopts = ["--cov-branch", "--cov-report=term:skip-covered", "--cov=patchmatch"]

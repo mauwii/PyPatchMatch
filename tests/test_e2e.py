@@ -56,6 +56,8 @@ def load_evaluation():
     """scripts/evaluate_inpainting.py, whose measures the quality tests share."""
     path = SCRIPTS / "evaluate_inpainting.py"
     spec = importlib.util.spec_from_file_location("evaluate_inpainting", path)
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

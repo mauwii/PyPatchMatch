@@ -275,9 +275,10 @@ def test_invalid_patch_size(image, ijmap, func, patch_size):
         func(image, None, patch_size=patch_size, **kwargs)
 
 
-def test_patch_size_must_be_an_integer(image):
+@pytest.mark.parametrize("patch_size", [3.0, "3", None])
+def test_patch_size_must_be_an_integer(image, patch_size):
     with pytest.raises(TypeError, match="patch_size must be an integer"):
-        patchmatch.inpaint(image, patch_size=3.0)
+        patchmatch.inpaint(image, patch_size=patch_size)
 
 
 def test_patch_size_accepts_numpy_integers(image):
