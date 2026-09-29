@@ -91,7 +91,12 @@ uv sync                        # create .venv, build the library, install dev de
 uv run pre-commit install      # enable ruff and the other hooks on commit
 uv run pytest                  # run the test suite
 uv run pytest -m "not e2e"     # only the fast unit tests
+uv run python scripts/evaluate_inpainting.py  # measure the fill quality
 ```
+
+The evaluation cuts holes into the images of `examples/images` and compares the fills
+with the original content; `--library` loads another build of the library to compare
+versions, and the docstring of the script explains its columns.
 
 Releases are published to PyPI by creating a GitHub release; the version is taken from
 its tag (e.g. `v2.0.0`).
