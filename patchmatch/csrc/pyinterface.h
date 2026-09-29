@@ -5,10 +5,12 @@ extern "C"
 
     struct PM_shape_t
     {
-        int width, height, channels;
+        int width;
+        int height;
+        int channels;
     };
 
-    enum PM_dtype_e
+    enum class PM_dtype_e : int
     {
         PM_UINT8,
         PM_FLOAT32,

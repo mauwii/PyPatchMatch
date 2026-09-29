@@ -8,7 +8,7 @@
 class PatchDistanceMetric
 {
 public:
-    PatchDistanceMetric(int patch_size) : m_patch_size(patch_size) {}
+    explicit PatchDistanceMetric(int patch_size) : m_patch_size(patch_size) {}
     virtual ~PatchDistanceMetric() = default;
 
     inline int patch_size() const
@@ -20,17 +20,14 @@ public:
         int target_x) const = 0;
     static const int kDistanceScale;
 
-protected:
+private:
     int m_patch_size;
 };
 
 class NearestNeighborField
 {
 public:
-    NearestNeighborField() : m_source(), m_target(), m_field(), m_distance_metric(nullptr)
-    {
-        // pass
-    }
+    NearestNeighborField() = default;
     NearestNeighborField(
         const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric, int max_retry = 20)
         : m_source(source), m_target(target), m_distance_metric(metric)
@@ -92,7 +89,9 @@ public:
     inline void set_identity(int y, int x)
     {
         auto ptr = mutable_ptr(y, x);
-        ptr[0] = y, ptr[1] = x, ptr[2] = 0;
+        ptr[0] = y;
+        ptr[1] = x;
+        ptr[2] = 0;
     }
 
     void minimize(int nr_pass);
@@ -101,46 +100,55 @@ public:
     static void seed_random(unsigned int seed);
 
 private:
-    inline int _distance(int source_y, int source_x, int target_y, int target_x)
+    inline int _distance(int source_y, int source_x, int target_y, int target_x) const
     {
         return (*m_distance_metric)(m_source, source_y, source_x, m_target, target_y, target_x);
     }
+    inline void _set(int y, int x, int y_target, int x_target, int distance)
+    {
+        auto ptr = mutable_ptr(y, x);
+        ptr[0] = y_target;
+        ptr[1] = x_target;
+        ptr[2] = distance;
+    }
 
     void _randomize_field(int max_retry = 20, bool reset = true);
+    void _randomize_link(int y, int x, int max_retry);
     void _initialize_field_from(const NearestNeighborField &other, int max_retry);
     void _minimize_link(int y, int x, int direction);
 
     MaskedImage m_source;
     MaskedImage m_target;
-    cv::Mat m_field; // { y_target, x_target, distance_scaled }
-    const PatchDistanceMetric *m_distance_metric;
+    // per pixel: the target y and x and the scaled distance to it
+    cv::Mat m_field;
+    const PatchDistanceMetric *m_distance_metric = nullptr;
 };
 
 class PatchSSDDistanceMetric : public PatchDistanceMetric
 {
 public:
     using PatchDistanceMetric::PatchDistanceMetric;
-    virtual int operator()(
+    int operator()(
         const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
-        int target_x) const;
+        int target_x) const override;
     static const int kSSDScale;
 };
 
 class RegularityGuidedPatchDistanceMetricV2 : public PatchDistanceMetric
 {
 public:
-    RegularityGuidedPatchDistanceMetricV2(int patch_size, cv::Mat ijmap, double weight)
+    RegularityGuidedPatchDistanceMetricV2(int patch_size, const cv::Mat &ijmap, double weight)
         : PatchDistanceMetric(patch_size), m_ijmap(ijmap), m_weight(weight)
     {
         // The distance is divided by 1 + weight, so a negative weight flips its sign.
         if (!(weight >= 0))
             throw std::invalid_argument("the guide weight must be >= 0");
     }
-    virtual int operator()(
+    int operator()(
         const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
-        int target_x) const;
+        int target_x) const override;
 
-protected:
+private:
     cv::Mat m_ijmap;
     double m_weight;
 };
