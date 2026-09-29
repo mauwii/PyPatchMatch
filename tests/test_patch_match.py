@@ -315,14 +315,18 @@ def test_inpaint_regularity_invalid_guide_weight(image, ijmap, guide_weight):
 # --- native errors ----------------------------------------------------------
 
 
-def test_native_exception_raises_runtime_error():
+@pytest.mark.parametrize(
+    "name",
+    ["PM_inpaint", "PM_inpaint2", "PM_inpaint_regularity", "PM_inpaint2_regularity"],
+)
+def test_native_exception_raises_runtime_error(name):
     # A null data pointer with a non-empty shape fails an OpenCV assertion. The
     # exception must not propagate through the C interface and abort the process.
-    lib = patch_match._get_lib()
+    func = getattr(patch_match._get_lib(), name)
     bad = _lib.CMatT(None, _lib.CShapeT(4, 4, 3), 0)
-    args = (bad, bad, ctypes.c_int(3))
+    args = [bad if argtype is _lib.CMatT else argtype(3) for argtype in func.argtypes]
     with pytest.raises(RuntimeError, match=r"patchmatch failed: .*Assertion failed"):
-        patch_match._call(lib.PM_inpaint, *args)
+        patch_match._call(func, *args)
 
 
 def test_native_rejects_negative_guide_weight(image, hole_mask, ijmap):
