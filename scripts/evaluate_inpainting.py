@@ -3,7 +3,9 @@
 The holes are cut into images whose content is known: forest.bmp and the images listed
 in examples/images/SOURCES.md. forest_pruned.bmp and every ``*_pruned.*`` image in the
 git-ignored examples/images/local/ are added as object removals without a ground
-truth; their pure white pixels are the holes.
+truth; their pure white pixels are the holes. forest-global and brick-global add a
+global mask, darkened in the report: the plant of examples/py_example_global_mask.py
+and the left third of brick.png.
 
 Usage:
     uv run python scripts/evaluate_inpainting.py
@@ -64,6 +66,7 @@ class Case(NamedTuple):
     image: np.ndarray
     holes: np.ndarray
     truth: np.ndarray | None
+    global_mask: np.ndarray | None = None
 
 
 class Result(NamedTuple):
@@ -85,10 +88,15 @@ def ellipse(shape: tuple[int, ...], cy: int, cx: int, ry: int, rx: int) -> np.nd
     return ((yy - cy) / ry) ** 2 + ((xx - cx) / rx) ** 2 < 1
 
 
-def cut(name: str, truth: np.ndarray, holes: np.ndarray) -> Case:
+def cut(
+    name: str,
+    truth: np.ndarray,
+    holes: np.ndarray,
+    global_mask: np.ndarray | None = None,
+) -> Case:
     image = truth.copy()
     image[holes] = 255
-    return Case(name, image, holes, truth)
+    return Case(name, image, holes, truth, global_mask)
 
 
 def cases() -> Iterator[Case]:
@@ -102,6 +110,13 @@ def cases() -> Iterator[Case]:
     for name, hole in HOLES.items():
         truth = load(IMAGES / f"{name}.png")
         yield cut(name, truth, ellipse(truth.shape, *hole))
+    plant = np.zeros(pruned.shape[:2], dtype=bool)
+    plant[290:, 100:180] = True
+    yield Case("forest-global", pruned, white(pruned), None, plant)
+    brick = load(IMAGES / "brick.png")
+    left = np.zeros(brick.shape[:2], dtype=bool)
+    left[:, :180] = True
+    yield cut("brick-global", brick, ellipse(brick.shape, *HOLES["brick"]), left)
     for path in sorted(LOCAL.glob("*_pruned.*")):
         image = load(path)
         yield Case(path.stem.removesuffix("_pruned"), image, white(image), None)
@@ -175,7 +190,11 @@ def evaluate(library: ctypes.CDLL, case: Case, patch_size: int, seeds: int) -> R
     start = time.perf_counter()
     for seed in range(seeds):
         patchmatch.set_random_seed(seed)
-        fills.append(patchmatch.inpaint(case.image, mask, patch_size=patch_size))
+        fills.append(
+            patchmatch.inpaint(
+                case.image, mask, global_mask=case.global_mask, patch_size=patch_size
+            )
+        )
         rows.append(measure(fills[-1], case.holes, case.truth))
     seconds = (time.perf_counter() - start) / seeds
     values = {key: float(np.mean([row[key] for row in rows])) for key in rows[0]}
@@ -191,7 +210,7 @@ def print_row(name: str, results: list[Result]) -> None:
         ]
         cells.append(f"{' -> '.join(found):16}")
     seconds = " -> ".join(f"{result.seconds:.1f}s" for result in results)
-    print(f"{name:10} {''.join(cells)}{seconds}", flush=True)
+    print(f"{name:14} {''.join(cells)}{seconds}", flush=True)
 
 
 # Report ------------------------------------------------------------------------------
@@ -352,7 +371,10 @@ def caption(label: str, result: Result | None) -> str:
 
 def section(case: Case, results: list[Result], labels: list[str]) -> str:
     box = crop_box(case.holes)
-    versions = [("holes", case.image, None)]
+    shown = case.image.copy()
+    if case.global_mask is not None:
+        shown[case.global_mask] //= 2
+    versions = [("holes", shown, None)]
     versions += [(label, r.fill, r) for label, r in zip(labels, results, strict=True)]
     if case.truth is not None:
         versions.append(("original", case.truth, None))
@@ -363,6 +385,8 @@ def section(case: Case, results: list[Result], labels: list[str]) -> str:
     )
     height, width = case.holes.shape
     meta = f"{width}&times;{height}, holes {case.holes.mean():.1%}"
+    if case.global_mask is not None:
+        meta += f", global mask {case.global_mask.mean():.1%}"
     name = html.escape(case.name)
     return (
         f'<section id="{name}"><h2>{name}</h2><p class="meta">{meta}</p>'
@@ -430,7 +454,7 @@ def main() -> None:
     selected = set(args.cases.split(",")) if args.cases else None
 
     print(f"patch_size={args.patch_size} seeds={args.seeds}")
-    print(f"{'case':10} {'seam':16}{'detail':16}{'error':16}time")
+    print(f"{'case':14} {'seam':16}{'detail':16}{'error':16}time")
     rows = []
     for case in cases():
         if selected and case.name not in selected:
