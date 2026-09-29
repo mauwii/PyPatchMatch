@@ -291,9 +291,14 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   then not captured by pytest's `capfd`, so tests of native output run in a subprocess
   (`test_set_verbose_prints_progress`).
 - With a static OpenCV, CMake installs its licenses, which the build script collects in
-  `<prefix>/licenses`, into `.dist-info/licenses/opencv` of the wheel.
+  `<prefix>/licenses`, into `.dist-info/licenses/opencv` of the wheel, and the CycloneDX
+  SBOM it writes to `<prefix>/sboms/opencv.cdx.json` into `.dist-info/sboms` (PEP 770).
+  The static libraries hide OpenCV and zlib from scanners; grype matches the SBOM
+  through its CPEs. The wheel job checks that the SBOM is in every wheel.
 - To update OpenCV, change `OPENCV_VERSION` and `OPENCV_SHA256` together. The CI cache of
-  the OpenCV build is keyed on the hash of the script.
+  the OpenCV build is keyed on the hash of the script. `write_sbom` reads the zlib
+  version from the sources and fails if the build bundles any 3rdparty library besides
+  zlib; add a new one to the SBOM.
 
 ### Packaging and versioning
 

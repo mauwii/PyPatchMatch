@@ -7,7 +7,9 @@ Usage: python build_opencv.py  (installs into $OpenCV_ROOT)
 """
 
 import hashlib
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -103,6 +105,55 @@ def verify_archive(archive: Path) -> None:
         )
 
 
+def write_sbom(source: Path, build: Path, path: Path) -> None:
+    # Scanners cannot see statically linked code, so the wheels ship a CycloneDX SBOM
+    # (PEP 770). A new 3rdparty library has to be added here before the build passes.
+    bundled = {
+        lib.stem.removeprefix("lib")
+        for lib in (build / "3rdparty" / "lib").rglob("*")
+        if lib.suffix in {".a", ".lib"}
+    }
+    if bundled != {"zlib"}:
+        sys.exit(f"Add the bundled 3rdparty libraries {sorted(bundled)} to the SBOM")
+    zlib_h = (source / "3rdparty" / "zlib" / "zlib.h").read_text()
+    match = re.search(r'#define ZLIB_VERSION "([^"]+)"', zlib_h)
+    if not match:
+        sys.exit("ZLIB_VERSION not found in OpenCV's zlib.h")
+    zlib_version = match[1]
+    sbom = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "components": [
+            {
+                "type": "library",
+                "bom-ref": "opencv",
+                "name": "opencv",
+                "version": OPENCV_VERSION,
+                "description": "OpenCV core module, linked statically",
+                "licenses": [{"license": {"id": "Apache-2.0"}}],
+                "purl": f"pkg:github/opencv/opencv@{OPENCV_VERSION}",
+                "cpe": f"cpe:2.3:a:opencv:opencv:{OPENCV_VERSION}:*:*:*:*:*:*:*",
+                "hashes": [{"alg": "SHA-256", "content": OPENCV_SHA256}],
+                "externalReferences": [{"type": "distribution", "url": OPENCV_URL}],
+            },
+            {
+                "type": "library",
+                "bom-ref": "zlib",
+                "name": "zlib",
+                "version": zlib_version,
+                "description": "3rdparty/zlib of OpenCV, linked statically",
+                "licenses": [{"license": {"id": "Zlib"}}],
+                "purl": f"pkg:generic/zlib@{zlib_version}",
+                "cpe": f"cpe:2.3:a:zlib:zlib:{zlib_version}:*:*:*:*:*:*:*",
+            },
+        ],
+        "dependencies": [{"ref": "opencv", "dependsOn": ["zlib"]}, {"ref": "zlib"}],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sbom, indent=2) + "\n")
+
+
 def main() -> None:
     # OpenCV_ROOT is the variable CMake's find_package(OpenCV) looks for.
     root = os.environ.get("OpenCV_ROOT")  # noqa: SIM112
@@ -146,6 +197,7 @@ def main() -> None:
         licenses = prefix / CMAKE_OPTIONS["OPENCV_LICENSES_INSTALL_PATH"]
         licenses.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source / "LICENSE", licenses / "opencv-LICENSE")
+        write_sbom(source, build, prefix / "sboms" / "opencv.cdx.json")
 
 
 if __name__ == "__main__":

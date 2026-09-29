@@ -112,7 +112,8 @@ PyPatchMatch is released under the
 [MIT License](https://github.com/mauwii/PyPatchMatch/blob/main/LICENSE). The wheels
 contain a statically linked build of OpenCV core (Apache-2.0) and its bundled
 third-party code; their licenses are included in the `licenses/opencv` directory of the
-wheel's `.dist-info`.
+wheel's `.dist-info`, and a CycloneDX SBOM of them (PEP 770) in
+`sboms/opencv.cdx.json`, so that vulnerability scanners can find them.
 
 ## README and COPYRIGHT by Younesse ANDAM
 
