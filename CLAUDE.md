@@ -340,7 +340,8 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   `coverage-cpp.xml` (`gcovr --sonarqube`) and exports `build/compile_commands.json`,
   and then runs the SonarCloud scan (`sonar-project.properties`, `SONAR_TOKEN`, skipped
   without the secret, e.g. for Dependabot and forks). Automatic analysis in SonarCloud
-  is disabled; it cannot import coverage and would conflict with the CI scan.
+  is disabled; it cannot import coverage and would conflict with the CI scan. `scripts/`
+  has no tests and is excluded from the coverage on new code (80 % in "Sonar way").
 - The `uv run` steps pass `--locked` and `--no-build` (SonarCloud S8544, S8541).
   `--no-build` only forbids building dependencies from source; uv still builds the
   project itself. The OpenCV step runs with `--only-group dev`: the project cannot be
