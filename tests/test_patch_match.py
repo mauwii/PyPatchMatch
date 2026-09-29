@@ -36,7 +36,10 @@ def hole_mask() -> np.ndarray:
 
 @pytest.fixture
 def ijmap() -> np.ndarray:
-    return np.zeros((HEIGHT, WIDTH, 3), dtype=np.float32)
+    """Regularity coordinates of a pattern that repeats every 8 pixels."""
+    y, x = np.mgrid[0:HEIGHT, 0:WIDTH]
+    ij = np.stack([y % 8 / 8, x % 8 / 8, np.zeros_like(y)], axis=-1)
+    return ij.astype(np.float32)
 
 
 @pytest.fixture(autouse=True)
@@ -162,11 +165,13 @@ def test_set_verbose_prints_progress(verbose):
 def test_inpaint_regularity(
     image, hole_mask, ijmap, use_mask, use_global_mask, guide_weight
 ):
+    global_mask = np.zeros_like(hole_mask)
+    global_mask[:8] = 1
     result = patchmatch.inpaint_regularity(
         image,
         hole_mask if use_mask else None,
         ijmap,
-        global_mask=np.zeros_like(hole_mask) if use_global_mask else None,
+        global_mask=global_mask if use_global_mask else None,
         patch_size=3,
         guide_weight=guide_weight,
     )
