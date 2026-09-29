@@ -26,8 +26,6 @@ jobs:
   test:
     name: test (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
-    env:
-      OpenCV_ROOT: ${{ github.workspace }}/../opencv
     strategy:
       fail-fast: false
       matrix:
@@ -43,6 +41,13 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: ${{ matrix.python-version }}
+
+      # Outside the checkout, but without "..": actions/cache rejects such paths
+      # and never saved the build. The runner context is not available in the
+      # job env, so the variable is set here.
+      - name: Set OpenCV_ROOT
+        shell: bash
+        run: echo "OpenCV_ROOT=$RUNNER_TEMP/opencv" >> "$GITHUB_ENV"
 
       - name: Cache OpenCV
         id: cache-opencv
