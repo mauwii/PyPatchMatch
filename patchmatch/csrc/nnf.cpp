@@ -165,6 +165,7 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
         if (m_target.is_globally_masked(yp, xp))
         {
             random_scale /= 2;
+            continue;
         }
 
         if (int dp = _distance(y, x, yp, xp); dp < at(y, x, 2))
