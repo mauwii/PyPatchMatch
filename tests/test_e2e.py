@@ -50,6 +50,18 @@ def assert_plausible_fill(
     assert color_diff.max() < 10, color_diff
 
 
+def neighbor_difference(
+    image: np.ndarray, first: np.ndarray, second: np.ndarray
+) -> float:
+    """Mean color difference of adjacent pixels, one in ``first``, one in ``second``."""
+    pixels = image.astype(int)
+    dx = np.abs(pixels[:, 1:] - pixels[:, :-1]).sum(axis=2)
+    dy = np.abs(pixels[1:] - pixels[:-1]).sum(axis=2)
+    pairs_x = (first[:, 1:] & second[:, :-1]) | (second[:, 1:] & first[:, :-1])
+    pairs_y = (first[1:] & second[:-1]) | (second[1:] & first[:-1])
+    return float(np.concatenate([dx[pairs_x], dy[pairs_y]]).mean())
+
+
 def coarse_error(image: np.ndarray, truth: np.ndarray, mask: np.ndarray) -> float:
     """Mean error inside ``mask`` on a downscaled image (texture, not pixels)."""
 
@@ -116,6 +128,40 @@ def test_global_mask_is_not_used_as_source(pruned_image):
     assert not red_in_hole(result)
     excluded = global_mask == 1
     np.testing.assert_array_equal(result[excluded], source[excluded])
+
+
+def test_fill_is_as_detailed_as_its_surroundings(pruned_image):
+    """The weighted mean of all overlapping patches blurred the fill (ratio 0.7)."""
+    source = np.array(pruned_image)
+    holes = white_pixels(source)
+    inside = holes & ~surrounding(~holes, 3)
+    band = surrounding(holes, 20)
+
+    result = patchmatch.inpaint(source, patch_size=3)
+
+    detail = neighbor_difference(result, inside, inside)
+    assert detail > 0.8 * neighbor_difference(result, band, band)
+
+
+def test_no_seam_at_the_hole_border(pruned_image):
+    """Known pixels changed during the iterations and restored at the end left a seam.
+
+    The difference across the border of the holes was more than twice the difference
+    of neighbors on either side of it.
+    """
+    source = np.array(pruned_image)
+    holes = white_pixels(source)
+    inner_ring = holes & surrounding(~holes, 8)
+    outer_ring = surrounding(holes, 8)
+
+    result = patchmatch.inpaint(source, patch_size=3)
+
+    across = neighbor_difference(result, holes, ~holes)
+    along = (
+        neighbor_difference(result, inner_ring, inner_ring)
+        + neighbor_difference(result, outer_ring, outer_ring)
+    ) / 2
+    assert across < 1.9 * along
 
 
 @pytest.mark.parametrize("hole_value", [1, 255])
