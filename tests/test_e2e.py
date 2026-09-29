@@ -64,16 +64,6 @@ def load_evaluation():
 evaluation = load_evaluation()
 
 
-def coarse_error(image: np.ndarray, truth: np.ndarray, mask: np.ndarray) -> float:
-    """Mean error inside ``mask`` on a downscaled image (texture, not pixels)."""
-
-    def reduce(a: np.ndarray) -> np.ndarray:
-        return np.array(Image.fromarray(a).reduce(8)).astype(float)
-
-    cells = reduce(mask.astype(np.uint8) * 255) > 200
-    return float(np.abs(reduce(image)[cells] - reduce(truth)[cells]).mean())
-
-
 @pytest.fixture
 def pruned_image() -> Image.Image:
     return Image.open(IMAGES / "forest_pruned.bmp")
@@ -189,6 +179,6 @@ def test_reconstructs_known_background(pruned_image, region):
     naive = source.copy()
     naive[mask] = source[surrounding(mask)].mean(axis=0).astype(np.uint8)
 
-    error = coarse_error(result, truth, mask)
-    naive_error = coarse_error(naive, truth, mask)
+    error = evaluation.coarse_error(result, truth, mask)
+    naive_error = evaluation.coarse_error(naive, truth, mask)
     assert error < 0.8 * naive_error, (error, naive_error)

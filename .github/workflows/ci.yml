@@ -90,10 +90,30 @@ jobs:
           ASAN_OPTIONS: detect_leaks=0
           UBSAN_OPTIONS: print_stacktrace=1
 
+  coverage:
+    runs-on: ubuntu-latest
+    env:
+      SKBUILD_CMAKE_DEFINE: PATCHMATCH_COVERAGE=ON
+    steps:
+      - *checkout
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - *opencv-root
+      - *opencv-cache
+      - *opencv-build
+      - run: uv run --locked --no-build --group coverage pytest --no-cov
+
+      # the distance loop runs more than 2**32 times, which gcovr takes for a gcov bug
+      - name: Check the C++ coverage
+        run: >-
+          uv run --locked --no-build --group coverage
+          gcovr --filter patchmatch/csrc/ --exclude-throw-branches --exclude-unreachable-branches
+          --gcov-suspicious-hits-threshold 0 --print-summary
+          --fail-under-line 95 --fail-under-branch 90
+
   # Single required status check for branch protection, independent of the matrix.
   ci-ok:
     if: always()
-    needs: [lint, test, sanitizers]
+    needs: [lint, test, sanitizers, coverage]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0

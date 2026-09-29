@@ -4,12 +4,12 @@
 #include <cstring>
 #include <exception>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #include "inpaint.h"
 
 int _dtype_py_to_cv(int dtype_py);
-int _dtype_cv_to_py(int dtype_cv);
 cv::Mat _py_to_cv2(PM_mat_t pymat);
 PM_mat_t _cv2_to_py(cv::Mat cvmat);
 
@@ -96,7 +96,7 @@ PM_mat_t PM_inpaint(PM_mat_t source_py, PM_mat_t mask_py, int patch_size)
         cv::Mat source = _py_to_cv2(source_py);
         cv::Mat mask = _py_to_cv2(mask_py);
         auto metric = PatchSSDDistanceMetric(patch_size);
-        cv::Mat result = Inpainting(source, mask, &metric).run(verbose().load(), false, random_seed().load());
+        cv::Mat result = Inpainting(source, mask, &metric).run(verbose().load(), random_seed().load());
         return _cv2_to_py(result);
     });
 }
@@ -110,7 +110,7 @@ PM_mat_t PM_inpaint_regularity(
         cv::Mat ijmap = _py_to_cv2(ijmap_py);
 
         auto metric = RegularityGuidedPatchDistanceMetricV2(patch_size, ijmap, guide_weight);
-        cv::Mat result = Inpainting(source, mask, &metric).run(verbose().load(), false, random_seed().load());
+        cv::Mat result = Inpainting(source, mask, &metric).run(verbose().load(), random_seed().load());
         return _cv2_to_py(result);
     });
 }
@@ -123,8 +123,7 @@ PM_mat_t PM_inpaint2(PM_mat_t source_py, PM_mat_t mask_py, PM_mat_t global_mask_
         cv::Mat global_mask = _py_to_cv2(global_mask_py);
 
         auto metric = PatchSSDDistanceMetric(patch_size);
-        cv::Mat result =
-            Inpainting(source, mask, global_mask, &metric).run(verbose().load(), false, random_seed().load());
+        cv::Mat result = Inpainting(source, mask, global_mask, &metric).run(verbose().load(), random_seed().load());
         return _cv2_to_py(result);
     });
 }
@@ -140,8 +139,7 @@ PM_mat_t PM_inpaint2_regularity(
         cv::Mat ijmap = _py_to_cv2(ijmap_py);
 
         auto metric = RegularityGuidedPatchDistanceMetricV2(patch_size, ijmap, guide_weight);
-        cv::Mat result =
-            Inpainting(source, mask, global_mask, &metric).run(verbose().load(), false, random_seed().load());
+        cv::Mat result = Inpainting(source, mask, global_mask, &metric).run(verbose().load(), random_seed().load());
         return _cv2_to_py(result);
     });
 }
@@ -152,44 +150,11 @@ int _dtype_py_to_cv(int dtype_py)
     {
     case PM_UINT8:
         return CV_8U;
-    case PM_INT8:
-        return CV_8S;
-    case PM_UINT16:
-        return CV_16U;
-    case PM_INT16:
-        return CV_16S;
-    case PM_INT32:
-        return CV_32S;
     case PM_FLOAT32:
         return CV_32F;
-    case PM_FLOAT64:
-        return CV_64F;
+    default:
+        throw std::invalid_argument("unsupported dtype");
     }
-
-    return CV_8U;
-}
-
-int _dtype_cv_to_py(int dtype_cv)
-{
-    switch (dtype_cv)
-    {
-    case CV_8U:
-        return PM_UINT8;
-    case CV_8S:
-        return PM_INT8;
-    case CV_16U:
-        return PM_UINT16;
-    case CV_16S:
-        return PM_INT16;
-    case CV_32S:
-        return PM_INT32;
-    case CV_32F:
-        return PM_FLOAT32;
-    case CV_64F:
-        return PM_FLOAT64;
-    }
-
-    return PM_UINT8;
 }
 
 cv::Mat _py_to_cv2(PM_mat_t pymat)
@@ -203,8 +168,8 @@ PM_mat_t _cv2_to_py(cv::Mat cvmat)
     if (!cvmat.isContinuous())
         cvmat = cvmat.clone();
 
+    CV_Assert(cvmat.depth() == CV_8U);
     PM_shape_t shape = {cvmat.size().width, cvmat.size().height, cvmat.channels()};
-    int dtype = _dtype_cv_to_py(cvmat.depth());
     size_t dsize = cvmat.total() * cvmat.elemSize();
 
     // A null pointer reports an error to Python, so allocate at least one byte. A failed
@@ -214,5 +179,5 @@ PM_mat_t _cv2_to_py(cv::Mat cvmat)
         std::memcpy(data.get(), cvmat.data, dsize);
 
     // Python passes the buffer back to PM_free_pymat, which frees it.
-    return PM_mat_t{data.release(), shape, dtype};
+    return PM_mat_t{data.release(), shape, PM_UINT8};
 }

@@ -36,7 +36,10 @@ def hole_mask() -> np.ndarray:
 
 @pytest.fixture
 def ijmap() -> np.ndarray:
-    return np.zeros((HEIGHT, WIDTH, 3), dtype=np.float32)
+    """Regularity coordinates of a pattern that repeats every 8 pixels."""
+    y, x = np.mgrid[0:HEIGHT, 0:WIDTH]
+    ij = np.stack([y % 8 / 8, x % 8 / 8, np.zeros_like(y)], axis=-1)
+    return ij.astype(np.float32)
 
 
 @pytest.fixture(autouse=True)
@@ -162,11 +165,13 @@ def test_set_verbose_prints_progress(verbose):
 def test_inpaint_regularity(
     image, hole_mask, ijmap, use_mask, use_global_mask, guide_weight
 ):
+    global_mask = np.zeros_like(hole_mask)
+    global_mask[:8] = 1
     result = patchmatch.inpaint_regularity(
         image,
         hole_mask if use_mask else None,
         ijmap,
-        global_mask=np.zeros_like(hole_mask) if use_global_mask else None,
+        global_mask=global_mask if use_global_mask else None,
         patch_size=3,
         guide_weight=guide_weight,
     )
@@ -310,14 +315,18 @@ def test_inpaint_regularity_invalid_guide_weight(image, ijmap, guide_weight):
 # --- native errors ----------------------------------------------------------
 
 
-def test_native_exception_raises_runtime_error():
+@pytest.mark.parametrize(
+    "name",
+    ["PM_inpaint", "PM_inpaint2", "PM_inpaint_regularity", "PM_inpaint2_regularity"],
+)
+def test_native_exception_raises_runtime_error(name):
     # A null data pointer with a non-empty shape fails an OpenCV assertion. The
     # exception must not propagate through the C interface and abort the process.
-    lib = patch_match._get_lib()
+    func = getattr(patch_match._get_lib(), name)
     bad = _lib.CMatT(None, _lib.CShapeT(4, 4, 3), 0)
-    args = (bad, bad, ctypes.c_int(3))
+    args = [bad if argtype is _lib.CMatT else argtype(3) for argtype in func.argtypes]
     with pytest.raises(RuntimeError, match=r"patchmatch failed: .*Assertion failed"):
-        patch_match._call(lib.PM_inpaint, *args)
+        patch_match._call(func, *args)
 
 
 def test_native_rejects_negative_guide_weight(image, hole_mask, ijmap):
@@ -327,6 +336,15 @@ def test_native_rejects_negative_guide_weight(image, hole_mask, ijmap):
     args = (image, mask, ijmap, ctypes.c_int(3), ctypes.c_float(-1))
     with pytest.raises(RuntimeError, match="guide weight must be >= 0"):
         patch_match._call(lib.PM_inpaint_regularity, *args)
+
+
+def test_native_rejects_unsupported_dtype(image, hole_mask):
+    lib = patch_match._get_lib()
+    source = _lib.np_to_pymat(image)
+    source.dtype = len(_lib._PYMAT_DTYPES)
+    args = (source, hole_mask[..., np.newaxis], ctypes.c_int(3))
+    with pytest.raises(RuntimeError, match="unsupported dtype"):
+        patch_match._call(lib.PM_inpaint, *args)
 
 
 # --- missing native library -------------------------------------------------
@@ -380,10 +398,7 @@ def test_import_without_native_library():
 # --- ctypes conversion ------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [np.uint8, np.int8, np.uint16, np.int16, np.int32, np.float32, np.float64],
-)
+@pytest.mark.parametrize("dtype", [np.uint8, np.float32])
 def test_pymat_roundtrip(dtype):
     npmat = (np.arange(10 * 20 * 3) % 100).astype(dtype).reshape(10, 20, 3)
     pymat = _lib.np_to_pymat(npmat)

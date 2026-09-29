@@ -1,12 +1,8 @@
+#include "inpaint.h"
+
 #include <algorithm>
 #include <array>
 #include <iostream>
-#ifdef PATCHMATCH_WITH_HIGHGUI
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgproc.hpp>
-#endif
-
-#include "inpaint.h"
 
 namespace
 {
@@ -56,8 +52,6 @@ namespace
     {
         if (source.is_masked(ys, xs))
             return;
-        if (source.is_globally_masked(ys, xs))
-            return;
 
         auto source_ptr = source.get_image(ys, xs);
         auto target_ptr = target.ptr<double>(yt, xt);
@@ -98,7 +92,7 @@ void Inpainting::_initialize_pyramid()
     }
 }
 
-cv::Mat Inpainting::run(bool verbose, bool verbose_visualize, unsigned int random_seed)
+cv::Mat Inpainting::run(bool verbose, unsigned int random_seed)
 {
     NearestNeighborField::seed_random(random_seed);
     const auto nr_levels = static_cast<int>(m_pyramid.size());
@@ -126,22 +120,6 @@ cv::Mat Inpainting::run(bool verbose, bool verbose_visualize, unsigned int rando
 
         if (verbose)
             std::cerr << "Initialization done." << std::endl;
-
-#ifdef PATCHMATCH_WITH_HIGHGUI
-        if (verbose_visualize)
-        {
-            auto visualize_size = m_initial.size();
-            cv::Mat source_visualize(visualize_size, m_initial.image().type());
-            cv::resize(source.image(), source_visualize, visualize_size);
-            cv::imshow("Source", source_visualize);
-            cv::Mat target_visualize(visualize_size, m_initial.image().type());
-            cv::resize(target.image(), target_visualize, visualize_size);
-            cv::imshow("Target", target_visualize);
-            cv::waitKey(0);
-        }
-#else
-        (void)verbose_visualize;
-#endif
 
         target = _expectation_maximization(source, target, level, verbose);
     }

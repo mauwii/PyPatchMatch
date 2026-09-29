@@ -114,15 +114,6 @@ public:
         return m_image.ptr<unsigned char>(y, x);
     }
 
-    inline unsigned char get_image(int y, int x, int c) const
-    {
-        return m_image.ptr<unsigned char>(y, x)[c];
-    }
-    inline int get_image_int(int y, int x, int c) const
-    {
-        return static_cast<int>(m_image.ptr<unsigned char>(y, x)[c]);
-    }
-
     bool contains_mask(int y, int x, int patch_size) const;
     MaskedImage downsample() const;
     MaskedImage upsample(int new_w, int new_h) const;
