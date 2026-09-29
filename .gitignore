@@ -21,6 +21,7 @@ patchmatch/_version.py
 
 # tooling caches / environments
 .venv/
+.hypothesis/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
