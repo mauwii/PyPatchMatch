@@ -98,8 +98,11 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
             auto this_value = mutable_ptr(i, j);
             auto other_value = other.ptr(ilow, jlow);
 
-            this_value[0] = static_cast<int>(other_value[0] * fi);
-            this_value[1] = static_cast<int>(other_value[1] * fj);
+            // Keep the offset within the coarse pixel, so that neighbors still point to
+            // neighbors. Without it, both pixels of a pair point to the same target pixel,
+            // which makes the upscaled fill blocky.
+            this_value[0] = clamp(static_cast<int>(other_value[0] * fi + (i - ilow * fi)), 0, target_size().height - 1);
+            this_value[1] = clamp(static_cast<int>(other_value[1] * fj + (j - jlow * fj)), 0, target_size().width - 1);
             this_value[2] = _distance(i, j, this_value[0], this_value[1]);
         }
     }
