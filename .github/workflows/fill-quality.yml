@@ -55,7 +55,7 @@ jobs:
         run: >-
           uv run --locked --no-build python scripts/evaluate_inpainting.py
           --baseline "$RUNNER_TEMP/base/build/libpatchmatch.so"
-          --summary "$GITHUB_STEP_SUMMARY"
+          --markdown >> "$GITHUB_STEP_SUMMARY"
 
       - name: Note the limits of the times
         run: echo "The times are from a shared runner and only show large differences." >> "$GITHUB_STEP_SUMMARY"
