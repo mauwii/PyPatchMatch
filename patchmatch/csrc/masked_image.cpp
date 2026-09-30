@@ -32,8 +32,9 @@ namespace
                 const int xx = x + dx;
                 if (yy < 0 || yy >= size.height || xx < 0 || xx >= size.width)
                     continue;
-                if (!image.is_globally_masked(yy, xx))
-                    sum.globally_masked = false;
+                if (image.is_globally_masked(yy, xx))
+                    continue;
+                sum.globally_masked = false;
                 if (image.is_masked(yy, xx))
                     continue;
 
@@ -161,8 +162,12 @@ void MaskedImage::compute_image_gradients() const
         auto *mptrx = m_image_gradx.ptr<unsigned char>(i, 0);
         for (int j = 3; j < size.width * 3 - 3; ++j)
         {
-            mptry[j] = (ptry1[j] / 2 - ptry2[j] / 2) + 128;
-            mptrx[j] = (ptrx1[j] / 2 - ptrx2[j] / 2) + 128;
+            // A neutral gradient next to a globally masked pixel keeps its color out of the distances.
+            const int x = j / 3;
+            const bool skip_y = is_globally_masked(i + 1, x) || is_globally_masked(i - 1, x);
+            const bool skip_x = is_globally_masked(i, x + 1) || is_globally_masked(i, x - 1);
+            mptry[j] = skip_y ? 128 : (ptry1[j] / 2 - ptry2[j] / 2) + 128;
+            mptrx[j] = skip_x ? 128 : (ptrx1[j] / 2 - ptrx2[j] / 2) + 128;
         }
     }
 

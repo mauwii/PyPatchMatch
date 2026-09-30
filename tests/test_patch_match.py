@@ -99,6 +99,19 @@ def test_inpaint_global_mask(image, hole_mask):
     np.testing.assert_array_equal(result[:8], image[:8])
 
 
+def test_inpaint_ignores_colors_under_global_mask(image, hole_mask):
+    global_mask = np.zeros_like(hole_mask)
+    global_mask[16:32, :24] = 1  # touches the hole
+    results = []
+    for color in (0, 255):
+        image[global_mask == 1] = color
+        patchmatch.set_random_seed(0)
+        results.append(
+            patchmatch.inpaint(image, hole_mask, global_mask=global_mask, patch_size=3)
+        )
+    np.testing.assert_array_equal(results[0][HOLE], results[1][HOLE])
+
+
 @pytest.mark.parametrize("shape", [(0, 0, 3), (0, 10, 3), (10, 0, 3)])
 def test_inpaint_empty_image(shape, ijmap):
     empty = np.zeros(shape, dtype=np.uint8)

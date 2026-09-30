@@ -68,3 +68,28 @@ def test_inpaint_regularity(inputs, patch_size, ijmap, guide_weight):
         guide_weight=guide_weight,
     )
     assert_only_holes_changed(result, image, mask, global_mask)
+
+
+@settings(deadline=None)
+@given(images_and_masks(), hnp.arrays(np.uint8, (24, 24, 3)), patch_sizes)
+def test_colors_under_global_mask_do_not_matter(inputs, colors, patch_size):
+    image, mask, global_mask = inputs
+    if global_mask is None:
+        global_mask = np.zeros(image.shape[:2], dtype=bool)
+    if mask is None:
+        mask = (image == 255).all(axis=-1)
+    colors = colors[: image.shape[0], : image.shape[1]]
+    recolored = np.where(global_mask[..., None], colors, image)
+    ijmap = image.astype(np.float32) / 255
+
+    def fills(source):
+        patchmatch.set_random_seed(0)
+        kwargs = {"global_mask": global_mask, "patch_size": patch_size}
+        return (
+            patchmatch.inpaint(source, mask, **kwargs),
+            patchmatch.inpaint_regularity(source, mask, ijmap, **kwargs),
+        )
+
+    holes = mask & ~global_mask
+    for result, expected in zip(fills(recolored), fills(image), strict=True):
+        np.testing.assert_array_equal(result[holes], expected[holes])
