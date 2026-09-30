@@ -53,10 +53,32 @@ jobs:
       - name: Locate sdist
         id: sdist
         shell: bash
-        run: echo "path=$(ls dist/*.tar.gz)" >> "$GITHUB_OUTPUT"
+        run: |
+          sdist=$(ls dist/*.tar.gz)
+          echo "path=$sdist" >> "$GITHUB_OUTPUT"
+          # there is no checkout, the cache key hashes these files of the sdist
+          name=$(basename "$sdist" .tar.gz)
+          tar -xzf "$sdist" -C dist "$name/scripts/build_opencv.py" "$name/pyproject.toml"
+      - name: Restore OpenCV
+        id: opencv
+        # wheels of a tag (releases, manual runs on a tag) are always built from scratch
+        if: github.event_name != 'release' && !startsWith(github.ref, 'refs/tags/')
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.os == 'Windows' && 'C:/opencv' || '/tmp/opencv' }}
+          key: opencv-wheel-${{ matrix.os }}-${{ hashFiles('dist/*/scripts/build_opencv.py', 'dist/*/pyproject.toml') }}
       - uses: pypa/cibuildwheel@e090b81e30c4d855ea63bf4b6e59204c09a101ae # v4.2.1
         with:
           package-dir: ${{ steps.sdist.outputs.path }}
+        env:
+          # lets the cache steps reach the OpenCV built inside the manylinux container
+          CIBW_CONTAINER_ENGINE: "docker; create_args: --volume /tmp/opencv:/tmp/opencv"
+      - name: Save OpenCV
+        if: steps.opencv.outcome == 'success' && steps.opencv.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.os == 'Windows' && 'C:/opencv' || '/tmp/opencv' }}
+          key: ${{ steps.opencv.outputs.cache-primary-key }}
       - name: Check the OpenCV SBOM and that no zlib code is linked
         shell: bash
         run: |
