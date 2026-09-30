@@ -103,6 +103,8 @@ The evaluation cuts holes into the images of `examples/images`, compares the fil
 the original content and writes `examples/images/evaluation.html`, which shows them side
 by side. `--baseline` evaluates another build of the library as well, e.g. of the main
 branch; the docstring of the script explains the columns.
+Pull requests that change the C++ code get this comparison with their base commit in the
+summary of the workflow "Fill quality", and the HTML report as its artifact.
 
 Releases are published to PyPI by creating a GitHub release; the version is taken from
 its tag (e.g. `v2.0.0`). Every released wheel and sdist carries a build provenance

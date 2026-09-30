@@ -12,6 +12,9 @@ Usage:
     uv run python scripts/evaluate_inpainting.py --baseline main/libpatchmatch.dylib
     uv run python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1 --cases brick
 
+--markdown prints the table as Markdown and moves the plain one to stderr; the CI
+workflow "Fill quality" redirects it to the job summary.
+
 Besides the table, it writes examples/images/evaluation.html (git-ignored): the holes,
 the fills (of --baseline too) and the originals side by side. It embeds the images of
 examples/images/local/ as well, so keep it out of the repository.
@@ -34,11 +37,12 @@ import base64
 import ctypes
 import html
 import io
+import sys
 import time
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, TextIO
 
 import numpy as np
 from PIL import Image
@@ -201,7 +205,7 @@ def evaluate(library: ctypes.CDLL, case: Case, patch_size: int, seeds: int) -> R
     return Result(values, seconds, fills[0])
 
 
-def print_row(name: str, results: list[Result]) -> None:
+def print_row(name: str, results: list[Result], out: TextIO) -> None:
     """One line of the table, with ``old -> new`` for a baseline."""
     cells = []
     for key in COLUMNS:
@@ -210,7 +214,7 @@ def print_row(name: str, results: list[Result]) -> None:
         ]
         cells.append(f"{' -> '.join(found):16}")
     seconds = " -> ".join(f"{result.seconds:.1f}s" for result in results)
-    print(f"{name:14} {''.join(cells)}{seconds}", flush=True)
+    print(f"{name:14} {''.join(cells)}{seconds}", file=out, flush=True)
 
 
 # Report ------------------------------------------------------------------------------
@@ -347,13 +351,17 @@ def verdict(key: str, old: float, new: float) -> str:
     return "better" if new < old else "worse"
 
 
-def cell(key: str, results: list[Result]) -> str:
+def column(key: str, results: list[Result]) -> tuple[list[float], list[str]]:
+    """The values of a column and their texts, one per library that has the value."""
     if key == "time":
         values = [result.seconds for result in results]
-        text = [f"{value:.1f} s" for value in values]
-    else:
-        values = [result.values[key] for result in results if key in result.values]
-        text = [f"{value:.2f}" for value in values]
+        return values, [f"{value:.1f} s" for value in values]
+    values = [result.values[key] for result in results if key in result.values]
+    return values, [f"{value:.2f}" for value in values]
+
+
+def cell(key: str, results: list[Result]) -> str:
+    values, text = column(key, results)
     if not values:
         return "<td></td>"
     if len(values) == 1:
@@ -424,6 +432,36 @@ def write_report(
         )
 
 
+MARKS = {"better": " 🟢", "worse": " 🔴", "": ""}
+
+
+def markdown_cell(key: str, results: list[Result]) -> str:
+    values, text = column(key, results)
+    if len(values) < 2:
+        return "".join(text)
+    return f"{text[0]} → {text[1]}{MARKS[verdict(key, values[0], values[1])]}"
+
+
+def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
+    columns = [*COLUMNS, "time"]
+    lines = [
+        f"### Fill quality ({title})",
+        "",
+        f"| case | {' | '.join(columns)} |",
+        f"| --- |{' ---: |' * len(columns)}",
+    ]
+    for case, results in rows:
+        cells = [markdown_cell(key, results) for key in columns]
+        lines.append(f"| {case.name} | {' | '.join(cells)} |")
+    lines += [
+        "",
+        "Means over the seeds. seam and detail are best at 1.0, as in the original "
+        "images, error at 0. With a baseline: baseline → current, 🟢 better and 🔴 worse "
+        "by more than 2 % (time: 10 %).",
+    ]
+    return "\n".join(lines)
+
+
 def describe(args: argparse.Namespace, labels: list[str], paths: list[str]) -> str:
     lines = [
         f"{datetime.now():%Y-%m-%d %H:%M}, patch_size {args.patch_size}, "
@@ -440,6 +478,9 @@ def main() -> None:
     parser.add_argument("--patch-size", type=int, default=3)
     parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--cases", help="comma-separated names, default: all")
+    parser.add_argument(
+        "--markdown", action="store_true", help="print the table as Markdown"
+    )
     args = parser.parse_args()
     if args.seeds < 1:
         parser.error("--seeds must be at least 1")
@@ -453,8 +494,9 @@ def main() -> None:
         labels = ["baseline", "current"]
     selected = set(args.cases.split(",")) if args.cases else None
 
-    print(f"patch_size={args.patch_size} seeds={args.seeds}")
-    print(f"{'case':14} {'seam':16}{'detail':16}{'error':16}time")
+    out = sys.stderr if args.markdown else sys.stdout
+    print(f"patch_size={args.patch_size} seeds={args.seeds}", file=out)
+    print(f"{'case':14} {'seam':16}{'detail':16}{'error':16}time", file=out)
     rows = []
     for case in cases():
         if selected and case.name not in selected:
@@ -462,12 +504,14 @@ def main() -> None:
         results = [
             evaluate(lib, case, args.patch_size, args.seeds) for lib in libraries
         ]
-        print_row(case.name, results)
+        print_row(case.name, results, out)
         rows.append((case, results))
 
     meta = describe(args, labels, [lib._name for lib in libraries])
     write_report(rows, labels, meta)
-    print(f"report: {REPORT}")
+    print(f"report: {REPORT}", file=out)
+    if args.markdown:
+        print(markdown(rows, f"patch_size {args.patch_size}, {args.seeds} seed(s)"))
 
 
 if __name__ == "__main__":

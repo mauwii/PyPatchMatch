@@ -1,0 +1,66 @@
+name: Fill quality
+
+# A report, not a gate: the measures vary over the seeds, so it is not part of ci-ok.
+on:
+  pull_request:
+    paths:
+      - CMakeLists.txt
+      - patchmatch/csrc/**
+      - scripts/evaluate_inpainting.py
+      - .github/workflows/fill-quality.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # the version from the git tags, and the base commit
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Set OpenCV_ROOT
+        run: echo "OpenCV_ROOT=$RUNNER_TEMP/opencv" >> "$GITHUB_ENV"
+
+      # the same key as in ci.yml, which fills the cache on main
+      - name: Cache OpenCV
+        id: cache-opencv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.OpenCV_ROOT }}
+          key: opencv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_opencv.py') }}
+
+      - name: Build OpenCV
+        if: steps.cache-opencv.outputs.cache-hit != 'true'
+        run: uv run --locked --no-build --only-group dev python scripts/build_opencv.py
+
+      - name: Build the library of the base branch
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          mkdir "$RUNNER_TEMP/base"
+          git archive "$BASE_SHA" CMakeLists.txt patchmatch/csrc | tar -x -C "$RUNNER_TEMP/base"
+          cmake -S "$RUNNER_TEMP/base" -B "$RUNNER_TEMP/base/build" -DCMAKE_BUILD_TYPE=Release
+          cmake --build "$RUNNER_TEMP/base/build" --parallel
+
+      - name: Evaluate the fills
+        run: >-
+          uv run --locked --no-build python scripts/evaluate_inpainting.py
+          --baseline "$RUNNER_TEMP/base/build/libpatchmatch.so"
+          --markdown >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Note the limits of the times
+        run: echo "The times are from a shared runner and only show large differences." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fill-quality
+          path: examples/images/evaluation.html
