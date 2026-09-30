@@ -148,6 +148,30 @@ def test_no_seam_at_the_hole_border(pruned_image):
     assert evaluation.measure(result, holes)["seam"] < 1.9
 
 
+@pytest.mark.parametrize(
+    ("seed", "use_global_mask"), [(6, False), (11, False), (28, True)]
+)
+def test_stem_is_filled_with_meadow(pruned_image, seed, use_global_mask):
+    """The thin stem was filled with dark forest for these seeds.
+
+    It is a small part of the holes, so assert_plausible_fill did not notice.
+    """
+    source = np.array(pruned_image)
+    stem = white_pixels(source)
+    stem[:315] = False
+    beside = surrounding(stem, width=20)
+    beside[:315] = False
+    global_mask = None
+    if use_global_mask:
+        global_mask = np.zeros_like(source[..., 0])
+        global_mask[290:, 100:180] = 1
+
+    patchmatch.set_random_seed(seed)
+    result = patchmatch.inpaint(source, global_mask=global_mask, patch_size=3)
+
+    assert result[stem].mean() > 0.85 * source[beside].mean()
+
+
 @pytest.mark.parametrize("hole_value", [1, 255])
 def test_explicit_mask_matches_implicit_white_mask(pruned_image, hole_value):
     """README: an explicit mask behaves like the default mask of white pixels."""
