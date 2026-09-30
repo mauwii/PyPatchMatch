@@ -105,6 +105,12 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
             this_value[0] = clamp(static_cast<int>(other_value[0] * fi + (i - ilow * fi)), 0, target_size().height - 1);
             this_value[1] = clamp(static_cast<int>(other_value[1] * fj + (j - jlow * fj)), 0, target_size().width - 1);
             this_value[2] = _distance(i, j, this_value[0], this_value[1]);
+
+            // A hole that is new on this level: search near the patch before a neighbor's link replaces its own.
+            const bool linked_to_itself = other_value[0] == ilow && other_value[1] == jlow;
+            if (linked_to_itself && this_value[2] > 0 &&
+                m_target.contains_mask(this_value[0], this_value[1], m_distance_metric->patch_size()))
+                _random_search(i, j);
         }
     }
 
@@ -132,8 +138,6 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
         return;
 
     const auto &this_size = source_size();
-    const auto &this_target_size = target_size();
-    auto this_ptr = mutable_ptr(y, x);
 
     // propagation along the y direction.
     if (y - direction >= 0 && y - direction < this_size.height && !m_source.is_globally_masked(y - direction, x))
@@ -153,7 +157,15 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
             _set(y, x, yp, xp, dp);
     }
 
-    // random search with a progressive step size.
+    _random_search(y, x);
+}
+
+// Random search around the link with a progressive step size.
+void NearestNeighborField::_random_search(int y, int x)
+{
+    const auto &this_target_size = target_size();
+    const int *this_ptr = ptr(y, x);
+
     int random_scale = (std::min(this_target_size.height, this_target_size.width) - 1) / 2;
     while (random_scale > 0)
     {

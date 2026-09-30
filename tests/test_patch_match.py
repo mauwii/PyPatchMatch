@@ -132,6 +132,28 @@ def test_inpaint_patch_sizes(image, patch_size):
     assert_filled(patchmatch.inpaint(image, patch_size=patch_size), image)
 
 
+def test_inpaint_thin_hole_takes_the_colors_beside_it():
+    """A thin hole that runs from a color gradient into a plain region.
+
+    The coarser levels do not have it, and its plain part was filled with the
+    colors of the gradient in a third of the seeds.
+    """
+    plain = (150, 170, 90)
+    y, x = np.mgrid[0:96, 0:48]
+    gradient = np.stack([10 + 3 * x, 200 - 3 * x, np.full_like(x, 60)], axis=-1)
+    noise = np.random.default_rng(0).integers(-3, 4, gradient.shape)
+    image = (np.where(y[..., None] < 72, gradient, plain) + noise).astype(np.uint8)
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    mask[48:, 22:26] = 1
+    image[mask == 1] = 255
+
+    for seed in range(20):
+        patchmatch.set_random_seed(seed)
+        result = patchmatch.inpaint(image, mask, patch_size=3)
+        fill = result[76:, 22:26].reshape(-1, 3).mean(axis=0)
+        assert np.abs(fill - plain).max() < 10, (seed, fill)
+
+
 def test_inpaint_does_not_modify_inputs(image, hole_mask):
     image_before, mask_before = image.copy(), hole_mask.copy()
     patchmatch.inpaint(image, hole_mask, global_mask=hole_mask, patch_size=3)

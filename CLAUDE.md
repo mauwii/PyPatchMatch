@@ -265,6 +265,20 @@ ctypes releases the GIL during native calls, so inpaintings run truly concurrent
   made the fills worse: it leaves the coarsest levels without valid source patches,
   because the similarity table gives zero weight to patches with more than about 10 %
   masked or border pixels.
+- A hole, and later each thin part of it, therefore has a level on which it appears for
+  the first time. The patches around it arrive there with the link of a patch without
+  holes, the one to itself, which now points into the hole. `_initialize_field_from`
+  runs a random search around such a patch before the first pass. Otherwise the first
+  propagation replaces the link with the one of a neighbor, the random search goes on
+  around that link, and with a radius of half the smaller image side it does not find
+  the way back to the surroundings of the patch: the stem of `forest_pruned.bmp` was
+  filled with forest instead of meadow in 31 of 200 seeds (36 of 48 with `patch_size`
+  7), and the `meadow` case had an error above 12 in 9 of 96 seeds, now at most 9.7
+  (`test_inpaint_thin_hole_takes_the_colors_beside_it`). Tried and rejected: searching
+  before propagating in every pass, which no longer refines a propagated link, the way
+  a structure is followed along a hole (brick error +9 %); and a search radius of the
+  larger image side, as in the paper, which blurs the fills (coffee detail 0.30 instead
+  of 0.53).
 - Distances are ints in `[0, PatchDistanceMetric::kDistanceScale]` (65535): an SSD over
   the colors and the x/y gradients, where masked pixels and pixels at the border count
   as maximal. The distance indexes `distance2similarity`, so every metric has to clamp

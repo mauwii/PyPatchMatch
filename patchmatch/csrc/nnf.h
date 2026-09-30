@@ -116,6 +116,7 @@ private:
     void _randomize_link(int y, int x, int max_retry);
     void _initialize_field_from(const NearestNeighborField &other, int max_retry);
     void _minimize_link(int y, int x, int direction);
+    void _random_search(int y, int x);
 
     MaskedImage m_source;
     MaskedImage m_target;
