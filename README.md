@@ -104,7 +104,8 @@ by side. `--baseline` evaluates another build of the library as well, e.g. of th
 branch; the docstring of the script explains the columns.
 
 Releases are published to PyPI by creating a GitHub release; the version is taken from
-its tag (e.g. `v2.0.0`).
+its tag (e.g. `v2.0.0`). Every released wheel and sdist carries a build provenance
+attestation: `gh attestation verify <file> -R mauwii/PyPatchMatch`.
 
 ## License
 
