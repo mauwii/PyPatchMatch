@@ -359,7 +359,10 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
 - `wheels.yml`: sdist, then cibuildwheel on five runners, then `sdist-fallback`;
   `publish` attests the build provenance of all files (`actions/attest`) and uploads
   them to PyPI with trusted publishing (environment `pypi`) only for a published GitHub
-  release of `mauwii/PyPatchMatch`.
+  release of `mauwii/PyPatchMatch`. The wheel jobs cache the OpenCV prefix, keyed on
+  `build_opencv.py` and `pyproject.toml` from the sdist (there is no checkout); on Linux
+  a volume makes `/tmp/opencv` of the container visible to the cache step. Runs on a
+  tag, and therefore releases, skip the cache and build OpenCV from scratch.
 - `codeql.yml` analyzes actions, C/C++ and Python.
 - `ci-ok` and `wheels-ok` (re-actors/alls-green) are the required status checks; add new
   jobs to their `needs`.
