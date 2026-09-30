@@ -365,6 +365,13 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   `build_opencv.py` and `pyproject.toml` from the sdist (there is no checkout); on Linux
   a volume makes `/tmp/opencv` of the container visible to the cache step. Runs on a
   tag, and therefore releases, skip the cache and build OpenCV from scratch.
+- `fill-quality.yml` runs for pull requests that change `CMakeLists.txt`,
+  `patchmatch/csrc` or the evaluation script: it builds the library of the base commit,
+  runs `scripts/evaluate_inpainting.py --baseline` against it (patch size 3, 3 seeds),
+  writes the table to the job summary (`--summary`) and uploads `evaluation.html` as the
+  artifact `fill-quality`. It is a report, not a gate: the measures vary over the seeds,
+  so it is not in the `needs` of `ci-ok`. It repeats the OpenCV steps of `ci.yml` with
+  the same cache key, because anchors do not reach across files.
 - `codeql.yml` analyzes actions, C/C++ and Python.
 - `ci-ok` and `wheels-ok` (re-actors/alls-green) are the required status checks; add new
   jobs to their `needs`.

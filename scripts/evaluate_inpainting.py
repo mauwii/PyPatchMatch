@@ -12,6 +12,9 @@ Usage:
     uv run python scripts/evaluate_inpainting.py --baseline main/libpatchmatch.dylib
     uv run python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1 --cases brick
 
+--summary appends the table as Markdown to a file; the CI workflow "Fill quality" passes
+the job summary.
+
 Besides the table, it writes examples/images/evaluation.html (git-ignored): the holes,
 the fills (of --baseline too) and the originals side by side. It embeds the images of
 examples/images/local/ as well, so keep it out of the repository.
@@ -347,13 +350,17 @@ def verdict(key: str, old: float, new: float) -> str:
     return "better" if new < old else "worse"
 
 
-def cell(key: str, results: list[Result]) -> str:
+def column(key: str, results: list[Result]) -> tuple[list[float], list[str]]:
+    """The values of a column and their texts, one per library that has the value."""
     if key == "time":
         values = [result.seconds for result in results]
-        text = [f"{value:.1f} s" for value in values]
-    else:
-        values = [result.values[key] for result in results if key in result.values]
-        text = [f"{value:.2f}" for value in values]
+        return values, [f"{value:.1f} s" for value in values]
+    values = [result.values[key] for result in results if key in result.values]
+    return values, [f"{value:.2f}" for value in values]
+
+
+def cell(key: str, results: list[Result]) -> str:
+    values, text = column(key, results)
     if not values:
         return "<td></td>"
     if len(values) == 1:
@@ -424,6 +431,40 @@ def write_report(
         )
 
 
+MARKS = {"better": " 🟢", "worse": " 🔴", "": ""}
+
+
+def markdown_cell(key: str, results: list[Result]) -> str:
+    values, text = column(key, results)
+    if len(values) < 2:
+        return "".join(text)
+    return f"{text[0]} → {text[1]}{MARKS[verdict(key, values[0], values[1])]}"
+
+
+def write_summary(
+    path: Path, rows: list[tuple[Case, list[Result]]], title: str
+) -> None:
+    columns = [*COLUMNS, "time"]
+    lines = [
+        f"### Fill quality ({title})",
+        "",
+        f"| case | {' | '.join(columns)} |",
+        f"| --- |{' ---: |' * len(columns)}",
+    ]
+    for case, results in rows:
+        cells = [markdown_cell(key, results) for key in columns]
+        lines.append(f"| {case.name} | {' | '.join(cells)} |")
+    lines += [
+        "",
+        "Means over the seeds. seam and detail are best at 1.0, as in the original "
+        "images, error at 0. With a baseline: baseline → current, 🟢 better and 🔴 worse "
+        "by more than 2 % (time: 10 %).",
+        "",
+    ]
+    with path.open("a", encoding="utf-8") as summary:
+        summary.write("\n".join(lines))
+
+
 def describe(args: argparse.Namespace, labels: list[str], paths: list[str]) -> str:
     lines = [
         f"{datetime.now():%Y-%m-%d %H:%M}, patch_size {args.patch_size}, "
@@ -440,6 +481,7 @@ def main() -> None:
     parser.add_argument("--patch-size", type=int, default=3)
     parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--cases", help="comma-separated names, default: all")
+    parser.add_argument("--summary", type=Path, help="file to append the table to")
     args = parser.parse_args()
     if args.seeds < 1:
         parser.error("--seeds must be at least 1")
@@ -467,6 +509,9 @@ def main() -> None:
 
     meta = describe(args, labels, [lib._name for lib in libraries])
     write_report(rows, labels, meta)
+    if args.summary:
+        title = f"patch_size {args.patch_size}, {args.seeds} seed(s)"
+        write_summary(args.summary, rows, title)
     print(f"report: {REPORT}")
 
 
