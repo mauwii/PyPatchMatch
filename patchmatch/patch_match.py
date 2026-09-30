@@ -96,6 +96,9 @@ def inpaint(
     lib = _get_lib()
     patch_size = _check_patch_size(patch_size)
     image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
+    # OpenCV 4.6 turns an empty image into one of shape (0, 0, 1)
+    if image.size == 0:
+        return image.copy()
 
     if global_mask is None:
         return _call(lib.PM_inpaint, image, mask, ctypes.c_int(patch_size))
@@ -143,6 +146,10 @@ def inpaint_regularity(
         raise ValueError(
             f"guide_weight must be a finite number >= 0, got {guide_weight}"
         )
+
+    # OpenCV 4.6 turns an empty image into one of shape (0, 0, 1)
+    if image.size == 0:
+        return image.copy()
 
     args = (ijmap, ctypes.c_int(patch_size), ctypes.c_float(guide_weight))
     if global_mask is None:
