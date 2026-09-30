@@ -7,6 +7,7 @@ Usage: python build_opencv.py  (installs into $OpenCV_ROOT)
 """
 
 import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -103,6 +104,40 @@ def verify_archive(archive: Path) -> None:
         )
 
 
+def write_sbom(build: Path, path: Path) -> None:
+    # Scanners cannot see statically linked code, so the wheels ship a CycloneDX SBOM
+    # (PEP 770). The bundled zlib is left out: only FileStorage uses it, and the wheel
+    # job checks that none of it is linked. A new 3rdparty library has to be added.
+    bundled = {
+        lib.stem.removeprefix("lib")
+        for lib in (build / "3rdparty" / "lib").rglob("*")
+        if lib.suffix in {".a", ".lib"}
+    }
+    if bundled - {"zlib"}:
+        sys.exit(f"Add the bundled 3rdparty libraries {sorted(bundled)} to the SBOM")
+    sbom = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "components": [
+            {
+                "type": "library",
+                "bom-ref": "opencv",
+                "name": "opencv",
+                "version": OPENCV_VERSION,
+                "description": "OpenCV core module, linked statically",
+                "licenses": [{"license": {"id": "Apache-2.0"}}],
+                "purl": f"pkg:github/opencv/opencv@{OPENCV_VERSION}",
+                "cpe": f"cpe:2.3:a:opencv:opencv:{OPENCV_VERSION}:*:*:*:*:*:*:*",
+                "hashes": [{"alg": "SHA-256", "content": OPENCV_SHA256}],
+                "externalReferences": [{"type": "distribution", "url": OPENCV_URL}],
+            },
+        ],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sbom, indent=2) + "\n")
+
+
 def main() -> None:
     # OpenCV_ROOT is the variable CMake's find_package(OpenCV) looks for.
     root = os.environ.get("OpenCV_ROOT")  # noqa: SIM112
@@ -146,6 +181,7 @@ def main() -> None:
         licenses = prefix / CMAKE_OPTIONS["OPENCV_LICENSES_INSTALL_PATH"]
         licenses.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source / "LICENSE", licenses / "opencv-LICENSE")
+        write_sbom(build, prefix / "sboms" / "opencv.cdx.json")
 
 
 if __name__ == "__main__":

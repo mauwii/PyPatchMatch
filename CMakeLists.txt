@@ -82,8 +82,9 @@ install(TARGETS patchmatch
   RUNTIME DESTINATION patchmatch
 )
 
-# A static OpenCV becomes part of the library, so a wheel has to ship its licenses,
-# which scripts/build_opencv.py collects in <prefix>/licenses.
+# A static OpenCV becomes part of the library, so a wheel has to ship its licenses and
+# an SBOM (PEP 770), which scripts/build_opencv.py writes to <prefix>/licenses and
+# <prefix>/sboms.
 if(DEFINED SKBUILD_METADATA_DIR AND NOT OpenCV_SHARED)
   set(PATCHMATCH_OPENCV_LICENSES "${OpenCV_INSTALL_PATH}/licenses")
   if(EXISTS "${PATCHMATCH_OPENCV_LICENSES}/opencv-LICENSE")
@@ -92,5 +93,12 @@ if(DEFINED SKBUILD_METADATA_DIR AND NOT OpenCV_SHARED)
   else()
     message(WARNING "No OpenCV licenses in ${PATCHMATCH_OPENCV_LICENSES}, "
       "the wheel will not include them")
+  endif()
+  set(PATCHMATCH_OPENCV_SBOM "${OpenCV_INSTALL_PATH}/sboms/opencv.cdx.json")
+  if(EXISTS "${PATCHMATCH_OPENCV_SBOM}")
+    install(FILES "${PATCHMATCH_OPENCV_SBOM}" DESTINATION "${SKBUILD_METADATA_DIR}/sboms")
+  else()
+    message(WARNING "No OpenCV SBOM at ${PATCHMATCH_OPENCV_SBOM}, "
+      "the wheel will not include it")
   endif()
 endif()

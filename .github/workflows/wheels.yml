@@ -57,6 +57,19 @@ jobs:
       - uses: pypa/cibuildwheel@e090b81e30c4d855ea63bf4b6e59204c09a101ae # v4.2.1
         with:
           package-dir: ${{ steps.sdist.outputs.path }}
+      - name: Check the OpenCV SBOM and that no zlib code is linked
+        shell: bash
+        run: |
+          # macOS runners have only python3, Windows only python
+          python=$(command -v python3 || command -v python)
+          "$python" -m zipfile -l wheelhouse/*.whl | tee contents.txt
+          grep -q "\.dist-info/sboms/opencv\.cdx\.json" contents.txt
+          # the SBOM leaves out OpenCV's zlib, which only FileStorage uses
+          if [ "$RUNNER_OS" != Windows ]; then
+            "$python" -m zipfile -e wheelhouse/*.whl wheel
+            zlib=" _?(adler32|crc32|deflate|inflate|gz[a-z]+)"
+            if nm wheel/patchmatch/libpatchmatch.* | grep -E "$zlib"; then exit 1; fi
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: wheel-${{ matrix.os }}
