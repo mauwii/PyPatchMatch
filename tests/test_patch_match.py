@@ -100,11 +100,18 @@ def test_inpaint_global_mask(image, hole_mask):
 
 
 @pytest.mark.parametrize("shape", [(0, 0, 3), (0, 10, 3), (10, 0, 3)])
-def test_inpaint_empty_image(shape):
+def test_inpaint_empty_image(shape, ijmap):
     empty = np.zeros(shape, dtype=np.uint8)
     global_mask = np.zeros(shape[:2], dtype=np.uint8)
-    assert patchmatch.inpaint(empty, patch_size=3).shape == shape
-    assert patchmatch.inpaint(empty, global_mask=global_mask).shape == shape
+    results = [
+        patchmatch.inpaint(empty, patch_size=3),
+        patchmatch.inpaint(empty, global_mask=global_mask),
+        patchmatch.inpaint_regularity(empty, None, ijmap, patch_size=3),
+        patchmatch.inpaint_regularity(empty, None, ijmap, global_mask=global_mask),
+    ]
+    for result in results:
+        assert result.shape == shape
+        assert result is not empty
 
 
 @pytest.mark.parametrize("patch_size", [1, 3, 7])
@@ -337,6 +344,15 @@ def test_native_rejects_negative_guide_weight(image, hole_mask, ijmap):
     args = (image, mask, ijmap, ctypes.c_int(3), ctypes.c_float(-1))
     with pytest.raises(RuntimeError, match="guide weight must be >= 0"):
         patch_match._call(lib.PM_inpaint_regularity, *args)
+
+
+def test_native_accepts_empty_image():
+    # Python returns empty images before the native call; C callers still get an
+    # empty result instead of a failure. OpenCV 4.6 returns it with shape (0, 0, 1).
+    lib = patch_match._get_lib()
+    empty = np.zeros((0, 10, 3), dtype=np.uint8)
+    mask = np.zeros((0, 10, 1), dtype=np.uint8)
+    assert patch_match._call(lib.PM_inpaint, empty, mask, ctypes.c_int(3)).size == 0
 
 
 def test_native_rejects_unsupported_dtype(image, hole_mask):
