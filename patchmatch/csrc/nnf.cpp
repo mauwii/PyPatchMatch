@@ -296,12 +296,12 @@ int RegularityGuidedPatchDistanceMetricV2::operator()(
         auto source_ij = m_ijmap.ptr<float>(map_y(source, source_y), map_x(source, source_x));
         auto target_ij = m_ijmap.ptr<float>(map_y(target, target_y), map_x(target, target_x));
 
-        float di = fabs(source_ij[0] - target_ij[0]);
-        if (di > 0.5)
-            di = 1 - di;
-        float dj = fabs(source_ij[1] - target_ij[1]);
-        if (dj > 0.5)
-            dj = 1 - dj;
+        float di = std::fabs(source_ij[0] - target_ij[0]);
+        if (di > 0.5F)
+            di = 1.0F - di;
+        float dj = std::fabs(source_ij[1] - target_ij[1]);
+        if (dj > 0.5F)
+            dj = 1.0F - dj;
         score1 = sqrt(di * di + dj * dj) / 0.707;
         if (score1 < 0 || score1 > 1)
             score1 = 1;
