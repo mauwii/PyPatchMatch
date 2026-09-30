@@ -133,10 +133,22 @@ jobs:
       # the lower bounds of the dependencies in pyproject.toml
       - run: uv run --locked --no-build --with numpy==1.21.6 --with pillow==8.4.0 pytest
 
+  # builds from the sdist link the OpenCV of the distribution, not the pinned one
+  system-opencv:
+    runs-on: ubuntu-24.04
+    steps:
+      - *checkout
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Install the OpenCV of the distribution
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libopencv-dev
+      - run: uv run --locked --no-build pytest --no-cov
+
   # Single required status check for branch protection, independent of the matrix.
   ci-ok:
     if: always()
-    needs: [lint, test, sanitizers, coverage, lowest]
+    needs: [lint, test, sanitizers, coverage, lowest, system-opencv]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
