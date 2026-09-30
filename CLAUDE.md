@@ -353,8 +353,9 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   project itself. The OpenCV step runs with `--only-group dev`: the project cannot be
   built before OpenCV is installed, and `--no-project` would lock nothing.
 - `wheels.yml`: sdist, then cibuildwheel on five runners, then `sdist-fallback`;
-  `publish` uploads to PyPI with trusted publishing (environment `pypi`) only for a
-  published GitHub release of `mauwii/PyPatchMatch`.
+  `publish` attests the build provenance of all files (`actions/attest`) and uploads
+  them to PyPI with trusted publishing (environment `pypi`) only for a published GitHub
+  release of `mauwii/PyPatchMatch`.
 - `codeql.yml` analyzes actions, C/C++ and Python.
 - `ci-ok` and `wheels-ok` (re-actors/alls-green) are the required status checks; add new
   jobs to their `needs`.
