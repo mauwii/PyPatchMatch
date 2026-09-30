@@ -352,6 +352,10 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   `--no-build` only forbids building dependencies from source; uv still builds the
   project itself. The OpenCV step runs with `--only-group dev`: the project cannot be
   built before OpenCV is installed, and `--no-project` would lock nothing.
+- `system-opencv` installs `libopencv-dev` on `ubuntu-24.04` (OpenCV 4.6) instead of
+  running the build script and runs the tests, because builds from the sdist link
+  whatever OpenCV the system has. The runner is pinned so that the OpenCV version only
+  changes on purpose.
 - `wheels.yml`: sdist, then cibuildwheel on five runners, then `sdist-fallback`;
   `publish` attests the build provenance of all files (`actions/attest`) and uploads
   them to PyPI with trusted publishing (environment `pypi`) only for a published GitHub
