@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # the cooldown of dependabot.yml for the build and test dependencies of the
+  # distributions, which are not locked (uv build, and cibuildwheel through build[uv])
+  UV_EXCLUDE_NEWER: 7 days
+
 concurrency:
   # one group per commit on main: a group keeps only one pending run
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
@@ -73,6 +78,11 @@ jobs:
         with:
           path: ${{ runner.os == 'Windows' && 'C:/opencv' || '/tmp/opencv' }}
           key: opencv-wheel-${{ matrix.os }}-${{ hashFiles('dist/*/scripts/build_opencv.py', 'dist/*/pyproject.toml') }}
+      # the frontend build[uv] of cibuildwheel uses this uv on macOS and Windows
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: latest-known
+          enable-cache: false
       - uses: pypa/cibuildwheel@e090b81e30c4d855ea63bf4b6e59204c09a101ae # v4.2.1
         with:
           package-dir: ${{ steps.sdist.outputs.path }}

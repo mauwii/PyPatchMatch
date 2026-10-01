@@ -407,6 +407,11 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   sdist (there is no checkout); on Linux a volume makes `/tmp/opencv` of the container
   visible to the cache step. Runs on a tag, and therefore releases, skip the cache and
   build OpenCV from scratch.
+  The build and test dependencies of the distributions are not locked, so the workflow
+  sets `UV_EXCLUDE_NEWER: 7 days` (the cooldown of `dependabot.yml`): `uv build` and
+  cibuildwheel's `build-frontend = "build[uv]"` resolve only releases older than a
+  week. On Linux `environment-pass` hands the variable into the container; on macOS
+  and Windows cibuildwheel uses the uv of a setup-uv step.
 - `fill-quality.yml` runs for pull requests that change `CMakeLists.txt`,
   `patchmatch/csrc` or the evaluation script: it builds the library of the base commit,
   runs `scripts/evaluate_inpainting.py --baseline` against it (patch size 3, 3 seeds),
