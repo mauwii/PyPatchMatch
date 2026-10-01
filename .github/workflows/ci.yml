@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # nightly and manual runs test the properties with many more examples (sanitizers)
+  schedule:
+    - cron: "23 2 * * *"
 
 permissions:
   contents: read
@@ -86,7 +89,7 @@ jobs:
 
   sanitizers:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name) && 90 || 30 }}
     env:
       SKBUILD_CMAKE_DEFINE: PATCHMATCH_SANITIZE=ON
     steps:
@@ -105,9 +108,11 @@ jobs:
         run: >-
           uv run --locked --no-build
           env LD_PRELOAD="$(gcc -print-file-name=libasan.so) $(gcc -print-file-name=libstdc++.so)"
-          pytest --no-cov --capture=sys
+          pytest --no-cov --capture=sys --hypothesis-profile="$HYPOTHESIS_PROFILE"
         env:
           ASAN_OPTIONS: detect_leaks=0
+          # 5000 examples per property test (tests/conftest.py)
+          HYPOTHESIS_PROFILE: ${{ contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name) && 'deep' || 'default' }}
           UBSAN_OPTIONS: print_stacktrace=1
 
   coverage:
