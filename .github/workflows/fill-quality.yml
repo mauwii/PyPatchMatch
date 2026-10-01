@@ -44,7 +44,7 @@ jobs:
 
       - name: Build OpenCV
         if: steps.cache-opencv.outputs.cache-hit != 'true'
-        run: uv run --locked --no-build --only-group dev python scripts/build_opencv.py
+        run: uv run --locked --no-build --only-group test python scripts/build_opencv.py
 
       - name: Build the library of the base branch
         env:

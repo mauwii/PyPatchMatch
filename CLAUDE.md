@@ -340,8 +340,10 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
 ## CI
 
 - `ci.yml`: `lint` runs `pre-commit run --all-files`; `test` runs `uv run pytest` on
-  Ubuntu, macOS and Windows with Python 3.11 and 3.14, after building (or restoring) the
-  OpenCV of the build script.
+  Ubuntu, macOS and Windows with Python 3.11, 3.14 and 3.15, after building (or
+  restoring) the OpenCV of the build script. It syncs only the `test` group: the `dev`
+  group pulls in pyyaml through pre-commit, which had no wheel for 3.15 yet, and
+  `--no-build` refuses to build it.
 - pre-commit runs, besides the file checks, ruff and uv-lock: clang-format
   (`.clang-format`), shellcheck, markdownlint-cli2 (`.markdownlint.yaml`, 88 columns),
   typos (fixes in place), actionlint (checks `run:` scripts with shellcheck only if it
@@ -368,8 +370,9 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   has no tests and is excluded from the coverage on new code (80 % in "Sonar way").
 - The `uv run` steps pass `--locked` and `--no-build` (SonarCloud S8544, S8541).
   `--no-build` only forbids building dependencies from source; uv still builds the
-  project itself. The OpenCV step runs with `--only-group dev`: the project cannot be
-  built before OpenCV is installed, and `--no-project` would lock nothing.
+  project itself. The OpenCV step runs with `--only-group test`: the project cannot be
+  built before OpenCV is installed, `--no-project` would lock nothing, and the `dev`
+  group may lack wheels for the newest Python of the matrix.
 - Every setup-uv step sets `version: latest-known`: the newest uv whose checksum is
   bundled with the pinned setup-uv. Without it, CI installs each uv release minutes
   after publication; this way uv only moves when Dependabot updates the action, with
