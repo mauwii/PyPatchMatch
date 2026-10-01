@@ -1,0 +1,24 @@
+name: Cache cleanup
+
+# The caches of a pull request are only visible to it; without this they take space
+# that GitHub frees by evicting the least recently used caches, often those of main.
+on:
+  pull_request:
+    types: [closed]
+
+permissions: {}
+
+jobs:
+  delete:
+    name: delete the caches of the pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write # to delete caches
+    steps:
+      - name: Delete the caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: gh cache delete --all --ref "$REF" --succeed-on-no-caches
