@@ -363,6 +363,10 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
 - `sanitizers` builds with `PATCHMATCH_SANITIZE=ON` on Ubuntu and runs the tests with
   the preloaded ASan runtime (see Commands). It reuses the checkout and OpenCV steps of
   `test` through YAML anchors, so change them there.
+  Scheduled (nightly) and manual runs of `ci.yml` pass `--hypothesis-profile=deep`
+  (`tests/conftest.py`: 5000 examples per property test, about 90 s locally without
+  sanitizers) and allow the job 90 minutes; a failure prints a `@reproduce_failure`
+  blob. The property tests found real bugs, so they get the most search time.
 - `coverage` builds with `PATCHMATCH_COVERAGE=ON` on Ubuntu, runs the tests and fails
   below 95 % of the C++ lines or 90 % of the branches (gcovr, see Commands).
   It reuses the same anchors. It also writes `coverage.xml` (Python) and
