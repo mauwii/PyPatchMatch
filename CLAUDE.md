@@ -374,6 +374,8 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   bundled with the pinned setup-uv. Without it, CI installs each uv release minutes
   after publication; this way uv only moves when Dependabot updates the action, with
   its cooldown. That uv can be a few releases older than the one of the `uv-lock` hook.
+  `prune-cache: true` keeps only wheels built from source in the uv cache; downloaded
+  wheels restore no faster than they download.
 - `system-opencv` installs `libopencv-dev` on `ubuntu-24.04` (OpenCV 4.6) instead of
   running the build script and runs the tests, because builds from the sdist link
   whatever OpenCV the system has. The runner is pinned so that the OpenCV version only
@@ -399,6 +401,10 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   so it is not in the `needs` of `ci-ok`. It repeats the OpenCV steps of `ci.yml` with
   the same cache key, because anchors do not reach across files.
 - `codeql.yml` analyzes actions, C/C++ and Python.
+- `cache-cleanup.yml` deletes the caches of a pull request when it is closed: only that
+  pull request can read them, and at the 10 GB limit GitHub evicts the least recently
+  used caches, often those of `main`. For pull requests from forks the token is
+  read-only; their caches expire after 7 days without access.
 - `ci-ok` and `wheels-ok` (re-actors/alls-green) are the required status checks; add new
   jobs to their `needs`.
 - Actions are pinned to full commit SHAs with a `# vX.Y.Z` comment, and checkouts use
