@@ -284,9 +284,11 @@ ctypes releases the GIL during native calls, so inpaintings run truly concurrent
   as maximal. The distance indexes `distance2similarity`, so every metric has to clamp
   its result to that range.
 - Mask semantics: `mask` non-zero marks the holes (by default all pure white pixels,
-  computed in Python by `_default_mask`); `global_mask` marks pixels that are neither
-  filled nor used as a patch source, and whose colors must not influence the fill: the
-  downsampling kernel skips them, and gradients next to them are neutral
+  computed in Python by `_default_mask`); `_initialize_pyramid` makes them black on
+  level 0 as on the coarser levels, so their colors do not matter
+  (`test_colors_under_the_holes_do_not_matter`); `global_mask` marks pixels that are
+  neither filled nor used as a patch source, and whose colors must not influence the
+  fill: the downsampling kernel skips them, and gradients next to them are neutral
   (`test_colors_under_global_mask_do_not_matter`). At the end of `run()` every pixel
   that is not a hole, including the globally masked ones, is copied back from the input,
   so only the holes change. The tests assert this invariant (`assert_filled`,

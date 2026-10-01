@@ -164,7 +164,18 @@ Inpainting::Inpainting(
 
 void Inpainting::_initialize_pyramid()
 {
-    auto source = m_initial;
+    // The colors under the holes would reach the fill through the gradients of their
+    // neighbors and the target of a single-level pyramid. Black, like on coarser levels.
+    auto source = m_initial.clone();
+    const auto size = source.size();
+    for (int y = 0; y < size.height; ++y)
+    {
+        for (int x = 0; x < size.width; ++x)
+        {
+            if (source.is_masked(y, x))
+                std::fill_n(source.get_mutable_image(y, x), 3, 0);
+        }
+    }
     m_pyramid.push_back(source);
     while (source.size().height > m_distance_metric->patch_size() &&
            source.size().width > m_distance_metric->patch_size())
