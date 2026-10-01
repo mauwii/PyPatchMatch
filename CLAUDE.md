@@ -190,7 +190,7 @@ The C++ headers double as the C++ API: `examples/cpp_example.cpp` uses `Inpainti
 
 The library does not use the CPython ABI, so the wheels are tagged
 `py3-none-<platform>` (`wheel.py-api = "py3"`): one wheel per platform serves all Python
-versions, and cibuildwheel only builds `cp310-*`. Keep `csrc` free of `Python.h`,
+versions, and cibuildwheel only builds `cp311-*`. Keep `csrc` free of `Python.h`,
 pybind11 or nanobind. The C++ sources are excluded from the wheel (`wheel.exclude`);
 CMake installs the shared library into the package directory.
 
@@ -340,7 +340,7 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
 ## CI
 
 - `ci.yml`: `lint` runs `pre-commit run --all-files`; `test` runs `uv run pytest` on
-  Ubuntu, macOS and Windows with Python 3.10 and 3.14, after building (or restoring) the
+  Ubuntu, macOS and Windows with Python 3.11 and 3.14, after building (or restoring) the
   OpenCV of the build script.
 - pre-commit runs, besides the file checks, ruff and uv-lock: clang-format
   (`.clang-format`), shellcheck, markdownlint-cli2 (`.markdownlint.yaml`, 88 columns),
@@ -407,7 +407,7 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
 
 ## Conventions
 
-- Python >= 3.10: keep `from __future__ import annotations`. Ruff targets py310 with the
+- Python >= 3.11: keep `from __future__ import annotations`. Ruff targets py311 with the
   rules B, C4, E, F, I, RUF, SIM, UP and W, and formats at 88 columns. `patchmatch/csrc`
   is excluded from ruff. C++ is formatted by clang-format (Microsoft style, 120 columns,
   includes grouped as own header, `<...>`, `"..."`); naming is not checked: `m_`

@@ -155,8 +155,7 @@ def main() -> None:
         urllib.request.urlretrieve(OPENCV_URL, archive)
         verify_archive(archive)
         with tarfile.open(archive) as tar:
-            # extraction filters are missing on older patch releases, e.g. the
-            # last Windows installer of Python 3.10 (3.10.11)
+            # extraction filters are missing on older patch releases (3.11 < 3.11.4)
             if hasattr(tarfile, "data_filter"):
                 tar.extractall(tmp, filter="data")
             else:
