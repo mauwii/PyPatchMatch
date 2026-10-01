@@ -376,11 +376,13 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   changes on purpose.
 - `wheels.yml`: sdist, then cibuildwheel on five runners, then `sdist-fallback`;
   `publish` attests the build provenance of all files (`actions/attest`) and uploads
-  them to PyPI with trusted publishing (environment `pypi`) only for a published GitHub
-  release of `mauwii/PyPatchMatch`. The wheel jobs cache the OpenCV prefix, keyed on
-  `build_opencv.py` and `pyproject.toml` from the sdist (there is no checkout); on Linux
-  a volume makes `/tmp/opencv` of the container visible to the cache step. Runs on a
-  tag, and therefore releases, skip the cache and build OpenCV from scratch.
+  them to PyPI with trusted publishing (environment `pypi`, deployable only from tags
+  `v*`) only for a published GitHub release of `mauwii/PyPatchMatch`. It downloads the
+  artifacts named `dist-*`, so other artifacts of the run never reach PyPI. The wheel
+  jobs cache the OpenCV prefix, keyed on `build_opencv.py` and `pyproject.toml` from the
+  sdist (there is no checkout); on Linux a volume makes `/tmp/opencv` of the container
+  visible to the cache step. Runs on a tag, and therefore releases, skip the cache and
+  build OpenCV from scratch.
 - `fill-quality.yml` runs for pull requests that change `CMakeLists.txt`,
   `patchmatch/csrc` or the evaluation script: it builds the library of the base commit,
   runs `scripts/evaluate_inpainting.py --baseline` against it (patch size 3, 3 seeds),

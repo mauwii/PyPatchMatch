@@ -141,6 +141,7 @@ addopts = ["--cov-branch", "--cov-report=term:skip-covered", "--cov=patchmatch"]
 # shows which test hangs before the job timeout kills the run
 faulthandler_timeout = 300
 markers = ["e2e: end-to-end tests of the user workflows (deselect with -m 'not e2e')"]
-minversion = "6.0"
+minversion = "9.0"
 python_files = ["test_*.py"]
+strict = true
 testpaths = ["tests"]
