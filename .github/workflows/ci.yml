@@ -45,7 +45,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         # oldest and newest supported Python; the ctypes library is version independent
-        python-version: ["3.10", "3.14"]
+        python-version: ["3.11", "3.14"]
     steps:
       - &checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -146,12 +146,12 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: latest-known
-          python-version: "3.10"
+          python-version: "3.11"
       - *opencv-root
       - *opencv-cache
       - *opencv-build
       # the lower bounds of the dependencies in pyproject.toml
-      - run: uv run --locked --no-build --with numpy==1.21.6 --with pillow==8.4.0 pytest
+      - run: uv run --locked --no-build --with numpy==1.23.2 --with pillow==9.2.0 pytest
 
   # builds from the sdist link the OpenCV of the distribution, not the pinned one
   system-opencv:

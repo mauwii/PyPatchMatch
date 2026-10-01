@@ -15,7 +15,7 @@ authors = [
     { name = "Matthias Wild", email = "mauwii@outlook.de" },
     { name = "Younesse ANDAM", email = "younesse.andam@gmail.com" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = ["inpainting", "patchmatch", "image-processing", "opencv"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -24,7 +24,6 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Programming Language :: C++",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -33,7 +32,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Image Processing",
     "Typing :: Typed",
 ]
-dependencies = ["numpy>=1.21.6", "pillow>=8.4.0"]
+dependencies = ["numpy>=1.23.2", "pillow>=9.2.0"]
 dynamic = ["version"]
 
 [project.urls]
@@ -78,7 +77,7 @@ fallback_version = "0.0.0"
 [tool.cibuildwheel]
 # The wheels are Python-version independent (py3-none-<platform>), so each platform
 # is built and tested once; the CI workflow covers the other Python versions.
-build = "cp310-*"
+build = "cp311-*"
 skip = "*-musllinux_*"
 # OpenCV is built once per job in before-all, only for the runner's native arch
 archs = ["native"]
@@ -108,7 +107,7 @@ cache-keys = [
 [tool.ruff]
 extend-exclude = ["patchmatch/csrc"]
 line-length = 88
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["B", "C4", "E", "F", "I", "RUF", "SIM", "UP", "W"]
