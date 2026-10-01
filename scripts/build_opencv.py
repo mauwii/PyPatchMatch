@@ -4,6 +4,9 @@ The patchmatch library only needs opencv_core. Linking it statically keeps the
 wheels small and free of OpenCV's GUI/codec dependencies.
 
 Usage: python build_opencv.py  (installs into $OpenCV_ROOT)
+
+PATCHMATCH_OPENCV_VERSION selects another pinned version, which CI tests because
+builds from the sdist link whatever OpenCV the system has.
 """
 
 import hashlib
@@ -17,13 +20,20 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
-OPENCV_VERSION = "4.14.0"
+# The wheels link this code statically, so every archive is pinned by its SHA-256,
+# e.g. from `sha256sum` or `shasum -a 256`.
+OPENCV_SHA256S = {
+    "4.14.0": "ee8fb9b30eb60850431b4656447080e3737b56e45719c92b67f245950609f86e",
+    "5.0.0": "b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095",
+}
+# the version of the release wheels
+OPENCV_VERSION = os.environ.get("PATCHMATCH_OPENCV_VERSION") or "4.14.0"
+if OPENCV_VERSION not in OPENCV_SHA256S:
+    sys.exit(f"OpenCV {OPENCV_VERSION} is not pinned, known: {sorted(OPENCV_SHA256S)}")
+OPENCV_SHA256 = OPENCV_SHA256S[OPENCV_VERSION]
 OPENCV_URL = (
     f"https://github.com/opencv/opencv/archive/refs/tags/{OPENCV_VERSION}.tar.gz"
 )
-# The wheels link this code statically, so the archive is pinned by its SHA-256.
-# Update it together with the version, e.g. with `sha256sum` or `shasum -a 256`.
-OPENCV_SHA256 = "ee8fb9b30eb60850431b4656447080e3737b56e45719c92b67f245950609f86e"
 
 CMAKE_OPTIONS = {
     "CMAKE_BUILD_TYPE": "Release",

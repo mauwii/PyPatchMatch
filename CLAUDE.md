@@ -316,8 +316,11 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   is linked into the library. The wheel job checks that every wheel has the SBOM and,
   except on Windows, that `nm` finds no zlib symbol in the library. `write_sbom` fails
   if the build bundles another 3rdparty library; add a new one to the SBOM.
-- To update OpenCV, change `OPENCV_VERSION` and `OPENCV_SHA256` together. The CI cache of
-  the OpenCV build is keyed on the hash of the script.
+- To update OpenCV, change the default of `OPENCV_VERSION` and add its hash to
+  `OPENCV_SHA256S`. `PATCHMATCH_OPENCV_VERSION` selects another pinned version: the
+  CI job `opencv5` builds against OpenCV 5 (Homebrew's `opencv` since 2026), because
+  builds from the sdist link whatever OpenCV the system has. The CI cache of the
+  OpenCV build is keyed on the hash of the script.
 
 ### Packaging and versioning
 
