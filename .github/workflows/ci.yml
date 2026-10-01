@@ -16,6 +16,7 @@ concurrency:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -26,6 +27,7 @@ jobs:
   test:
     name: test (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     env:
       # only here, so that builds from the sdist survive new compiler warnings
       SKBUILD_CMAKE_DEFINE: CMAKE_COMPILE_WARNING_AS_ERROR=ON
@@ -70,6 +72,7 @@ jobs:
 
   sanitizers:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       SKBUILD_CMAKE_DEFINE: PATCHMATCH_SANITIZE=ON
     steps:
@@ -92,6 +95,7 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       SKBUILD_CMAKE_DEFINE: PATCHMATCH_COVERAGE=ON;CMAKE_EXPORT_COMPILE_COMMANDS=ON
       # a fixed path for sonar.cfamily.compile-commands
@@ -122,6 +126,7 @@ jobs:
 
   lowest:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - *checkout
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
@@ -136,6 +141,7 @@ jobs:
   # builds from the sdist link the OpenCV of the distribution, not the pinned one
   system-opencv:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - *checkout
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
@@ -150,6 +156,7 @@ jobs:
     if: always()
     needs: [lint, test, sanitizers, coverage, lowest, system-opencv]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
