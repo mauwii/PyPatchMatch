@@ -109,6 +109,23 @@ def test_colors_under_global_mask_do_not_matter(inputs, colors, patch_size):
 
 
 @settings(deadline=None)
+@given(images_and_masks(), hnp.arrays(np.uint8, (24, 24, 3)), patch_sizes)
+def test_colors_under_the_holes_do_not_matter(inputs, colors, patch_size):
+    image, mask, global_mask = inputs
+    if mask is None:
+        mask = white_pixels(image)
+    holes = mask if global_mask is None else mask & ~global_mask
+    colors = colors[: image.shape[0], : image.shape[1]]
+    recolored = np.where(holes[..., None], colors, image)
+    ijmap = image.astype(np.float32) / 255
+    kwargs = {"global_mask": global_mask, "patch_size": patch_size}
+
+    assert_same_fills(
+        fills(recolored, mask, ijmap, **kwargs), fills(image, mask, ijmap, **kwargs)
+    )
+
+
+@settings(deadline=None)
 @given(images_and_masks(), patch_sizes)
 def test_empty_global_mask_changes_nothing(inputs, patch_size):
     image, mask, _ = inputs
