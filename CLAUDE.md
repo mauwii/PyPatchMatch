@@ -398,8 +398,12 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
 - `ci-ok` and `wheels-ok` (re-actors/alls-green) are the required status checks; add new
   jobs to their `needs`.
 - Actions are pinned to full commit SHAs with a `# vX.Y.Z` comment, and checkouts use
-  `persist-credentials: false`. Dependabot updates actions, uv and pre-commit weekly in
-  groups.
+  `persist-credentials: false`. The pre-commit hooks are pinned the same way
+  (`rev: <sha>  # frozen: vX.Y.Z`; `pre-commit autoupdate --freeze` by hand), because a
+  moved tag would otherwise reach CI and fresh clones without review. Dependabot
+  updates actions, uv and pre-commit weekly in groups, SHA and comment together. The
+  repository is a GitHub fork, on which Dependabot version updates are off by default;
+  they are enabled in Insights → Dependency graph → Dependabot.
 
 ## Conventions
 
