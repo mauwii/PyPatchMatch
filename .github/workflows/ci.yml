@@ -160,6 +160,29 @@ jobs:
       # the lower bounds of the dependencies in pyproject.toml
       - run: uv run --locked --no-build --with numpy==1.23.2 --with pillow==9.2.0 pytest
 
+  # Homebrew and newer distributions ship OpenCV 5, which builds from the sdist link
+  opencv5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PATCHMATCH_OPENCV_VERSION: 5.0.0
+      SKBUILD_CMAKE_DEFINE: CMAKE_COMPILE_WARNING_AS_ERROR=ON
+    steps:
+      - *checkout
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: latest-known
+          prune-cache: true
+      - *opencv-root
+      - name: Cache OpenCV
+        id: cache-opencv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.OpenCV_ROOT }}
+          key: opencv-${{ env.PATCHMATCH_OPENCV_VERSION }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_opencv.py') }}
+      - *opencv-build
+      - run: uv run --locked --no-build pytest --no-cov
+
   # builds from the sdist link the OpenCV of the distribution, not the pinned one
   system-opencv:
     runs-on: ubuntu-24.04
@@ -199,7 +222,7 @@ jobs:
   # Single required status check for branch protection, independent of the matrix.
   ci-ok:
     if: always()
-    needs: [lint, test, sanitizers, coverage, lowest, system-opencv]
+    needs: [lint, test, sanitizers, coverage, lowest, opencv5, system-opencv]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
