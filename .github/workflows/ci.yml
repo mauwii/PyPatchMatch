@@ -23,6 +23,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # the newest uv with a checksum in this pin, so uv moves with Dependabot
+          version: latest-known
       - run: uv run --locked --no-build --only-group dev pre-commit run --all-files --show-diff-on-failure
 
   test:
@@ -47,6 +50,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          version: latest-known
           python-version: ${{ matrix.python-version }}
 
       # actions/cache rejects ".." in paths, and the job env has no runner context
@@ -79,6 +83,8 @@ jobs:
     steps:
       - *checkout
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: latest-known
       - *opencv-root
       - *opencv-cache
       - *opencv-build
@@ -106,6 +112,8 @@ jobs:
     steps:
       - *checkout
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: latest-known
       - *opencv-root
       - *opencv-cache
       - *opencv-build
@@ -132,6 +140,7 @@ jobs:
       - *checkout
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
+          version: latest-known
           python-version: "3.10"
       - *opencv-root
       - *opencv-cache
@@ -146,6 +155,8 @@ jobs:
     steps:
       - *checkout
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: latest-known
       - name: Install the OpenCV of the distribution
         run: |
           sudo apt-get update
