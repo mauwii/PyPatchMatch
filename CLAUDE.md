@@ -370,6 +370,10 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   `--no-build` only forbids building dependencies from source; uv still builds the
   project itself. The OpenCV step runs with `--only-group dev`: the project cannot be
   built before OpenCV is installed, and `--no-project` would lock nothing.
+- Every setup-uv step sets `version: latest-known`: the newest uv whose checksum is
+  bundled with the pinned setup-uv. Without it, CI installs each uv release minutes
+  after publication; this way uv only moves when Dependabot updates the action, with
+  its cooldown. That uv can be a few releases older than the one of the `uv-lock` hook.
 - `system-opencv` installs `libopencv-dev` on `ubuntu-24.04` (OpenCV 4.6) instead of
   running the build script and runs the tests, because builds from the sdist link
   whatever OpenCV the system has. The runner is pinned so that the OpenCV version only
