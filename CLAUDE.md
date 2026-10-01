@@ -368,6 +368,10 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   without the secret, e.g. for Dependabot and forks). Automatic analysis in SonarCloud
   is disabled; it cannot import coverage and would conflict with the CI scan. `scripts/`
   has no tests and is excluded from the coverage on new code (80 % in "Sonar way").
+  `sonar.qualitygate.wait=true` makes the scan fail on a red quality gate, so the gate
+  is part of `ci-ok` and auto-merge waits for it; the skipped scan of Dependabot and
+  fork PRs blocks nothing, unlike a required "SonarCloud Code Analysis" check, which
+  would never appear there.
 - The `uv run` steps pass `--locked` and `--no-build` (SonarCloud S8544, S8541).
   `--no-build` only forbids building dependencies from source; uv still builds the
   project itself. The OpenCV step runs with `--only-group test`: the project cannot be
@@ -409,7 +413,9 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
   used caches, often those of `main`. For pull requests from forks the token is
   read-only; their caches expire after 7 days without access.
 - `ci-ok` and `wheels-ok` (re-actors/alls-green) are the required status checks; add new
-  jobs to their `needs`.
+  jobs to their `needs`. The ruleset of `main` also has a `code_scanning` rule: CodeQL
+  alerts of severity error or security severity high and above block the merge (CodeQL
+  uploads its results for Dependabot PRs too, so they are not stuck).
 - Actions are pinned to full commit SHAs with a `# vX.Y.Z` comment, and checkouts use
   `persist-credentials: false`. The pre-commit hooks are pinned the same way
   (`rev: <sha>  # frozen: vX.Y.Z`; `pre-commit autoupdate --freeze` by hand), because a
