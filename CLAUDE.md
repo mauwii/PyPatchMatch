@@ -377,7 +377,11 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
 - `system-opencv` installs `libopencv-dev` on `ubuntu-24.04` (OpenCV 4.6) instead of
   running the build script and runs the tests, because builds from the sdist link
   whatever OpenCV the system has. The runner is pinned so that the OpenCV version only
-  changes on purpose.
+  changes on purpose. The Ubuntu mirror is sometimes very slow (180 MB at under
+  300 kB/s), so the job caches the downloaded `.deb` files, keyed on the hash of
+  `apt-get install --print-uris`, with `restore-keys` for the files that did not change.
+  apt checks them against the signed index and dpkg installs them as usual. The job
+  downloads first (`--download-only`) and caches only the files of the current list.
 - `wheels.yml`: sdist, then cibuildwheel on five runners, then `sdist-fallback`;
   `publish` attests the build provenance of all files (`actions/attest`) and uploads
   them to PyPI with trusted publishing (environment `pypi`, deployable only from tags
