@@ -82,6 +82,9 @@ build = "cp311-*"
 skip = "*-musllinux_*"
 # OpenCV is built once per job in before-all, only for the runner's native arch
 archs = ["native"]
+# uv installs the build and test environments, so that UV_EXCLUDE_NEWER of wheels.yml
+# applies to them
+build-frontend = "build[uv]"
 test-groups = ["test"]
 test-command = "pytest {project}/tests --no-cov"
 before-all = "python {project}/scripts/build_opencv.py"
@@ -89,6 +92,7 @@ environment = { OpenCV_ROOT = "/tmp/opencv" }
 
 [tool.cibuildwheel.linux]
 before-all = "/opt/python/cp312-cp312/bin/python {project}/scripts/build_opencv.py"
+environment-pass = ["UV_EXCLUDE_NEWER"]
 
 [tool.cibuildwheel.macos]
 environment = { OpenCV_ROOT = "/tmp/opencv", MACOSX_DEPLOYMENT_TARGET = "11.0" }
