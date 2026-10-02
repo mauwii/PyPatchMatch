@@ -11,6 +11,8 @@ permissions: {}
 jobs:
   delete:
     name: delete the caches of the pull request
+    # forks get a read-only token; head.repo.fork is always true, this repo is a fork
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
