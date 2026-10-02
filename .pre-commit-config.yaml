@@ -13,7 +13,7 @@ repos:
         args: [--fix=lf]
       - id: trailing-whitespace
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: 2eeb5678de71a00c0902cbda7105d328432f72cb  # frozen: v0.16.8
+    rev: a56c0b927e6465d37cae3e97d35d4d18ab2b96cd  # frozen: v0.16.9
     hooks:
       - id: ruff-check
         args: [--fix]
@@ -28,7 +28,7 @@ repos:
         types: [python]
         pass_filenames: false
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 9b16a472943852b803af3785c45041dcf10b9f12  # frozen: 0.12.18
+    rev: 2aeb804518b4373dbf5adb8dddc5466d9a6e6b21  # frozen: 0.12.19
     hooks:
       - id: uv-lock
   - repo: https://github.com/pre-commit/mirrors-clang-format
@@ -45,7 +45,7 @@ repos:
     hooks:
       - id: markdownlint-cli2
   - repo: https://github.com/crate-ci/typos
-    rev: 00f422f3b19c57bc6338715ebfe3316d38768461  # frozen: v1.50.3
+    rev: b859c0df7f391deba73030f79b957e62b4d81dc6  # frozen: varcon-core-v5.0.7
     hooks:
       - id: typos
   - repo: https://github.com/rhysd/actionlint
