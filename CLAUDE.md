@@ -363,7 +363,7 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
 - `sanitizers` builds with `PATCHMATCH_SANITIZE=ON` on Ubuntu and runs the tests with
   the preloaded ASan runtime (see Commands). It reuses the checkout and OpenCV steps of
   `test` through YAML anchors, so change them there.
-  Scheduled (nightly) and manual runs of `ci.yml` pass `--hypothesis-profile=deep`
+  Scheduled (weekly) and manual runs of `ci.yml` pass `--hypothesis-profile=deep`
   (`tests/conftest.py`: 5000 examples per property test, about 90 s locally without
   sanitizers) and allow the job 90 minutes; a failure prints a `@reproduce_failure`
   blob. The property tests found real bugs, so they get the most search time.
@@ -431,10 +431,16 @@ The release wheels link a static, core-only OpenCV (`scripts/build_opencv.py`:
 - Actions are pinned to full commit SHAs with a `# vX.Y.Z` comment, and checkouts use
   `persist-credentials: false`. The pre-commit hooks are pinned the same way
   (`rev: <sha>  # frozen: vX.Y.Z`; `pre-commit autoupdate --freeze` by hand), because a
-  moved tag would otherwise reach CI and fresh clones without review. Dependabot
-  updates actions, uv and pre-commit weekly in groups, SHA and comment together. The
-  repository is a GitHub fork, on which Dependabot version updates are off by default;
-  they are enabled in Insights → Dependency graph → Dependabot.
+  moved tag would otherwise reach CI and fresh clones without review. Except typos,
+  which is pinned by tag: its repository tags other crates too, and Dependabot matched
+  the frozen comment against one of them (#92). Dependabot updates actions and
+  pre-commit weekly in groups, SHA and comment together. The repository is a GitHub
+  fork, on which Dependabot version updates are off by default; they are enabled in
+  Insights → Dependency graph → Dependabot.
+- `uv.lock` only pins development tools and is updated by hand (`uv lock --upgrade`).
+  Dependabot cannot: its `uv lock --upgrade-package` builds the project, which fails
+  without OpenCV, because scikit-build-core hides the `prepare_metadata_for_build_*`
+  hooks when an override uses `if.failed` (the fallback of the sdist).
 
 ## Conventions
 
