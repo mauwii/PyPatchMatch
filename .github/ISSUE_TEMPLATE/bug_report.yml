@@ -1,0 +1,43 @@
+name: Bug report
+description: A crash, a failed installation or a wrong fill
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: >-
+        What happened, and what did you expect? Include the complete error message or
+        traceback.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: >-
+        The code or the commands that reproduce the problem. For a wrong fill, attach the
+        image and the mask.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      # The wheel tag tells a PyPI wheel, a build from the sdist and the fallback apart.
+      description: |
+        The complete output of this command, run with the Python that uses PyPatchMatch:
+
+        ```sh
+        python -c "import importlib.metadata as m, platform, sys; from patchmatch import patch_match as p; d = m.distribution('PyPatchMatch'); print(d.version, p.patchmatch_available, sys.version, platform.platform(), d.read_text('WHEEL'), sep='\n')"
+        ```
+
+        If you built PyPatchMatch from source, add the version of OpenCV.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: application
+    attributes:
+      label: Application
+      description: >-
+        If you use PyPatchMatch through an application such as InvokeAI, its name and
+        version.
