@@ -1,11 +1,10 @@
 [build-system]
 build-backend = "scikit_build_core.build"
-requires = ["scikit-build-core>=0.11", "setuptools-scm>=8"]
+requires = ["scikit-build-core>=0.11.2", "setuptools-scm>=8"]
 
 [project]
 name = "PyPatchMatch"
 description = "This library implements the PatchMatch based inpainting algorithm."
-readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
@@ -34,7 +33,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = ["numpy>=1.23.2", "pillow>=9.2.0"]
-dynamic = ["version"]
+dynamic = ["version", "readme"]
 
 [project.urls]
 "Source Code" = "https://github.com/mauwii/PyPatchMatch"
@@ -56,6 +55,7 @@ wheel.py-api = "py3"
 wheel.packages = ["patchmatch"]
 wheel.exclude = ["patchmatch/csrc/**"]
 metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+metadata.readme.provider = "scikit_build_core.metadata.fancy_pypi_readme"
 # The release wheels are built from the sdist, so it has to contain the tests
 # and their input image; _version.py is generated and therefore git-ignored.
 sdist.include = ["examples/images/forest_pruned.bmp", "patchmatch/_version.py"]
@@ -69,6 +69,17 @@ sdist.exclude = [".*", "examples", "sonar-project.properties", "uv.lock"]
 if.from-sdist = true
 if.failed = true
 wheel.cmake = false
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+# PyPI does not resolve relative image paths
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '!\[([^\]]*)\]\((?!https?:)([^)]+)\)'
+replacement = '![\1](https://raw.githubusercontent.com/mauwii/PyPatchMatch/v$HFPR_VERSION/\2)'
 
 [tool.setuptools_scm]
 version_file = "patchmatch/_version.py"

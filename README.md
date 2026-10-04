@@ -12,6 +12,12 @@ and Python interfaces. This implementation is heavily based on the implementatio
 Younesse ANDAM: [younesse-cv/PatchMatch](https://github.com/younesse-cv/PatchMatch),
 with some bug fixes, and updates.
 
+![Birdhouses removed from a photo by patchmatch.inpaint](examples/images/readme_example.jpg)
+
+From left to right: the photo, the input of
+[examples/py_example.py](https://github.com/mauwii/PyPatchMatch/blob/main/examples/py_example.py)
+with the birdhouses painted out in white, and its result.
+
 ## Installation
 
 ```sh
