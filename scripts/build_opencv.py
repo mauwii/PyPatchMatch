@@ -92,6 +92,8 @@ WINDOWS_CMAKE_OPTIONS = {
     "OPENCV_CONFIG_INSTALL_PATH": "cmake",
     "OPENCV_INSTALL_BINARIES_PREFIX": "",
     "OPENCV_SKIP_CMAKE_ROOT_CONFIG": "ON",
+    # skips OpenCV 5's assembler check: MinGW's would set MINGW and link pthread
+    "CMAKE_ASM_COMPILER": "CMAKE_ASM_COMPILER-NOTFOUND",
 }
 
 
