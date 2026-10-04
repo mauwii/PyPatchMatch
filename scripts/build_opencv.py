@@ -5,8 +5,8 @@ wheels small and free of OpenCV's GUI/codec dependencies.
 
 Usage: python build_opencv.py  (installs into $OpenCV_ROOT)
 
-PATCHMATCH_OPENCV_VERSION selects another pinned version, which CI tests because
-builds from the sdist link whatever OpenCV the system has.
+PATCHMATCH_OPENCV_VERSION selects another pinned version, e.g. 4.14.0 to rebuild the
+wheels of PyPatchMatch 2.0.0.
 """
 
 import hashlib
@@ -27,7 +27,7 @@ OPENCV_SHA256S = {
     "5.0.0": "b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095",
 }
 # the version of the release wheels
-OPENCV_VERSION = os.environ.get("PATCHMATCH_OPENCV_VERSION") or "4.14.0"
+OPENCV_VERSION = os.environ.get("PATCHMATCH_OPENCV_VERSION") or "5.0.0"
 if OPENCV_VERSION not in OPENCV_SHA256S:
     sys.exit(f"OpenCV {OPENCV_VERSION} is not pinned, known: {sorted(OPENCV_SHA256S)}")
 OPENCV_SHA256 = OPENCV_SHA256S[OPENCV_VERSION]
@@ -73,6 +73,8 @@ CMAKE_OPTIONS = {
     "WITH_QT": "OFF",
     "WITH_TIFF": "OFF",
     "WITH_V4L": "OFF",
+    # an installed VTK adds OpenGL to the link interface of core (OpenCV 5)
+    "WITH_VTK": "OFF",
     "WITH_WEBP": "OFF",
     "WITH_IPP": "OFF",
     "WITH_ITT": "OFF",

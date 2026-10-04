@@ -42,7 +42,7 @@ paths:
   except on Windows, that `nm` finds no zlib symbol in the library. `write_sbom` fails
   if the build bundles another 3rdparty library; add a new one to the SBOM.
 - To update OpenCV, change the default of `OPENCV_VERSION` and add its hash to
-  `OPENCV_SHA256S`. `PATCHMATCH_OPENCV_VERSION` selects another pinned version: the
-  CI job `opencv5` builds against OpenCV 5 (Homebrew's `opencv` since 2026), because
-  builds from the sdist link whatever OpenCV the system has. The CI cache of the
-  OpenCV build is keyed on the hash of the script.
+  `OPENCV_SHA256S`. The CI cache of the OpenCV build is keyed on the hash of the
+  script. `PATCHMATCH_OPENCV_VERSION` selects another pinned version, e.g. 4.14.0 of
+  the 2.0.0 wheels to compare the fills. Builds from the sdist link whatever OpenCV the
+  system has; CI tests 5.0 through the script and 4.6 in `system-opencv`.
