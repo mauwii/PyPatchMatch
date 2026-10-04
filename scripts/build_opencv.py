@@ -161,8 +161,10 @@ def main() -> None:
         return
 
     cmake = find_cmake()
-    with tempfile.TemporaryDirectory() as tmp:
-        archive = Path(tmp) / "opencv.tar.gz"
+    with tempfile.TemporaryDirectory() as tmp_name:
+        # OpenCV 5 compares paths as strings, which fails with 8.3 names (RUNNER~1)
+        tmp = Path(tmp_name).resolve()
+        archive = tmp / "opencv.tar.gz"
         print(f"Downloading {OPENCV_URL}", flush=True)
         urllib.request.urlretrieve(OPENCV_URL, archive)
         verify_archive(archive)
@@ -173,8 +175,8 @@ def main() -> None:
             else:
                 tar.extractall(tmp)
 
-        source = Path(tmp) / f"opencv-{OPENCV_VERSION}"
-        build = Path(tmp) / "build"
+        source = tmp / f"opencv-{OPENCV_VERSION}"
+        build = tmp / "build"
         options = {**CMAKE_OPTIONS, "CMAKE_INSTALL_PREFIX": prefix.as_posix()}
         if sys.platform == "win32":
             options.update(WINDOWS_CMAKE_OPTIONS)
