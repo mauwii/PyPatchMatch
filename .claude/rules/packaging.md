@@ -11,6 +11,10 @@ paths:
 - Build backend: scikit-build-core with setuptools-scm. The version comes from the git
   tags; `patchmatch/_version.py` is generated and git-ignored. Without git metadata the
   version falls back to `0.0.0`, so CI checks out with `fetch-depth: 0`.
+- The PyPI description is `README.md` through hatch-fancy-pypi-readme
+  (`metadata.readme.provider`): PyPI does not resolve relative image paths, so the
+  build rewrites them to raw.githubusercontent.com URLs at the tag `v$HFPR_VERSION`.
+  Release tags must therefore be `v` plus the normalized version (`v2.0.0rc6`).
 - The release wheels are built from the sdist, not from the checkout, and cibuildwheel
   runs `pytest {project}/tests --no-cov` against the sdist contents. Everything the tests
   need has to be in the sdist: `sdist.include` adds `examples/images/forest_pruned.bmp`,

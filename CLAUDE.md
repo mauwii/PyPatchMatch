@@ -66,6 +66,9 @@ Other entry points:
   the core-only build of the script.
 - `uv run python examples/py_example.py` (and `py_example_global_mask.py`) write
   `examples/images/forest_recovered.bmp`, which is git-ignored.
+- `uv run python scripts/render_readme_example.py` runs `py_example.py` and renders the
+  picture at the top of the README, `examples/images/readme_example.jpg`; rerun it and
+  commit the picture after changes that affect the fills.
 - CMake options: `PATCHMATCH_BUILD_EXAMPLES` (OFF), `PATCHMATCH_FAST_MATH` (ON,
   `-ffast-math` or `/fp:fast`), `PATCHMATCH_SANITIZE` (OFF, ASan and UBSan with
   `float-cast-overflow`, every finding aborts; turns off fast math, which lets the
