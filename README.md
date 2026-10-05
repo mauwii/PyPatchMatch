@@ -1,6 +1,5 @@
 # PatchMatch based Inpainting
 
-[![CI](https://github.com/mauwii/PyPatchMatch/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mauwii/PyPatchMatch/actions/workflows/ci.yml)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=mauwii_PyPatchMatch&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=mauwii_PyPatchMatch)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blueviolet.svg)](https://github.com/mauwii/PyPatchMatch/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/PyPatchMatch)](https://pypi.org/project/PyPatchMatch/)
