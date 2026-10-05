@@ -173,6 +173,30 @@ def test_inpaint_thin_hole_takes_the_colors_beside_it():
         assert np.abs(fill - plain).max() < 10, (seed, fill)
 
 
+@pytest.mark.parametrize("regularity", [False, True], ids=["inpaint", "regularity"])
+@pytest.mark.parametrize("tall", [True, False], ids=["tall", "wide"])
+def test_inpaint_very_large_image(tall, regularity):
+    """Coordinate products overflowed a C int near the end of very large images.
+
+    The regularity metric crashed from 46,342 pixels on, and the upsampling filled
+    a hole near the bottom black from 65,537 pixels on.
+    """
+    image = np.random.default_rng(0).integers(90, 110, (70_000, 4, 3), dtype=np.uint8)
+    image[-30:-20, 1:3] = 255
+    if not tall:
+        image = image.transpose(1, 0, 2)
+    holes = (image == 255).all(axis=2)
+
+    if regularity:
+        ijmap = np.zeros(image.shape, dtype=np.float32)
+        result = patchmatch.inpaint_regularity(image, None, ijmap, patch_size=1)
+    else:
+        result = patchmatch.inpaint(image, patch_size=1)
+
+    np.testing.assert_array_equal(result[~holes], image[~holes])
+    assert np.abs(result[holes].mean(axis=0) - 100).max() < 10
+
+
 def test_inpaint_does_not_modify_inputs(image, hole_mask):
     image_before, mask_before = image.copy(), hole_mask.copy()
     patchmatch.inpaint(image, hole_mask, global_mask=hole_mask, patch_size=3)

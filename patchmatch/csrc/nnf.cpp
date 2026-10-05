@@ -296,12 +296,17 @@ int RegularityGuidedPatchDistanceMetricV2::operator()(
     if (target_y < 0 || target_y >= target.size().height || target_x < 0 || target_x >= target.size().width)
         return PatchDistanceMetric::kDistanceScale;
 
-    // Map pyramid-level coordinates to the full-resolution ijmap. Height and width are
-    // scaled independently and clamped, since the pyramid sizes are rounded per axis.
+    // Map pyramid-level coordinates to the full-resolution ijmap, height and width
+    // independently; a coordinate inside the image stays inside the map. In 64 bits:
+    // the products overflow an int from 46,342 pixels on.
     const int map_h = m_ijmap.size().height;
     const int map_w = m_ijmap.size().width;
-    auto map_y = [&](const MaskedImage &img, int y) { return std::min(y * map_h / img.size().height, map_h - 1); };
-    auto map_x = [&](const MaskedImage &img, int x) { return std::min(x * map_w / img.size().width, map_w - 1); };
+    auto map_y = [&](const MaskedImage &img, int y) {
+        return static_cast<int>(std::int64_t{y} * map_h / img.size().height);
+    };
+    auto map_x = [&](const MaskedImage &img, int x) {
+        return static_cast<int>(std::int64_t{x} * map_w / img.size().width);
+    };
 
     double score1 = PatchDistanceMetric::kDistanceScale;
     if (!source.is_globally_masked(source_y, source_x) && !target.is_globally_masked(target_y, target_x))
