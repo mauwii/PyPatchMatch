@@ -486,6 +486,11 @@ MaskedImage Inpainting::_expectation_maximization(
 // measured again on a changed image. Globally masked pixels have no link.
 void Inpainting::_update_links(const MaskedImage &source, bool image_changed)
 {
+    const auto for_each_field = [this](const auto &update) {
+        if (m_source2target)
+            update(*m_source2target);
+        update(m_target2source);
+    };
     const int patch_size = m_distance_metric->patch_size();
     const auto size = source.size();
     for (int i = 0; i < size.height; ++i)
@@ -493,17 +498,9 @@ void Inpainting::_update_links(const MaskedImage &source, bool image_changed)
         for (int j = 0; j < size.width; ++j)
         {
             if (!source.contains_mask(i, j, patch_size))
-            {
-                if (m_source2target)
-                    m_source2target->set_identity(i, j);
-                m_target2source.set_identity(i, j);
-            }
+                for_each_field([i, j](NearestNeighborField &field) { field.set_identity(i, j); });
             else if (image_changed && !source.is_globally_masked(i, j))
-            {
-                if (m_source2target)
-                    m_source2target->update_distance(i, j);
-                m_target2source.update_distance(i, j);
-            }
+                for_each_field([i, j](NearestNeighborField &field) { field.update_distance(i, j); });
         }
     }
 }
