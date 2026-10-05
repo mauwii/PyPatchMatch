@@ -156,28 +156,22 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
     _random_search(y, x);
 }
 
-// Random search around the link with a progressive step size.
+// Random search around the link in windows of decreasing size, clamped to the image.
 void NearestNeighborField::_random_search(int y, int x)
 {
-    const auto &this_target_size = target_size();
-    const int *this_ptr = ptr(y, x);
-
-    int random_scale = (std::min(this_target_size.height, this_target_size.width) - 1) / 2;
-    while (random_scale > 0)
+    const auto size = target_size();
+    const int *link = ptr(y, x);
+    for (int radius = (std::min(size.height, size.width) - 1) / 2; radius > 0; radius /= 2)
     {
-        int yp = this_ptr[0] + (random_int(2 * random_scale + 1) - random_scale);
-        int xp = this_ptr[1] + (random_int(2 * random_scale + 1) - random_scale);
-        yp = std::clamp(yp, 0, target_size().height - 1);
-        xp = std::clamp(xp, 0, target_size().width - 1);
-
-        if (m_target.is_globally_masked(yp, xp))
-        {
-            random_scale /= 2;
-            continue;
-        }
-
-        _link_if_closer(y, x, yp, xp);
-        random_scale /= 2;
+        // A propagated link can lie outside the image, which would leave the window empty.
+        const int yc = std::clamp(link[0], 0, size.height - 1);
+        const int xc = std::clamp(link[1], 0, size.width - 1);
+        const int top = std::max(yc - radius, 0);
+        const int left = std::max(xc - radius, 0);
+        const int yp = top + random_int(std::min(yc + radius, size.height - 1) - top + 1);
+        const int xp = left + random_int(std::min(xc + radius, size.width - 1) - left + 1);
+        if (!m_target.is_globally_masked(yp, xp))
+            _link_if_closer(y, x, yp, xp);
     }
 }
 

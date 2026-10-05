@@ -73,7 +73,8 @@ ctypes releases the GIL during native calls, so inpaintings run truly concurrent
   (`test_inpaint_thin_hole_takes_the_colors_beside_it`). Tried and rejected: searching
   before propagating in every pass, which no longer refines a propagated link, the way
   a structure is followed along a hole; and a search radius of the larger image side,
-  as in the paper, which blurs the fills.
+  as in the paper, which blurs the fills, also since the window rather than each
+  candidate is clamped to the image.
 - Distances are ints in `[0, PatchDistanceMetric::kDistanceScale]` (65535): an SSD over
   the colors and the x/y gradients, where masked pixels and pixels outside the image
   count as maximal. The distance indexes `distance2similarity`, so every metric has to
