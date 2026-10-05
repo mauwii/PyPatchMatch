@@ -1,6 +1,7 @@
 #include "masked_image.h"
 
 #include <algorithm>
+#include <cstdint>
 
 const cv::Size MaskedImage::kDownsampleKernelSize = cv::Size(6, 6);
 const std::array<int, 6> MaskedImage::kDownsampleKernel = {1, 5, 10, 10, 5, 1};
@@ -107,8 +108,9 @@ MaskedImage MaskedImage::upsample(int new_w, int new_h) const
     {
         for (int x = 0; x < new_w; ++x)
         {
-            const int yy = y * size.height / new_h;
-            const int xx = x * size.width / new_w;
+            // In 64 bits: the products overflow an int from 65,537 pixels on.
+            const auto yy = static_cast<int>(std::int64_t{y} * size.height / new_h);
+            const auto xx = static_cast<int>(std::int64_t{x} * size.width / new_w);
 
             if (is_globally_masked(yy, xx))
             {
