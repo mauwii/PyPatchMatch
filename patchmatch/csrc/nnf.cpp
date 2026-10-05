@@ -229,9 +229,9 @@ namespace
 
             const unsigned char *p_sgm = nullptr;
             const unsigned char *p_tgm = nullptr;
-            if (!source.global_mask().empty())
+            if (source.has_global_mask())
                 p_sgm = source.global_mask().ptr<unsigned char>(yys, 0);
-            if (!target.global_mask().empty())
+            if (target.has_global_mask())
                 p_tgm = target.global_mask().ptr<unsigned char>(yyt, 0);
 
             const auto *p_sgy = source.grady().ptr<unsigned char>(yys, 0);

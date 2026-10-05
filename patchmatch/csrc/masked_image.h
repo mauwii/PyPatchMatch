@@ -10,14 +10,14 @@ public:
     MaskedImage() = default;
     MaskedImage(const cv::Mat &image, const cv::Mat &mask) : m_image(image), m_mask(mask) {}
     MaskedImage(const cv::Mat &image, const cv::Mat &mask, const cv::Mat &global_mask)
-        : m_image(image), m_mask(mask), m_global_mask(global_mask)
+        : m_image(image), m_mask(mask), m_global_mask(global_mask), m_has_global_mask(!global_mask.empty())
     {
     }
     MaskedImage(
         const cv::Mat &image, const cv::Mat &mask, const cv::Mat &global_mask, const cv::Mat &grady,
         const cv::Mat &gradx, bool grad_computed)
-        : m_image(image), m_mask(mask), m_global_mask(global_mask), m_image_grady(grady), m_image_gradx(gradx),
-          m_image_grad_computed(grad_computed)
+        : m_image(image), m_mask(mask), m_global_mask(global_mask), m_has_global_mask(!global_mask.empty()),
+          m_image_grady(grady), m_image_gradx(gradx), m_image_grad_computed(grad_computed)
     {
     }
     MaskedImage(int width, int height)
@@ -55,6 +55,10 @@ public:
     {
         return m_global_mask;
     }
+    inline bool has_global_mask() const
+    {
+        return m_has_global_mask;
+    }
     inline const cv::Mat &grady() const
     {
         assert(m_image_grad_computed);
@@ -70,10 +74,12 @@ public:
     {
         m_global_mask = cv::Mat(m_mask.size(), CV_8U);
         m_global_mask.setTo(cv::Scalar(0));
+        m_has_global_mask = !m_global_mask.empty();
     }
     inline void set_global_mask_mat(const cv::Mat &other)
     {
         m_global_mask = other;
+        m_has_global_mask = !other.empty();
     }
 
     inline bool is_masked(int y, int x) const
@@ -82,7 +88,7 @@ public:
     }
     inline bool is_globally_masked(int y, int x) const
     {
-        return !m_global_mask.empty() && static_cast<bool>(m_global_mask.at<unsigned char>(y, x));
+        return m_has_global_mask && static_cast<bool>(m_global_mask.at<unsigned char>(y, x));
     }
     inline void set_mask(int y, int x, bool value)
     {
@@ -119,6 +125,8 @@ private:
     cv::Mat m_image;
     cv::Mat m_mask;
     cv::Mat m_global_mask;
+    // cv::Mat::empty() is not inline in OpenCV 5, too slow to call for every pixel
+    bool m_has_global_mask = false;
     // computed on first use by compute_image_gradients
     mutable cv::Mat m_image_grady;
     mutable cv::Mat m_image_gradx;
