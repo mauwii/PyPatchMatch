@@ -16,7 +16,7 @@ public:
 private:
     void _initialize_pyramid(void);
     MaskedImage _expectation_maximization(const MaskedImage &source, MaskedImage target, int level, bool verbose);
-    void _link_patches_without_holes(const MaskedImage &source);
+    void _update_links(const MaskedImage &source, bool image_changed);
     void _expectation_step(
         const NearestNeighborField &nnf, bool source2target, cv::Mat &vote, const MaskedImage &source, bool upscaled,
         bool best_only, bool keep_known) const;

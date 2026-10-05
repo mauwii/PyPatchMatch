@@ -32,7 +32,10 @@ ctypes releases the GIL during native calls, so inpaintings run truly concurrent
 - Each level runs `1 + 2 * level` EM iterations with `min(7, 1 + level)` NNF passes
   (propagation and random search), an expectation step (votes of both fields, weighted
   through the `distance2similarity` table) and a maximization step, which sets each
-  pixel to the weighted mean of its votes. On levels 0 and 1 the known pixels keep their
+  pixel to the weighted mean of its votes. From the second iteration on, the links of
+  patches with holes are measured again on the new image before the passes; with the
+  distances of the previous image, worse candidates replaced better links, and the
+  votes were weighted with outdated distances. On levels 0 and 1 the known pixels keep their
   input values instead; without that the votes change the pixels around the holes, and a
   seam appears when `run()` restores them. On coarser levels the known pixels next to
   the holes are averages of partially masked kernels, and keeping them made fills copy
