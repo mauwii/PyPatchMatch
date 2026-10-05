@@ -151,25 +151,30 @@ void MaskedImage::compute_image_gradients() const
     const auto size = m_image.size();
     m_image_grady = cv::Mat(size, CV_8UC3);
     m_image_gradx = cv::Mat(size, CV_8UC3);
-    m_image_grady = cv::Scalar::all(0);
-    m_image_gradx = cv::Scalar::all(0);
 
-    for (int i = 1; i < size.height - 1; ++i)
+    // The border replicates its pixels, so that patches over the outermost line compare it as well.
+    for (int y = 0; y < size.height; ++y)
     {
-        const auto *ptry1 = m_image.ptr<unsigned char>(i + 1, 0);
-        const auto *ptry2 = m_image.ptr<unsigned char>(i - 1, 0);
-        const auto *ptrx1 = m_image.ptr<unsigned char>(i, 0) + 3;
-        const auto *ptrx2 = m_image.ptr<unsigned char>(i, 0) - 3;
-        auto *mptry = m_image_grady.ptr<unsigned char>(i, 0);
-        auto *mptrx = m_image_gradx.ptr<unsigned char>(i, 0);
-        for (int j = 3; j < size.width * 3 - 3; ++j)
+        const int up = std::max(y - 1, 0);
+        const int down = std::min(y + 1, size.height - 1);
+        for (int x = 0; x < size.width; ++x)
         {
+            const int left = std::max(x - 1, 0);
+            const int right = std::min(x + 1, size.width - 1);
             // A neutral gradient next to a globally masked pixel keeps its color out of the distances.
-            const int x = j / 3;
-            const bool skip_y = is_globally_masked(i + 1, x) || is_globally_masked(i - 1, x);
-            const bool skip_x = is_globally_masked(i, x + 1) || is_globally_masked(i, x - 1);
-            mptry[j] = skip_y ? 128 : (ptry1[j] / 2 - ptry2[j] / 2) + 128;
-            mptrx[j] = skip_x ? 128 : (ptrx1[j] / 2 - ptrx2[j] / 2) + 128;
+            const bool skip_y = is_globally_masked(down, x) || is_globally_masked(up, x);
+            const bool skip_x = is_globally_masked(y, right) || is_globally_masked(y, left);
+            const unsigned char *below = get_image(down, x);
+            const unsigned char *above = get_image(up, x);
+            const unsigned char *next = get_image(y, right);
+            const unsigned char *previous = get_image(y, left);
+            auto *grady = m_image_grady.ptr<unsigned char>(y, x);
+            auto *gradx = m_image_gradx.ptr<unsigned char>(y, x);
+            for (int c = 0; c < 3; ++c)
+            {
+                grady[c] = static_cast<unsigned char>(skip_y ? 128 : below[c] / 2 - above[c] / 2 + 128);
+                gradx[c] = static_cast<unsigned char>(skip_x ? 128 : next[c] / 2 - previous[c] / 2 + 128);
+            }
         }
     }
 
