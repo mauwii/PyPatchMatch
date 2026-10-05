@@ -6,6 +6,8 @@
 [![PyPI](https://img.shields.io/pypi/v/PyPatchMatch)](https://pypi.org/project/PyPatchMatch/)
 [![Downloads](https://static.pepy.tech/badge/pypatchmatch)](https://pepy.tech/projects/pypatchmatch)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![ponytail](https://img.shields.io/badge/over--engineering-ponytail_audited-111111)](https://github.com/DietrichGebert/ponytail)
+[![caveman](https://img.shields.io/badge/agent-caveman-F0A63C)](https://github.com/JuliusBrussee/caveman)
 
 This library implements the PatchMatch based inpainting algorithm. It provides both C++
 and Python interfaces. This implementation is heavily based on the implementation by
