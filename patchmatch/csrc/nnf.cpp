@@ -231,7 +231,7 @@ namespace
             const int yys = ys + dy;
             const int yyt = yt + dy;
 
-            if (yys <= 0 || yys >= source_size.height - 1 || yyt <= 0 || yyt >= target_size.height - 1)
+            if (yys < 0 || yys >= source_size.height || yyt < 0 || yyt >= target_size.height)
             {
                 distance += std::int64_t{PatchSSDDistanceMetric::kSSDScale} * (2 * patch_size + 1);
                 wsum += 2 * patch_size + 1;
@@ -262,7 +262,7 @@ namespace
                 wsum += 1;
 
                 // The bounds first: the masks are read only inside the image.
-                if (xxs <= 0 || xxs >= source_size.width - 1 || xxt <= 0 || xxt >= target_size.width - 1 || p_sm[xxs] ||
+                if (xxs < 0 || xxs >= source_size.width || xxt < 0 || xxt >= target_size.width || p_sm[xxs] ||
                     p_tm[xxt] || (p_sgm && p_sgm[xxs]) || (p_tgm && p_tgm[xxt]))
                 {
                     distance += PatchSSDDistanceMetric::kSSDScale;

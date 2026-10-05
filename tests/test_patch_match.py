@@ -200,6 +200,30 @@ def test_inpaint_thin_hole_takes_the_colors_beside_it():
         assert np.abs(fill - plain).max() < 10, (seed, fill)
 
 
+@pytest.mark.parametrize("transpose", [False, True], ids=["right", "bottom"])
+@pytest.mark.parametrize("patch_size", [1, 3])
+def test_inpaint_textures_the_image_border(patch_size, transpose):
+    """Outpainting: the outermost line of a hole at the image border was flat.
+
+    Up to patch_size 4 no patch that covered it got a weight above zero, so it kept
+    the colors upsampled from the coarse levels (detail 0.06).
+    """
+    rng = np.random.default_rng(0)
+    texture = rng.integers(-20, 21, (HEIGHT, WIDTH, 3)) + np.array([120, 140, 100])
+    image = texture.astype(np.uint8)
+    image[:, WIDTH // 2 :] = 255
+    if transpose:
+        image = image.transpose(1, 0, 2)
+
+    result = patchmatch.inpaint(image, patch_size=patch_size).astype(float)
+
+    if transpose:
+        result = result.transpose(1, 0, 2)
+    outermost = result[:, -1].std(axis=0).mean()
+    known = result[:, : WIDTH // 2].reshape(-1, 3).std(axis=0).mean()
+    assert outermost > 0.5 * known, outermost / known
+
+
 @pytest.mark.parametrize("regularity", [False, True], ids=["inpaint", "regularity"])
 @pytest.mark.parametrize("tall", [True, False], ids=["tall", "wide"])
 def test_inpaint_very_large_image(tall, regularity):

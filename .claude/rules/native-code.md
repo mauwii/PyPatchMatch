@@ -45,7 +45,7 @@ ctypes releases the GIL during native calls, so inpaintings run truly concurrent
   levels add the texture. Marking every pixel that touches a hole instead was tried and
   made the fills worse: it leaves the coarsest levels without valid source patches,
   because the similarity table gives zero weight to patches with more than about 10 %
-  masked or border pixels.
+  masked pixels or pixels outside the image.
 - A hole, and later each thin part of it, therefore has a level on which it appears for
   the first time. The patches around it arrive there with the link of a patch without
   holes, the one to itself, which now points into the hole. `_initialize_field_from`
@@ -61,9 +61,13 @@ ctypes releases the GIL during native calls, so inpaintings run truly concurrent
   larger image side, as in the paper, which blurs the fills (coffee detail 0.30 instead
   of 0.53).
 - Distances are ints in `[0, PatchDistanceMetric::kDistanceScale]` (65535): an SSD over
-  the colors and the x/y gradients, where masked pixels and pixels at the border count
-  as maximal. The distance indexes `distance2similarity`, so every metric has to clamp
-  its result to that range.
+  the colors and the x/y gradients, where masked pixels and pixels outside the image
+  count as maximal. The distance indexes `distance2similarity`, so every metric has to
+  clamp its result to that range. The gradients replicate the outermost pixels. When
+  the outermost line counted as maximal too, every patch over it had at least
+  1/(2p+1) maximal pixels, above the 10 % at which the table is zero up to
+  `patch_size` 4, so that line of a hole at the image border never got a vote and
+  stayed flat (`test_inpaint_textures_the_image_border`).
 - Mask semantics: `mask` non-zero marks the holes (by default all pure white pixels,
   computed in Python by `_default_mask`); `_initialize_pyramid` makes them black on
   level 0 as on the coarser levels, so their colors do not matter

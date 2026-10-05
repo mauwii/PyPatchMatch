@@ -3,9 +3,10 @@
 The holes are cut into images whose content is known: forest.bmp and the images listed
 in examples/images/SOURCES.md. forest_pruned.bmp and every ``*_pruned.*`` image in the
 git-ignored examples/images/local/ are added as object removals without a ground
-truth; their pure white pixels are the holes. forest-global and brick-global add a
-global mask, darkened in the report: the plant of examples/py_example_global_mask.py
-and the left third of brick.png.
+truth; their pure white pixels are the holes. grass-edge cuts a band at the right
+border, as in outpainting. forest-global and brick-global add a global mask, darkened
+in the report: the plant of examples/py_example_global_mask.py and the left third of
+brick.png.
 
 Usage:
     uv run python scripts/evaluate_inpainting.py
@@ -118,6 +119,10 @@ def cases() -> Iterator[Case]:
     for name, hole in HOLES.items():
         truth = load(IMAGES / f"{name}.png")
         yield cut(name, truth, ellipse(truth.shape, *hole))
+    grass = load(IMAGES / "grass.png")
+    edge = np.zeros(grass.shape[:2], dtype=bool)
+    edge[:, -64:] = True
+    yield cut("grass-edge", grass, edge)
     plant = np.zeros(pruned.shape[:2], dtype=bool)
     plant[290:, 100:180] = True
     yield Case("forest-global", pruned, white(pruned), None, plant)
