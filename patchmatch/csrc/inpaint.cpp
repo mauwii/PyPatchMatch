@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <iostream>
+#include <optional>
 
 namespace
 {
@@ -70,14 +72,59 @@ namespace
         target_ptr[3] = weight;
     }
 
+    // Counts the holes of an image in rectangles, from the number of holes above and left of each pixel.
+    class HoleCounter
+    {
+    public:
+        explicit HoleCounter(const MaskedImage &image)
+            : m_size(image.size()), m_sums(static_cast<std::size_t>(m_size.height + 1) * (m_size.width + 1), 0)
+        {
+            for (int y = 0; y < m_size.height; ++y)
+            {
+                for (int x = 0; x < m_size.width; ++x)
+                {
+                    const std::int64_t hole = image.is_masked(y, x) ? 1 : 0;
+                    sum(y + 1, x + 1) = hole + sum(y, x + 1) + sum(y + 1, x) - sum(y, x);
+                }
+            }
+        }
+
+        // Whether the rectangle from (y0, x0) to (y1, x1), clipped to the image, contains a hole.
+        bool any(std::int64_t y0, std::int64_t x0, std::int64_t y1, std::int64_t x1) const
+        {
+            const auto clip = [](std::int64_t value, int size) {
+                return static_cast<int>(std::clamp<std::int64_t>(value, 0, size));
+            };
+            const int top = clip(y0, m_size.height);
+            const int bottom = clip(y1 + 1, m_size.height);
+            const int left = clip(x0, m_size.width);
+            const int right = clip(x1 + 1, m_size.width);
+            return sum(bottom, right) - sum(top, right) - sum(bottom, left) + sum(top, left) > 0;
+        }
+
+    private:
+        std::int64_t &sum(int y, int x)
+        {
+            return m_sums[static_cast<std::size_t>(y) * (m_size.width + 1) + x];
+        }
+        std::int64_t sum(int y, int x) const
+        {
+            return m_sums[static_cast<std::size_t>(y) * (m_size.width + 1) + x];
+        }
+
+        cv::Size m_size;
+        std::vector<std::int64_t> m_sums;
+    };
+
     // Casts the votes of one nearest-neighbor field into the vote image.
     class VoteCaster
     {
     public:
+        // With holes, only the patches whose votes reach one of them are cast.
         VoteCaster(
             const NearestNeighborField &nnf, bool source2target, cv::Mat &vote, const MaskedImage &source,
-            bool upscaled, bool best_only)
-            : m_nnf(&nnf), m_vote(&vote), m_source(&source), m_source_size(nnf.source_size()),
+            bool upscaled, bool best_only, const HoleCounter *holes)
+            : m_nnf(&nnf), m_vote(&vote), m_source(&source), m_holes(holes), m_source_size(nnf.source_size()),
               m_target_size(nnf.target_size()), m_source2target(source2target), m_upscaled(upscaled),
               m_best_only(best_only)
         {
@@ -89,6 +136,8 @@ namespace
         {
             const int yp = m_nnf->at(i, j, 0);
             const int xp = m_nnf->at(i, j, 1);
+            if (m_holes && !votes_for_hole(m_source2target ? yp : i, m_source2target ? xp : j, patch_size))
+                return;
             for (int di = -patch_size; di <= patch_size; ++di)
             {
                 for (int dj = -patch_size; dj <= patch_size; ++dj)
@@ -109,6 +158,15 @@ namespace
         }
 
     private:
+        // Whether the patch around (y, x) of the voted image, scaled like the votes, has a hole.
+        bool votes_for_hole(int y, int x, int patch_size) const
+        {
+            const std::int64_t scale = m_upscaled ? 2 : 1;
+            return m_holes->any(
+                scale * (std::int64_t{y} - patch_size), scale * (std::int64_t{x} - patch_size),
+                scale * (std::int64_t{y} + patch_size + 1) - 1, scale * (std::int64_t{x} + patch_size + 1) - 1);
+        }
+
         void cast_pair(int ys, int xs, int yt, int xt, double weight) const
         {
             if (!m_source2target)
@@ -137,6 +195,7 @@ namespace
         const NearestNeighborField *m_nnf;
         cv::Mat *m_vote;
         const MaskedImage *m_source;
+        const HoleCounter *m_holes;
         cv::Size m_source_size;
         cv::Size m_target_size;
         bool m_source2target;
@@ -288,19 +347,21 @@ MaskedImage Inpainting::_expectation_maximization(
         // structure that the finer levels refine, the best vote there makes seams.
         const bool best_only = level == 0 && iter_em == nr_iters_em - 1;
 
-        // Votes for best patch from NNF Source->Target (completeness) and Target->Source (coherence).
-        _expectation_step(m_source2target, true, vote, new_source, upscaled, best_only);
-        trace(verbose, "  Expectation source to target finished.");
-        _expectation_step(m_target2source, false, vote, new_source, upscaled, best_only);
-        trace(verbose, "  Expectation target to source finished.");
-
-        // Compile votes and update pixel values.
         // Known pixels are kept on the two finest levels only. On coarser levels those
         // next to the holes average only the known part of their downsampling kernel,
         // estimates that reach into the holes; keeping them there made the fills copy
         // smooth regions, e.g. a concrete wall into the foliage above it.
         const int new_level = upscaled ? level - 1 : level;
-        _maximization_step(new_target, vote, new_source, new_level <= 1);
+        const bool keep_known = new_level <= 1;
+
+        // Votes for best patch from NNF Source->Target (completeness) and Target->Source (coherence).
+        _expectation_step(m_source2target, true, vote, new_source, upscaled, best_only, keep_known);
+        trace(verbose, "  Expectation source to target finished.");
+        _expectation_step(m_target2source, false, vote, new_source, upscaled, best_only, keep_known);
+        trace(verbose, "  Expectation target to source finished.");
+
+        // Compile votes and update pixel values.
+        _maximization_step(new_target, vote, new_source, keep_known);
         trace(verbose, "  Minimization step finished.");
     }
 
@@ -327,9 +388,14 @@ void Inpainting::_link_patches_without_holes(const MaskedImage &source)
 // Expectation step: vote for best estimations of each pixel.
 void Inpainting::_expectation_step(
     const NearestNeighborField &nnf, bool source2target, cv::Mat &vote, const MaskedImage &source, bool upscaled,
-    bool best_only) const
+    bool best_only, bool keep_known) const
 {
-    const VoteCaster caster(nnf, source2target, vote, source, upscaled, best_only);
+    // Votes for known pixels do not count where the maximization step keeps them.
+    std::optional<HoleCounter> holes;
+    if (keep_known)
+        holes.emplace(source);
+    const VoteCaster caster(
+        nnf, source2target, vote, source, upscaled, best_only, holes.has_value() ? &holes.value() : nullptr);
     const int patch_size = m_distance_metric->patch_size();
     const auto &kDistance2Similarity = distance2similarity();
     const auto source_size = nnf.source_size();
