@@ -77,9 +77,11 @@ ctypes releases the GIL during native calls, so inpaintings run truly concurrent
   was filled with forest instead of meadow
   (`test_inpaint_thin_hole_takes_the_colors_beside_it`). Tried and rejected: searching
   before propagating in every pass, which no longer refines a propagated link, the way
-  a structure is followed along a hole; and a search radius of the larger image side,
-  as in the paper, which blurs the fills, also since the window rather than each
-  candidate is clamped to the image.
+  a structure is followed along a hole; a search radius of the larger image side, as
+  in the paper, which blurs the fills, also since the window rather than each candidate
+  is clamped to the image; and a radius of 1 on level 0, as the paper suggests for the
+  finest levels (section 4.3), which saved at most 10 % and made the seam worse with
+  `patch_size` 7 and 15 (on levels 0 and 1 with every patch size).
 - Distances are ints in `[0, PatchDistanceMetric::kDistanceScale]` (65535): an SSD over
   the colors and the x/y gradients, where masked pixels and pixels outside the image
   count as maximal. The distance indexes `distance2similarity`, so every metric has to
