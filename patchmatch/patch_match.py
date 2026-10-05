@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import ctypes
 import logging
-import math
 import operator
 from collections.abc import Callable
 from typing import SupportsIndex, TypeAlias
@@ -44,7 +43,9 @@ ImageLike: TypeAlias = np.ndarray | Image.Image
 
 try:
     _lib: ctypes.CDLL | None = load_library()
-except OSError as e:
+except (OSError, AttributeError) as e:
+    # AttributeError: a library without the PM_* functions, e.g. one that 1.x
+    # compiled into the package directory and that pip does not remove on upgrade
     _lib = None
     logger.warning("patchmatch failed to load: %s", e)
 
@@ -54,6 +55,9 @@ patchmatch_available = _lib is not None
 # The native code computes 2 * patch_size + 1 as a C int.
 _MAX_PATCH_SIZE = (2**31 - 2) // 2
 
+# The native code takes a C float, which turns larger weights into infinity.
+_MAX_GUIDE_WEIGHT = float(np.finfo(np.float32).max)
+
 
 def _get_lib() -> ctypes.CDLL:
     if _lib is None:
@@ -62,10 +66,17 @@ def _get_lib() -> ctypes.CDLL:
 
 
 def set_random_seed(seed: int) -> None:
+    """Set the seed of the randomized search of all following inpaintings.
+
+    Every inpainting starts from this seed, so equal inputs give equal results. The
+    native code keeps it as a 32-bit unsigned int, so ``seed`` is taken modulo
+    ``2**32``: ``2**32`` behaves like 0 and -1 like ``2**32 - 1``.
+    """
     _get_lib().PM_set_random_seed(ctypes.c_uint(seed))
 
 
 def set_verbose(verbose: bool) -> None:
+    """Print the progress of all following inpaintings to stderr if ``verbose``."""
     _get_lib().PM_set_verbose(ctypes.c_int(verbose))
 
 
@@ -96,8 +107,7 @@ def inpaint(
     lib = _get_lib()
     patch_size = _check_patch_size(patch_size)
     image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
-    # OpenCV 4.6 turns an empty image into one of shape (0, 0, 1)
-    if image.size == 0:
+    if not _has_holes(mask, global_mask):
         return image.copy()
 
     if global_mask is None:
@@ -140,15 +150,16 @@ def inpaint_regularity(
         raise ValueError("ijmap must only contain finite values")
     ijmap = np.ascontiguousarray(ijmap)
 
-    # the native code divides by 1 + guide_weight and indexes a table with the result
+    # the native code divides by 1 + guide_weight and indexes a table with the result;
+    # the comparison also rejects NaN
     guide_weight = float(guide_weight)
-    if not (math.isfinite(guide_weight) and guide_weight >= 0):
+    if not 0 <= guide_weight <= _MAX_GUIDE_WEIGHT:
         raise ValueError(
-            f"guide_weight must be a finite number >= 0, got {guide_weight}"
+            f"guide_weight must be between 0 and {_MAX_GUIDE_WEIGHT:g}, "
+            f"got {guide_weight}"
         )
 
-    # OpenCV 4.6 turns an empty image into one of shape (0, 0, 1)
-    if image.size == 0:
+    if not _has_holes(mask, global_mask):
         return image.copy()
 
     args = (ijmap, ctypes.c_int(patch_size), ctypes.c_float(guide_weight))
@@ -192,6 +203,19 @@ def _prepare_inputs(
                 f"got {m.shape[:2]} for an image of {image.shape[:2]}"
             )
     return image, mask, global_mask
+
+
+def _has_holes(mask: np.ndarray, global_mask: np.ndarray | None) -> bool:
+    """Whether a hole lies outside the global mask.
+
+    Otherwise the result equals the input, but the native code still runs every
+    level of the pyramid. This also covers empty images, which OpenCV 4.6 would
+    return with the shape (0, 0, 1).
+    """
+    holes = mask != 0
+    if global_mask is not None:
+        holes &= global_mask == 0
+    return bool(holes.any())
 
 
 def _call(func: Callable[..., CMatT], *args: object) -> np.ndarray:
