@@ -127,18 +127,24 @@ def test_fill_is_as_detailed_as_its_surroundings(pruned_image):
     assert evaluation.measure(result, holes)["detail"] > 0.8
 
 
-def test_no_seam_at_the_hole_border(pruned_image):
-    """Known pixels changed during the iterations and restored at the end left a seam.
+@pytest.mark.parametrize(
+    ("name", "patch_size", "limit"), [("forest", 3, 1.5), ("chelsea", 15, 2.0)]
+)
+def test_no_seam_at_the_hole_border(name, patch_size, limit):
+    """The border of the holes stood out as an outline.
 
-    The difference across the border of the holes was about twice the difference of
-    neighbors on either side of it (seam 2.03).
+    Known pixels changed during the iterations and restored at the end made the
+    difference across the border about twice the difference of neighbors on either
+    side of it (seam 2.03). Keeping them still left the colors of the fill off along
+    the border: seam 1.73 for forest with patch size 3, 3.24 for chelsea with 15.
     """
-    source = np.array(pruned_image)
-    holes = evaluation.white(source)
+    case = next(case for case in evaluation.cases() if case.name == name)
 
-    result = patchmatch.inpaint(source, patch_size=3)
+    result = patchmatch.inpaint(
+        case.image, case.holes.astype(np.uint8), patch_size=patch_size
+    )
 
-    assert evaluation.measure(result, holes)["seam"] < 1.9
+    assert evaluation.measure(result, case.holes)["seam"] < limit
 
 
 @pytest.mark.parametrize(

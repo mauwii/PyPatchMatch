@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <optional>
 
@@ -30,6 +31,95 @@ namespace
     {
         static const std::vector<double> table = make_distance2similarity();
         return table;
+    }
+
+    // Calls visit(y, x) for the pixels of the image within radius of (cy, cx).
+    template <typename Visit>
+    void for_window(cv::Size size, int cy, int cx, int radius, Visit visit)
+    {
+        for (int y = std::max(0, cy - radius); y <= std::min(size.height - 1, cy + radius); ++y)
+            for (int x = std::max(0, cx - radius); x <= std::min(size.width - 1, cx + radius); ++x)
+                visit(y, x);
+    }
+
+    // Mean of value(y, x) over the pixels within radius of (cy, cx) for which select(y, x) holds.
+    template <typename Select, typename Value>
+    cv::Vec3d window_mean(cv::Size size, int cy, int cx, int radius, Select select, Value value)
+    {
+        cv::Vec3d sum;
+        int count = 0;
+        for_window(size, cy, cx, radius, [&sum, &count, &select, &value](int y, int x) {
+            if (select(y, x))
+            {
+                sum += value(y, x);
+                ++count;
+            }
+        });
+        return count > 0 ? sum / count : sum;
+    }
+
+    // Shifts the hole pixels near the border by the color step across it, which showed as an outline.
+    void blend_hole_borders(cv::Mat &result, const MaskedImage &initial)
+    {
+        constexpr int kWidth = 4;
+        constexpr int kStepRadius = 1;
+        constexpr int kSpreadRadius = 4;
+        const auto size = initial.size();
+        const auto known = [&initial](int y, int x) {
+            return !initial.is_masked(y, x) && !initial.is_globally_masked(y, x);
+        };
+        const auto hole = [&initial](int y, int x) {
+            return initial.is_masked(y, x) && !initial.is_globally_masked(y, x);
+        };
+        const auto color = [&result](int y, int x) {
+            const auto *pixel = result.ptr<unsigned char>(y, x);
+            return cv::Vec3d(pixel[0], pixel[1], pixel[2]);
+        };
+
+        // Chessboard distance of the hole pixels to the nearest known pixel, 0 beyond kWidth.
+        cv::Mat depth(size, CV_32S, cv::Scalar(0));
+        for (int cy = 0; cy < size.height; ++cy)
+        {
+            for (int cx = 0; cx < size.width; ++cx)
+            {
+                if (!hole(cy, cx))
+                    continue;
+                int &d = depth.at<int>(cy, cx);
+                for_window(size, cy, cx, kWidth, [&d, &known, cy, cx](int y, int x) {
+                    const int distance = std::max(std::abs(y - cy), std::abs(x - cx));
+                    if (known(y, x) && (d == 0 || distance < d))
+                        d = distance;
+                });
+            }
+        }
+        const auto border = [&depth](int y, int x) { return depth.at<int>(y, x) == 1; };
+
+        cv::Mat steps(size, CV_64FC3, cv::Scalar::all(0));
+        for (int y = 0; y < size.height; ++y)
+        {
+            for (int x = 0; x < size.width; ++x)
+            {
+                if (border(y, x))
+                    steps.at<cv::Vec3d>(y, x) = window_mean(size, y, x, kStepRadius, known, color) -
+                                                window_mean(size, y, x, kStepRadius, hole, color);
+            }
+        }
+
+        const auto step = [&steps](int y, int x) { return steps.at<cv::Vec3d>(y, x); };
+        for (int y = 0; y < size.height; ++y)
+        {
+            for (int x = 0; x < size.width; ++x)
+            {
+                const int d = depth.at<int>(y, x);
+                if (d == 0)
+                    continue;
+                const cv::Vec3d shift =
+                    window_mean(size, y, x, kSpreadRadius, border, step) * (kWidth + 1 - d) / kWidth;
+                auto *pixel = result.ptr<unsigned char>(y, x);
+                for (int c = 0; c < 3; ++c)
+                    pixel[c] = cv::saturate_cast<unsigned char>(pixel[c] + shift[c]);
+            }
+        }
     }
 
     template <typename... Args>
@@ -152,7 +242,9 @@ namespace
                     if (yt < 0 || yt >= m_target_size.height || xt < 0 || xt >= m_target_size.width ||
                         m_nnf->target().is_globally_masked(yt, xt))
                         continue;
-                    cast_pair(ys, xs, yt, xt, weight);
+                    // Near ties go to the patch centered closest, not the first cast, which made blocks.
+                    const auto offset2 = std::int64_t{di} * di + std::int64_t{dj} * dj;
+                    cast_pair(ys, xs, yt, xt, m_best_only ? weight * (1 - 1e-5 * offset2) : weight);
                 }
             }
         }
@@ -291,6 +383,7 @@ cv::Mat Inpainting::run(bool verbose, unsigned int random_seed)
             std::copy(input, input + 3, result.ptr<unsigned char>(y, x));
         }
     }
+    blend_hole_borders(result, m_initial);
     return result;
 }
 

@@ -39,7 +39,20 @@ ctypes releases the GIL during native calls, so inpaintings run truly concurrent
   smooth regions into textured ones. The last iteration of a level votes directly into
   the upsampled image of the next level, which is less blurry than upsampling the
   result. The last iteration at level 0 keeps only the heaviest vote of each pixel
-  instead of the mean, which blurs.
+  instead of the mean, which blurs. Many votes there are near ties (fill copied from the
+  source, distance close to 0), and the first one cast won the whole area of its patch,
+  which filled large patch sizes with blocks of `2 * patch_size + 1` pixels. The weight
+  is therefore multiplied by `1 - 1e-5 * (di² + dj²)`, so near ties go to the patch
+  centered closest to the pixel. Stronger preferences (`1e-4`, a Gaussian, `1 / (1 +
+  r²)`) override real differences: on the color gradient of the unit tests a patch in
+  the hole copied colors from far away (`test_inpaint_patch_sizes[7]`).
+- The fills match the texture around a hole better than its colors, and the border
+  stood out as an outline once the known pixels were restored. At the end of `run()`,
+  `blend_hole_borders` shifts the hole pixels up to 4 pixels from the border by the
+  local color step across it (3x3 means on either side, averaged over the border
+  pixels within 4 pixels), fading out inwards. A width that grows with `patch_size`
+  measured worse. Blending the mean and the heaviest vote did not help: with the
+  known pixels kept, the mean of `patch_size` 15 is flat (detail 0.08 for chelsea).
 - The coarse levels mark a pixel as a hole only if its whole downsampling kernel is
   one, so the holes shrink quickly and are filled smoothly from their border; the finer
   levels add the texture. Marking every pixel that touches a hole instead was tried and
