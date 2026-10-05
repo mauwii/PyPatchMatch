@@ -19,7 +19,7 @@ private:
     void _link_patches_without_holes(const MaskedImage &source);
     void _expectation_step(
         const NearestNeighborField &nnf, bool source2target, cv::Mat &vote, const MaskedImage &source, bool upscaled,
-        bool best_only) const;
+        bool best_only, bool keep_known) const;
     void _maximization_step(MaskedImage &target, const cv::Mat &vote, const MaskedImage &source, bool keep_known) const;
 
     MaskedImage m_initial;
