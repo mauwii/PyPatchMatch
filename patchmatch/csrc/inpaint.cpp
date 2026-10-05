@@ -362,18 +362,21 @@ cv::Mat Inpainting::run(bool verbose, unsigned int random_seed)
 
         source = m_pyramid[level];
 
-        if (level == nr_levels - 1)
+        const bool coarsest = level == nr_levels - 1;
+        if (coarsest)
         {
             target = source.clone();
             target.clear_mask();
-            m_source2target = NearestNeighborField(source, target, m_distance_metric);
-            m_target2source = NearestNeighborField(target, source, m_distance_metric);
         }
+        // The votes of the completeness field keep the known pixels near their input on the
+        // coarse levels; on levels 0 and 1, which keep the known pixels, they change nothing.
+        if (level < 2)
+            m_source2target.reset();
         else
-        {
-            m_source2target = NearestNeighborField(source, target, m_distance_metric, m_source2target);
-            m_target2source = NearestNeighborField(target, source, m_distance_metric, m_target2source);
-        }
+            m_source2target = coarsest ? NearestNeighborField(source, target, m_distance_metric)
+                                       : NearestNeighborField(source, target, m_distance_metric, *m_source2target);
+        m_target2source = coarsest ? NearestNeighborField(target, source, m_distance_metric)
+                                   : NearestNeighborField(target, source, m_distance_metric, m_target2source);
 
         trace(verbose, "Initialization done.");
 
@@ -415,7 +418,8 @@ MaskedImage Inpainting::_expectation_maximization(
     {
         if (iter_em != 0)
         {
-            m_source2target.set_target(new_target);
+            if (m_source2target)
+                m_source2target->set_target(new_target);
             m_target2source.set_source(new_target);
             target = new_target;
         }
@@ -424,7 +428,8 @@ MaskedImage Inpainting::_expectation_maximization(
 
         _update_links(source, iter_em != 0);
         trace(verbose, "  NNF minimization started.");
-        m_source2target.minimize(nr_iters_nnf);
+        if (m_source2target)
+            m_source2target->minimize(nr_iters_nnf);
         m_target2source.minimize(nr_iters_nnf);
         trace(verbose, "  NNF minimization finished.");
 
@@ -461,8 +466,11 @@ MaskedImage Inpainting::_expectation_maximization(
         const bool keep_known = new_level <= 1;
 
         // Votes for best patch from NNF Source->Target (completeness) and Target->Source (coherence).
-        _expectation_step(m_source2target, true, vote, new_source, upscaled, best_only, keep_known);
-        trace(verbose, "  Expectation source to target finished.");
+        if (m_source2target)
+        {
+            _expectation_step(*m_source2target, true, vote, new_source, upscaled, best_only, keep_known);
+            trace(verbose, "  Expectation source to target finished.");
+        }
         _expectation_step(m_target2source, false, vote, new_source, upscaled, best_only, keep_known);
         trace(verbose, "  Expectation target to source finished.");
 
@@ -486,12 +494,14 @@ void Inpainting::_update_links(const MaskedImage &source, bool image_changed)
         {
             if (!source.contains_mask(i, j, patch_size))
             {
-                m_source2target.set_identity(i, j);
+                if (m_source2target)
+                    m_source2target->set_identity(i, j);
                 m_target2source.set_identity(i, j);
             }
             else if (image_changed && !source.is_globally_masked(i, j))
             {
-                m_source2target.update_distance(i, j);
+                if (m_source2target)
+                    m_source2target->update_distance(i, j);
                 m_target2source.update_distance(i, j);
             }
         }

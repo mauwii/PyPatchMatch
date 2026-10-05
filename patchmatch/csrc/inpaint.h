@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <vector>
 
 #include "masked_image.h"
@@ -25,7 +26,7 @@ private:
     MaskedImage m_initial;
     std::vector<MaskedImage> m_pyramid;
 
-    NearestNeighborField m_source2target;
+    std::optional<NearestNeighborField> m_source2target;
     NearestNeighborField m_target2source;
     const PatchDistanceMetric *m_distance_metric;
 };
