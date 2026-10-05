@@ -28,6 +28,8 @@ Columns, means over the seeds:
             surroundings; 0.85 to 1.1 in the original images, lower is blurrier
     error   mean color error against the original on images reduced to 1/8, which
             compares the structure of the fill rather than its pixels
+    fills   with --baseline: whether the fills of all seeds are byte-identical to the
+            baseline's, as they have to be after a change that only makes it faster
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ from __future__ import annotations
 import argparse
 import base64
 import ctypes
+import hashlib
 import html
 import io
 import sys
@@ -77,6 +80,7 @@ class Result(NamedTuple):
     values: dict[str, float]  # means over the seeds
     seconds: float  # per seed
     fill: np.ndarray  # of seed 0
+    digest: str  # of the fills of all seeds
 
 
 def load(path: Path) -> np.ndarray:
@@ -202,7 +206,20 @@ def evaluate(library: ctypes.CDLL, case: Case, patch_size: int, seeds: int) -> R
         rows.append(measure(fills[-1], case.holes, case.truth))
     seconds = (time.perf_counter() - start) / seeds
     values = {key: float(np.mean([row[key] for row in rows])) for key in rows[0]}
-    return Result(values, seconds, fills[0])
+    digest = hashlib.sha256(b"".join(fill.tobytes() for fill in fills)).hexdigest()
+    return Result(values, seconds, fills[0], digest)
+
+
+def identical(results: list[Result]) -> str:
+    """Whether the fills match those of the baseline, empty without one."""
+    if len(results) < 2:
+        return ""
+    return "identical" if results[0].digest == results[1].digest else "changed"
+
+
+def report_columns(rows: list[tuple[Case, list[Result]]]) -> list[str]:
+    baseline = any(len(results) > 1 for _, results in rows)
+    return [*COLUMNS, "time", *(["fills"] if baseline else [])]
 
 
 def print_row(name: str, results: list[Result], out: TextIO) -> None:
@@ -214,7 +231,8 @@ def print_row(name: str, results: list[Result], out: TextIO) -> None:
         ]
         cells.append(f"{' -> '.join(found):16}")
     seconds = " -> ".join(f"{result.seconds:.1f}s" for result in results)
-    print(f"{name:14} {''.join(cells)}{seconds}", file=out, flush=True)
+    line = f"{name:14} {''.join(cells)}{seconds:16}{identical(results)}"
+    print(line.rstrip(), file=out, flush=True)
 
 
 # Report ------------------------------------------------------------------------------
@@ -361,6 +379,8 @@ def column(key: str, results: list[Result]) -> tuple[list[float], list[str]]:
 
 
 def cell(key: str, results: list[Result]) -> str:
+    if key == "fills":
+        return f"<td>{identical(results)}</td>"
     values, text = column(key, results)
     if not values:
         return "<td></td>"
@@ -405,7 +425,7 @@ def section(case: Case, results: list[Result], labels: list[str]) -> str:
 def write_report(
     rows: list[tuple[Case, list[Result]]], labels: list[str], meta: str
 ) -> None:
-    columns = [*COLUMNS, "time"]
+    columns = report_columns(rows)
     head = "".join(f"<th>{key}</th>" for key in ["case", *columns])
     body = "".join(
         f'<tr><td><a href="#{html.escape(case.name)}">{html.escape(case.name)}</a></td>'
@@ -436,6 +456,8 @@ MARKS = {"better": " 🟢", "worse": " 🔴", "": ""}
 
 
 def markdown_cell(key: str, results: list[Result]) -> str:
+    if key == "fills":
+        return identical(results)
     values, text = column(key, results)
     if len(values) < 2:
         return "".join(text)
@@ -443,7 +465,7 @@ def markdown_cell(key: str, results: list[Result]) -> str:
 
 
 def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
-    columns = [*COLUMNS, "time"]
+    columns = report_columns(rows)
     lines = [
         f"### Fill quality ({title})",
         "",
@@ -453,6 +475,13 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
     for case, results in rows:
         cells = [markdown_cell(key, results) for key in columns]
         lines.append(f"| {case.name} | {' | '.join(cells)} |")
+    if "fills" in columns:
+        same = sum(identical(results) == "identical" for _, results in rows)
+        lines += [
+            "",
+            f"The fills of all seeds are byte-identical to the baseline in {same} of "
+            f"{len(rows)} cases.",
+        ]
     lines += [
         "",
         "Means over the seeds. seam and detail are best at 1.0, as in the original "
@@ -496,7 +525,9 @@ def main() -> None:
 
     out = sys.stderr if args.markdown else sys.stdout
     print(f"patch_size={args.patch_size} seeds={args.seeds}", file=out)
-    print(f"{'case':14} {'seam':16}{'detail':16}{'error':16}time", file=out)
+    fills = "fills" if args.baseline else ""
+    header = f"{'case':14} {'seam':16}{'detail':16}{'error':16}{'time':16}{fills}"
+    print(header.rstrip(), file=out)
     rows = []
     for case in cases():
         if selected and case.name not in selected:
