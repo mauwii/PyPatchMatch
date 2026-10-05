@@ -18,6 +18,13 @@ public:
     virtual int operator()(
         const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
         int target_x) const = 0;
+    // The distance if it is below bound, otherwise any value >= bound.
+    virtual int distance_below(
+        const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x,
+        int /* bound */) const
+    {
+        return (*this)(source, source_y, source_x, target, target_y, target_x);
+    }
     static const int kDistanceScale;
 
 private:
@@ -104,6 +111,13 @@ private:
     {
         return (*m_distance_metric)(m_source, source_y, source_x, m_target, target_y, target_x);
     }
+    inline void _link_if_closer(int y, int x, int y_target, int x_target)
+    {
+        const int current = at(y, x, 2);
+        const int distance = m_distance_metric->distance_below(m_source, y, x, m_target, y_target, x_target, current);
+        if (distance < current)
+            _set(y, x, y_target, x_target, distance);
+    }
     inline void _set(int y, int x, int y_target, int x_target, int distance)
     {
         auto ptr = mutable_ptr(y, x);
@@ -132,6 +146,9 @@ public:
     int operator()(
         const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
         int target_x) const override;
+    int distance_below(
+        const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x,
+        int bound) const override;
     static const int kSSDScale;
 };
 
