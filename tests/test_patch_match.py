@@ -14,6 +14,7 @@ from patchmatch import _lib, patch_match
 
 HEIGHT, WIDTH = 48, 64
 HOLE = (slice(20, 28), slice(24, 36))
+AROUND_HOLE = (slice(14, 34), slice(18, 42))
 
 
 @pytest.fixture
@@ -23,6 +24,21 @@ def image() -> np.ndarray:
     rgb = np.stack([4 * x, 5 * y, 2 * (x + y)], axis=-1)
     noise = np.random.default_rng(0).integers(0, 8, rgb.shape)
     img = np.clip(rgb + noise, 0, 200).astype(np.uint8)
+    img[HOLE] = 255
+    return img
+
+
+@pytest.fixture
+def regular_image() -> np.ndarray:
+    """Noisy pattern that repeats every 8 pixels, as ijmap describes, with the hole.
+
+    The regularity term copies from whole periods away, which in the gradient of
+    ``image`` shifted the fill by up to 35 color values.
+    """
+    rng = np.random.default_rng(0)
+    tile = rng.integers(80, 120, (8, 8, 3))
+    noise = rng.integers(0, 8, (HEIGHT, WIDTH, 3))
+    img = (np.tile(tile, (HEIGHT // 8, WIDTH // 8, 1)) + noise).astype(np.uint8)
     img[HOLE] = 255
     return img
 
@@ -48,13 +64,20 @@ def seed():
 
 
 def assert_filled(result: np.ndarray, source: np.ndarray) -> None:
-    """The hole is filled and all other pixels keep their values."""
+    """The hole is filled to blend in, and all other pixels keep their values."""
     assert result.shape == source.shape
     assert result.dtype == np.uint8
-    assert not (result[HOLE] == 255).all(axis=-1).any()
     known = np.ones(source.shape[:2], dtype=bool)
     known[HOLE] = False
     np.testing.assert_array_equal(result[known], source[known])
+
+    # a hole that is not filled stays black, see _initialize_pyramid
+    ring = np.zeros_like(known)
+    ring[AROUND_HOLE] = True
+    ring[HOLE] = False
+    fill = result[HOLE].reshape(-1, 3).mean(axis=0)
+    color_diff = np.abs(fill - source[ring].mean(axis=0))
+    assert color_diff.max() < 10, color_diff
 
 
 # --- package ----------------------------------------------------------------
@@ -83,11 +106,7 @@ def test_inpaint_default_mask_fills_white_pixels(image):
 
 def test_inpaint_explicit_mask(image, hole_mask):
     image[HOLE] = 0  # not white: only the explicit mask marks the hole
-    result = patchmatch.inpaint(image, hole_mask, patch_size=3)
-    assert result.shape == image.shape
-    assert (result[HOLE] != 0).any()
-    known = hole_mask == 0
-    np.testing.assert_array_equal(result[known], image[known])
+    assert_filled(patchmatch.inpaint(image, hole_mask, patch_size=3), image)
 
 
 def test_inpaint_global_mask(image, hole_mask):
@@ -181,6 +200,30 @@ def test_inpaint_thin_hole_takes_the_colors_beside_it():
         assert np.abs(fill - plain).max() < 10, (seed, fill)
 
 
+@pytest.mark.parametrize("regularity", [False, True], ids=["inpaint", "regularity"])
+@pytest.mark.parametrize("tall", [True, False], ids=["tall", "wide"])
+def test_inpaint_very_large_image(tall, regularity):
+    """Coordinate products overflowed a C int near the end of very large images.
+
+    The regularity metric crashed from 46,342 pixels on, and the upsampling filled
+    a hole near the bottom black from 65,537 pixels on.
+    """
+    image = np.random.default_rng(0).integers(90, 110, (70_000, 4, 3), dtype=np.uint8)
+    image[-30:-20, 1:3] = 255
+    if not tall:
+        image = image.transpose(1, 0, 2)
+    holes = (image == 255).all(axis=2)
+
+    if regularity:
+        ijmap = np.zeros(image.shape, dtype=np.float32)
+        result = patchmatch.inpaint_regularity(image, None, ijmap, patch_size=1)
+    else:
+        result = patchmatch.inpaint(image, patch_size=1)
+
+    np.testing.assert_array_equal(result[~holes], image[~holes])
+    assert np.abs(result[holes].mean(axis=0) - 100).max() < 10
+
+
 def test_inpaint_does_not_modify_inputs(image, hole_mask):
     image_before, mask_before = image.copy(), hole_mask.copy()
     patchmatch.inpaint(image, hole_mask, global_mask=hole_mask, patch_size=3)
@@ -232,19 +275,19 @@ def test_set_verbose_prints_progress(verbose):
 @pytest.mark.parametrize("use_global_mask", [False, True], ids=["", "global"])
 @pytest.mark.parametrize("guide_weight", [0.0, 0.25, 1.0])
 def test_inpaint_regularity(
-    image, hole_mask, ijmap, use_mask, use_global_mask, guide_weight
+    regular_image, hole_mask, ijmap, use_mask, use_global_mask, guide_weight
 ):
     global_mask = np.zeros_like(hole_mask)
     global_mask[:8] = 1
     result = patchmatch.inpaint_regularity(
-        image,
+        regular_image,
         hole_mask if use_mask else None,
         ijmap,
         global_mask=global_mask if use_global_mask else None,
         patch_size=3,
         guide_weight=guide_weight,
     )
-    assert_filled(result, image)
+    assert_filled(result, regular_image)
 
 
 def test_inpaint_regularity_scales_smaller_ijmap(image):
