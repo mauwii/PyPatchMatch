@@ -144,8 +144,7 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
     {
         int yp = at(y - direction, x, 0) + direction;
         int xp = at(y - direction, x, 1);
-        if (int dp = _distance(y, x, yp, xp); dp < at(y, x, 2))
-            _set(y, x, yp, xp, dp);
+        _link_if_closer(y, x, yp, xp);
     }
 
     // propagation along the x direction.
@@ -153,8 +152,7 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
     {
         int yp = at(y, x - direction, 0);
         int xp = at(y, x - direction, 1) + direction;
-        if (int dp = _distance(y, x, yp, xp); dp < at(y, x, 2))
-            _set(y, x, yp, xp, dp);
+        _link_if_closer(y, x, yp, xp);
     }
 
     _random_search(y, x);
@@ -180,8 +178,7 @@ void NearestNeighborField::_random_search(int y, int x)
             continue;
         }
 
-        if (int dp = _distance(y, x, yp, xp); dp < at(y, x, 2))
-            _set(y, x, yp, xp, dp);
+        _link_if_closer(y, x, yp, xp);
         random_scale /= 2;
     }
 }
@@ -197,12 +194,28 @@ namespace
         return i * i;
     }
 
-    int distance_masked_images(
-        const MaskedImage &source, int ys, int xs, const MaskedImage &target, int yt, int xt, int patch_size)
+    struct Position
     {
+        int y;
+        int x;
+    };
+
+    // Returns kDistanceScale once the result is certain to reach bound, never for bound kDistanceScale.
+    int distance_masked_images(
+        const MaskedImage &source, Position source_center, const MaskedImage &target, Position target_center,
+        int patch_size, int bound)
+    {
+        const auto [ys, xs] = source_center;
+        const auto [yt, xt] = target_center;
+
         // Exact integer sums: long double is emulated in software on Linux aarch64
         std::int64_t distance = 0;
         std::int64_t wsum = 0;
+
+        // Above this sum the result is at least bound + 1, a margin for the rounding of the doubles.
+        const double side = 2.0 * patch_size + 1;
+        const double limit =
+            (bound + 1.0) * PatchSSDDistanceMetric::kSSDScale * side * side / PatchDistanceMetric::kDistanceScale;
 
         source.compute_image_gradients();
         target.compute_image_gradients();
@@ -212,6 +225,9 @@ namespace
 
         for (int dy = -patch_size; dy <= patch_size; ++dy)
         {
+            if (static_cast<double>(distance) > limit)
+                return PatchDistanceMetric::kDistanceScale;
+
             const int yys = ys + dy;
             const int yyt = yt + dy;
 
@@ -245,13 +261,9 @@ namespace
                 const int xxt = xt + dx;
                 wsum += 1;
 
-                if (xxs <= 0 || xxs >= source_size.width - 1 || xxt <= 0 || xxt >= target_size.width - 1)
-                {
-                    distance += PatchSSDDistanceMetric::kSSDScale;
-                    continue;
-                }
-
-                if (p_sm[xxs] || p_tm[xxt] || (p_sgm && p_sgm[xxs]) || (p_tgm && p_tgm[xxt]))
+                // The bounds first: the masks are read only inside the image.
+                if (xxs <= 0 || xxs >= source_size.width - 1 || xxt <= 0 || xxt >= target_size.width - 1 || p_sm[xxs] ||
+                    p_tm[xxt] || (p_sgm && p_sgm[xxs]) || (p_tgm && p_tgm[xxt]))
                 {
                     distance += PatchSSDDistanceMetric::kSSDScale;
                     continue;
@@ -287,7 +299,15 @@ namespace
 int PatchSSDDistanceMetric::operator()(
     const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x) const
 {
-    return distance_masked_images(source, source_y, source_x, target, target_y, target_x, patch_size());
+    return distance_masked_images(
+        source, {source_y, source_x}, target, {target_y, target_x}, patch_size(), PatchDistanceMetric::kDistanceScale);
+}
+
+int PatchSSDDistanceMetric::distance_below(
+    const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x,
+    int bound) const
+{
+    return distance_masked_images(source, {source_y, source_x}, target, {target_y, target_x}, patch_size(), bound);
 }
 
 int RegularityGuidedPatchDistanceMetricV2::operator()(
@@ -326,7 +346,8 @@ int RegularityGuidedPatchDistanceMetricV2::operator()(
         score1 *= PatchDistanceMetric::kDistanceScale;
     }
 
-    double score2 = distance_masked_images(source, source_y, source_x, target, target_y, target_x, patch_size());
+    double score2 = distance_masked_images(
+        source, {source_y, source_x}, target, {target_y, target_x}, patch_size(), PatchDistanceMetric::kDistanceScale);
     double score = (score1 * m_weight + score2) / (1 + m_weight);
     // The distance indexes the similarity table in Inpainting, so keep it in range.
     if (!(score > 0))
