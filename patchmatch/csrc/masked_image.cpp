@@ -72,14 +72,14 @@ MaskedImage MaskedImage::downsample() const
 {
     const auto size = this->size();
     auto ret = MaskedImage(size.width / 2, size.height / 2);
-    if (!m_global_mask.empty())
+    if (m_has_global_mask)
         ret.init_global_mask_mat();
     for (int y = 0; y < size.height - 1; y += 2)
     {
         for (int x = 0; x < size.width - 1; x += 2)
         {
             const auto sum = sum_kernel(*this, y, x);
-            if (!m_global_mask.empty())
+            if (m_has_global_mask)
                 ret.set_global_mask(y / 2, x / 2, sum.globally_masked);
             if (sum.weight == 0)
             {
@@ -102,7 +102,7 @@ MaskedImage MaskedImage::upsample(int new_w, int new_h) const
 {
     const auto size = this->size();
     auto ret = MaskedImage(new_w, new_h);
-    if (!m_global_mask.empty())
+    if (m_has_global_mask)
         ret.init_global_mask_mat();
     for (int y = 0; y < new_h; ++y)
     {
@@ -118,7 +118,7 @@ MaskedImage MaskedImage::upsample(int new_w, int new_h) const
                 ret.set_mask(y, x, true);
                 continue;
             }
-            if (!m_global_mask.empty())
+            if (m_has_global_mask)
                 ret.set_global_mask(y, x, false);
             if (is_masked(yy, xx))
             {
