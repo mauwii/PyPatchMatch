@@ -69,11 +69,12 @@ The previous import path `from patchmatch import patch_match` keeps working.
 pixels in each direction. Larger patches follow larger structures but are much slower;
 the default of 15 compares 31x31 patches, the examples use 3.
 
-`patchmatch.set_random_seed(seed)` sets the seed of the randomized search and
-`patchmatch.set_verbose(True)` prints the progress of the native code to stderr.
-`patchmatch.inpaint_regularity(image, mask, ijmap)` additionally guides the search with
-a regularity map, an HxWx3 float32 array with the regularity coordinates of each pixel
-in its first two channels. Its `guide_weight` must be at least 0.
+`patchmatch.set_random_seed(seed)` sets the seed of the randomized search, modulo
+`2**32`, and `patchmatch.set_verbose(True)` prints the progress of the native code to
+stderr. `patchmatch.inpaint_regularity(image, mask, ijmap)` additionally guides the
+search with a regularity map, an HxWx3 float32 array with the regularity coordinates of
+each pixel in its first two channels. Its `guide_weight` must be between 0 and the
+largest float32, about 3.4e38.
 
 C++ (see
 [examples/cpp_example.cpp](https://github.com/mauwii/PyPatchMatch/blob/main/examples/cpp_example.cpp),

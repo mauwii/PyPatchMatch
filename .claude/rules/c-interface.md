@@ -33,6 +33,7 @@ everything, stores the message in a thread-local string and returns a null `data
 `_call` turns that into `RuntimeError("patchmatch failed: <PM_last_error()>")`. Most
 input validation lives in Python because the native code crashes or hangs on bad input:
 `patch_size` 0 crashes, negative sizes never terminate, sizes >= 2**31 wrap to negative
-C ints, negative guide weights index outside the similarity table, NaN or infinity in the
-`ijmap` produce out-of-range distances. `RegularityGuidedPatchDistanceMetricV2` also
+C ints, negative guide weights index outside the similarity table, weights above the
+float32 range become infinity and the scores NaN, NaN or infinity in the `ijmap` produce
+out-of-range distances. `RegularityGuidedPatchDistanceMetricV2` also
 throws on a negative weight, for C++ callers.

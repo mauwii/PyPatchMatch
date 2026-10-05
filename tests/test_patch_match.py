@@ -127,6 +127,33 @@ def test_inpaint_empty_image(shape, ijmap):
         assert result is not empty
 
 
+@pytest.mark.parametrize("covered", [False, True], ids=["no-hole", "global-mask"])
+@pytest.mark.parametrize(
+    "func",
+    [patchmatch.inpaint, patchmatch.inpaint_regularity],
+    ids=lambda f: f.__name__,
+)
+def test_input_without_holes_skips_the_native_code(
+    monkeypatch, image, hole_mask, ijmap, func, covered
+):
+    """The result equals the input, but the native code ran every level.
+
+    That took 14 s for a 512 x 512 image with the default patch size.
+    """
+
+    def native_call(*args):
+        pytest.fail("the native code was called")
+
+    monkeypatch.setattr(patch_match, "_call", native_call)
+    mask = hole_mask if covered else np.zeros_like(hole_mask)
+    kwargs = {"ijmap": ijmap} if func is patchmatch.inpaint_regularity else {}
+
+    result = func(image, mask, global_mask=hole_mask if covered else None, **kwargs)
+
+    np.testing.assert_array_equal(result, image)
+    assert not np.shares_memory(result, image)
+
+
 @pytest.mark.parametrize("patch_size", [1, 3, 7])
 def test_inpaint_patch_sizes(image, patch_size):
     assert_filled(patchmatch.inpaint(image, patch_size=patch_size), image)
@@ -347,10 +374,10 @@ def test_inpaint_regularity_invalid_ijmap(image, bad_ijmap):
         patchmatch.inpaint_regularity(image, None, bad_ijmap)
 
 
-@pytest.mark.parametrize("guide_weight", [-1.0, -0.5, float("nan"), float("inf")])
+@pytest.mark.parametrize("guide_weight", [-1.0, -0.5, float("nan"), float("inf"), 1e39])
 def test_inpaint_regularity_invalid_guide_weight(image, ijmap, guide_weight):
     # a weight of -1 used to crash the native code, other negative weights made it
-    # read outside of the similarity table
+    # read outside of the similarity table, and 1e39 became infinity as a C float
     with pytest.raises(ValueError, match="guide_weight"):
         patchmatch.inpaint_regularity(image, None, ijmap, guide_weight=guide_weight)
 
@@ -445,6 +472,28 @@ def test_import_without_native_library():
     )
     assert "missing-library not found" in process.stderr
     assert "--no-cache-dir" in process.stderr
+
+
+def test_import_with_incompatible_library():
+    """A library without the PM_* functions must not break the import either.
+
+    1.x compiled the library into the package directory, and pip keeps it there.
+    Pillow's extension module stands in for it.
+    """
+    code = (
+        "import importlib\n"
+        "from pathlib import Path\n"
+        "import PIL._imaging\n"
+        "from patchmatch import _lib, patch_match\n"
+        "_lib.find_library = lambda: Path(PIL._imaging.__file__)\n"
+        "importlib.reload(patch_match)\n"
+        "assert not patch_match.patchmatch_available\n"
+    )
+    process = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert "patchmatch failed to load" in process.stderr
+    assert "PM_" in process.stderr
 
 
 # --- ctypes conversion ------------------------------------------------------
