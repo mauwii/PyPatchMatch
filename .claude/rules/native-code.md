@@ -25,26 +25,31 @@ ctypes releases the GIL during native calls, so inpaintings run truly concurrent
 
 - `patch_size` is a radius: patches span `(2 * patch_size + 1)` pixels in each
   direction. The pyramid halves the image until one side is <= `patch_size`.
-- From the coarsest level to the finest, two nearest-neighbor fields are kept:
-  source to target (completeness) and target to source (coherence). They start random
-  at the coarsest level and are upscaled from the previous level afterwards, keeping the
-  offset within the coarse pixel so that neighbors still point to neighbors.
+- Two nearest-neighbor fields link the patches: source to target (completeness) and
+  target to source (coherence). They start random at the coarsest level and are
+  upscaled from the previous level afterwards, keeping the offset within the coarse
+  pixel so that neighbors still point to neighbors. Levels 0 and 1 leave the
+  completeness field out, which the paper does on all levels (section 4): there its
+  votes changed nothing, and it cost a quarter of the time. On the coarser levels they
+  keep the known pixels near their input; without them the error of the fills rose by
+  up to 69 % (trees with `patch_size` 15).
 - Each level runs `1 + 2 * level` EM iterations with `min(7, 1 + level)` NNF passes
-  (propagation and random search), an expectation step (votes of both fields, weighted
+  (propagation and random search), an expectation step (votes of the fields, weighted
   through the `distance2similarity` table) and a maximization step, which sets each
   pixel to the weighted mean of its votes. From the second iteration on, the links of
   patches with holes are measured again on the new image before the passes; with the
   distances of the previous image, worse candidates replaced better links, and the
-  votes were weighted with outdated distances. On levels 0 and 1 the known pixels keep their
-  input values instead; without that the votes change the pixels around the holes, and a
-  seam appears when `run()` restores them. On coarser levels the known pixels next to
-  the holes are averages of partially masked kernels, and keeping them made fills copy
-  smooth regions into textured ones. The last iteration of a level votes directly into
-  the upsampled image of the next level, which is less blurry than upsampling the
-  result. The last iteration at level 0 keeps only the heaviest vote of each pixel
-  instead of the mean, which blurs. Many votes there are near ties (fill copied from the
-  source, distance close to 0), and the first one cast won the whole area of its patch,
-  which filled large patch sizes with blocks of `2 * patch_size + 1` pixels. The weight
+  votes were weighted with outdated distances. On levels 0 and 1 the known pixels keep
+  their input values instead; without that the votes change the pixels around the
+  holes, and a seam appears when `run()` restores them. On coarser levels the known
+  pixels next to the holes are averages of partially masked kernels, and keeping them
+  made fills copy smooth regions into textured ones. The last iteration of a level
+  votes directly into the upsampled image of the next level, which is less blurry than
+  upsampling the result. The last iteration at level 0 keeps only the heaviest vote of
+  each pixel instead of the mean, which blurs. Many votes there are near ties (fill
+  copied from the source, distance close to 0), and the first one cast won the whole
+  area of its patch, which filled large patch sizes with blocks of
+  `2 * patch_size + 1` pixels. The weight
   is therefore multiplied by `1 - 1e-5 * (di² + dj²)`, so near ties go to the patch
   centered closest to the pixel. Stronger preferences (`1e-4`, a Gaussian, `1 / (1 +
   r²)`) override real differences: on the color gradient of the unit tests a patch in
