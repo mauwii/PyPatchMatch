@@ -58,6 +58,38 @@ namespace
         return count > 0 ? sum / count : sum;
     }
 
+    bool is_known(const MaskedImage &image, int y, int x)
+    {
+        return !image.is_masked(y, x) && !image.is_globally_masked(y, x);
+    }
+
+    bool is_hole(const MaskedImage &image, int y, int x)
+    {
+        return image.is_masked(y, x) && !image.is_globally_masked(y, x);
+    }
+
+    // Chessboard distance of the hole pixels to the nearest known pixel, 0 beyond radius.
+    cv::Mat hole_depths(const MaskedImage &image, int radius)
+    {
+        const auto size = image.size();
+        cv::Mat depth(size, CV_32S, cv::Scalar(0));
+        for (int cy = 0; cy < size.height; ++cy)
+        {
+            for (int cx = 0; cx < size.width; ++cx)
+            {
+                if (!is_hole(image, cy, cx))
+                    continue;
+                int &d = depth.at<int>(cy, cx);
+                for_window(size, cy, cx, radius, [&d, &image, cy, cx](int y, int x) {
+                    const int distance = std::max(std::abs(y - cy), std::abs(x - cx));
+                    if (is_known(image, y, x) && (d == 0 || distance < d))
+                        d = distance;
+                });
+            }
+        }
+        return depth;
+    }
+
     // Shifts the hole pixels near the border by the color step across it, which showed as an outline.
     void blend_hole_borders(cv::Mat &result, const MaskedImage &initial)
     {
@@ -65,33 +97,14 @@ namespace
         constexpr int kStepRadius = 1;
         constexpr int kSpreadRadius = 4;
         const auto size = initial.size();
-        const auto known = [&initial](int y, int x) {
-            return !initial.is_masked(y, x) && !initial.is_globally_masked(y, x);
-        };
-        const auto hole = [&initial](int y, int x) {
-            return initial.is_masked(y, x) && !initial.is_globally_masked(y, x);
-        };
+        const auto known = [&initial](int y, int x) { return is_known(initial, y, x); };
+        const auto hole = [&initial](int y, int x) { return is_hole(initial, y, x); };
         const auto color = [&result](int y, int x) {
             const auto *pixel = result.ptr<unsigned char>(y, x);
             return cv::Vec3d(pixel[0], pixel[1], pixel[2]);
         };
 
-        // Chessboard distance of the hole pixels to the nearest known pixel, 0 beyond kWidth.
-        cv::Mat depth(size, CV_32S, cv::Scalar(0));
-        for (int cy = 0; cy < size.height; ++cy)
-        {
-            for (int cx = 0; cx < size.width; ++cx)
-            {
-                if (!hole(cy, cx))
-                    continue;
-                int &d = depth.at<int>(cy, cx);
-                for_window(size, cy, cx, kWidth, [&d, &known, cy, cx](int y, int x) {
-                    const int distance = std::max(std::abs(y - cy), std::abs(x - cx));
-                    if (known(y, x) && (d == 0 || distance < d))
-                        d = distance;
-                });
-            }
-        }
+        const cv::Mat depth = hole_depths(initial, kWidth);
         const auto border = [&depth](int y, int x) { return depth.at<int>(y, x) == 1; };
 
         cv::Mat steps(size, CV_64FC3, cv::Scalar::all(0));
@@ -243,7 +256,7 @@ namespace
                         m_nnf->target().is_globally_masked(yt, xt))
                         continue;
                     // Near ties go to the patch centered closest, not the first cast, which made blocks.
-                    const auto offset2 = std::int64_t{di} * di + std::int64_t{dj} * dj;
+                    const double offset2 = static_cast<double>(di) * di + static_cast<double>(dj) * dj;
                     cast_pair(ys, xs, yt, xt, m_best_only ? weight * (1 - 1e-5 * offset2) : weight);
                 }
             }
