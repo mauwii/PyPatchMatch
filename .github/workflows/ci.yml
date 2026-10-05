@@ -175,30 +175,7 @@ jobs:
         with:
           version: latest-known
           prune-cache: true
-      # the mirror is sometimes very slow, so the downloads are cached; apt checks them
-      # against the signed index and dpkg installs them as usual
-      - name: List the packages of the distribution's OpenCV
-        id: apt
-        run: |
-          sudo apt-get update
-          apt-get install --print-uris -qq --no-install-recommends libopencv-dev > "$RUNNER_TEMP/apt-uris"
-          echo "digest=$(sha256sum < "$RUNNER_TEMP/apt-uris" | cut -c1-16)" >> "$GITHUB_OUTPUT"
-      - name: Cache the downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/apt-archives
-          key: apt-opencv-${{ steps.apt.outputs.digest }}
-          restore-keys: apt-opencv-
-      - name: Install the OpenCV of the distribution
-        run: |
-          archives="$RUNNER_TEMP/apt-archives"
-          mkdir -p "$archives"
-          find "$archives" -name '*.deb' -exec sudo cp -t /var/cache/apt/archives/ {} +
-          sudo apt-get install --download-only --yes --no-install-recommends libopencv-dev
-          # only the files of the current list, so that the cache does not grow
-          find "$archives" -name '*.deb' -delete
-          awk '{print $2}' "$RUNNER_TEMP/apt-uris" | sed 's|^|/var/cache/apt/archives/|' | xargs cp -t "$archives"/
-          sudo apt-get install --yes --no-install-recommends libopencv-dev
+      - run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends libopencv-dev
       - run: uv run --locked --no-build pytest --no-cov
 
   # Single required status check for branch protection, independent of the matrix.
