@@ -422,7 +422,7 @@ MaskedImage Inpainting::_expectation_maximization(
 
         trace(verbose, "EM Iteration: ", iter_em);
 
-        _link_patches_without_holes(source);
+        _update_links(source, iter_em != 0);
         trace(verbose, "  NNF minimization started.");
         m_source2target.minimize(nr_iters_nnf);
         m_target2source.minimize(nr_iters_nnf);
@@ -474,8 +474,9 @@ MaskedImage Inpainting::_expectation_maximization(
     return new_target;
 }
 
-// Patches without holes are their own nearest neighbors.
-void Inpainting::_link_patches_without_holes(const MaskedImage &source)
+// Patches without holes are their own nearest neighbors; the others keep their links,
+// measured again on a changed image. Globally masked pixels have no link.
+void Inpainting::_update_links(const MaskedImage &source, bool image_changed)
 {
     const int patch_size = m_distance_metric->patch_size();
     const auto size = source.size();
@@ -483,10 +484,16 @@ void Inpainting::_link_patches_without_holes(const MaskedImage &source)
     {
         for (int j = 0; j < size.width; ++j)
         {
-            if (source.contains_mask(i, j, patch_size))
-                continue;
-            m_source2target.set_identity(i, j);
-            m_target2source.set_identity(i, j);
+            if (!source.contains_mask(i, j, patch_size))
+            {
+                m_source2target.set_identity(i, j);
+                m_target2source.set_identity(i, j);
+            }
+            else if (image_changed && !source.is_globally_masked(i, j))
+            {
+                m_source2target.update_distance(i, j);
+                m_target2source.update_distance(i, j);
+            }
         }
     }
 }
@@ -551,10 +558,6 @@ void Inpainting::_maximization_step(
                 target_ptr[0] = r;
                 target_ptr[1] = g;
                 target_ptr[2] = b;
-            }
-            else
-            {
-                target.set_mask(i, j, false);
             }
         }
     }

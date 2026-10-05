@@ -95,6 +95,12 @@ public:
         ptr[1] = x;
         ptr[2] = 0;
     }
+    // Measures the link again after an image changed.
+    void update_distance(int y, int x)
+    {
+        auto ptr = mutable_ptr(y, x);
+        ptr[2] = _distance(y, x, ptr[0], ptr[1]);
+    }
 
     void minimize(int nr_pass);
 
