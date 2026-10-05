@@ -77,35 +77,20 @@ Other entry points:
 
 ## Architecture
 
-### Layers, in the call order of `patchmatch.inpaint`
+### Layers
 
-1. `patchmatch/__init__.py` re-exports the public API of `patch_match.py` and
-   `__version__` from the generated `_version.py`. `test_top_level_exports` checks that
-   every name in `patch_match.__all__` is re-exported.
-2. `patchmatch/patch_match.py` is the public API. It validates and canonicalizes the
-   inputs (`_prepare_inputs`, `_check_patch_size`, the `ijmap` and `guide_weight`
-   checks), returns a copy of the image without a native call if `_has_holes` finds no
-   hole outside the global mask, picks the entry point (`PM_inpaint`, `PM_inpaint2`
-   with a global mask, and their `_regularity` variants) and runs it through `_call`.
-   It loads the library at import time; on `OSError` (no library) or `AttributeError`
-   (one without the `PM_*` symbols) it logs a warning and sets
-   `patchmatch_available = False`, and every function then raises `RuntimeError`
-   through `_get_lib()`.
-3. `patchmatch/_lib.py` is the ctypes layer: the `CShapeT`/`CMatT` structures, the dtype
-   table, `np_to_pymat`/`pymat_to_np`, `find_library` (looks for `libpatchmatch.so`,
-   `libpatchmatch.dylib` or `patchmatch.dll` in every directory of `patchmatch.__path__`)
-   and `load_library` (argtypes and restype of every `PM_*` function).
-4. `patchmatch/csrc/pyinterface.{h,cpp}` is the `extern "C"` API: the `PM_*` functions,
-   the conversion between `PM_mat_t` and `cv::Mat`, the global settings and the error
-   reporting.
-5. `csrc/inpaint.{h,cpp}`: `Inpainting`, the image pyramid and the EM loop.
-6. `csrc/nnf.{h,cpp}`: `NearestNeighborField` (propagation and random search) and the
-   distance metrics `PatchSSDDistanceMetric` and `RegularityGuidedPatchDistanceMetricV2`.
-7. `csrc/masked_image.{h,cpp}`: `MaskedImage`, an image with its hole mask and optional
-   global mask, down- and upsampling, gradients.
+`patchmatch.inpaint` calls through `patch_match.py` (public API, input validation) →
+`_lib.py` (ctypes) → `csrc/pyinterface.*` (`extern "C"`) → `inpaint.*` (`Inpainting`,
+pyramid, EM loop) → `nnf.*` (`NearestNeighborField`, distance metrics) →
+`masked_image.*` (`MaskedImage`).
 
-The C++ headers double as the C++ API: `examples/cpp_example.cpp` uses `Inpainting` and
-`PatchSSDDistanceMetric` directly.
+- `patch_match.py` loads the library at import time; on `OSError` (no library) or
+  `AttributeError` (one without the `PM_*` symbols) it sets `patchmatch_available =
+  False`, and every function then raises `RuntimeError` through `_get_lib()`. Without a
+  hole outside the global mask (`_has_holes`) it returns a copy without a native call.
+- `__init__.py` re-exports `patch_match.__all__` (`test_top_level_exports`).
+- The C++ headers double as the C++ API: `examples/cpp_example.cpp` uses `Inpainting`
+  and `PatchSSDDistanceMetric` directly.
 
 ### ctypes instead of a CPython extension
 

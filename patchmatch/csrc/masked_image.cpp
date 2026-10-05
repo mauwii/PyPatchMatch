@@ -1,13 +1,13 @@
 #include "masked_image.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
-
-const cv::Size MaskedImage::kDownsampleKernelSize = cv::Size(6, 6);
-const std::array<int, 6> MaskedImage::kDownsampleKernel = {1, 5, 10, 10, 5, 1};
 
 namespace
 {
+    constexpr std::array<int, 6> kDownsampleKernel = {1, 5, 10, 10, 5, 1};
+
     struct KernelSum
     {
         int r = 0;
@@ -20,14 +20,13 @@ namespace
     // The known pixels under the downsampling kernel at (y, x), weighted by the kernel.
     KernelSum sum_kernel(const MaskedImage &image, int y, int x)
     {
-        const auto &kernel_size = MaskedImage::kDownsampleKernelSize;
-        const auto &kernel = MaskedImage::kDownsampleKernel;
+        constexpr int half = static_cast<int>(kDownsampleKernel.size()) / 2;
         const auto size = image.size();
 
         KernelSum sum;
-        for (int dy = -kernel_size.height / 2 + 1; dy <= kernel_size.height / 2; ++dy)
+        for (int dy = -half + 1; dy <= half; ++dy)
         {
-            for (int dx = -kernel_size.width / 2 + 1; dx <= kernel_size.width / 2; ++dx)
+            for (int dx = -half + 1; dx <= half; ++dx)
             {
                 const int yy = y + dy;
                 const int xx = x + dx;
@@ -40,7 +39,7 @@ namespace
                     continue;
 
                 const auto *source_ptr = image.get_image(yy, xx);
-                const int k = kernel[kernel_size.height / 2 - 1 + dy] * kernel[kernel_size.width / 2 - 1 + dx];
+                const int k = kDownsampleKernel[half - 1 + dy] * kDownsampleKernel[half - 1 + dx];
                 sum.r += source_ptr[0] * k;
                 sum.g += source_ptr[1] * k;
                 sum.b += source_ptr[2] * k;

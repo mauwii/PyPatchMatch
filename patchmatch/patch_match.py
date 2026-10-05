@@ -259,5 +259,5 @@ def _canonize_mask_array(mask: ImageLike) -> np.ndarray:
 
 def _default_mask(image: np.ndarray) -> np.ndarray:
     """Treat all pure white pixels as holes."""
-    mask = (image == 255).all(axis=2, keepdims=True).astype(np.uint8)
-    return np.ascontiguousarray(mask)
+    mask: np.ndarray = (image == 255).all(axis=2, keepdims=True)
+    return mask.astype(np.uint8)

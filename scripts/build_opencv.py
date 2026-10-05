@@ -107,14 +107,11 @@ def find_cmake() -> str:
 
 
 def verify_archive(archive: Path) -> None:
-    sha256 = hashlib.sha256()
     with archive.open("rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            sha256.update(chunk)
-    if sha256.hexdigest() != OPENCV_SHA256:
+        digest = hashlib.file_digest(f, "sha256").hexdigest()
+    if digest != OPENCV_SHA256:
         sys.exit(
-            f"SHA-256 mismatch for {OPENCV_URL}: "
-            f"expected {OPENCV_SHA256}, got {sha256.hexdigest()}"
+            f"SHA-256 mismatch for {OPENCV_URL}: expected {OPENCV_SHA256}, got {digest}"
         )
 
 

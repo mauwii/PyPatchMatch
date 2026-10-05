@@ -2,7 +2,6 @@
 **/dist/
 **/__pycache__/
 **/*.py[cod]
-.scratch/
 **/*.dll
 **/*.so
 
@@ -11,17 +10,18 @@ patchmatch/_version.py
 
 # your own images for scripts/evaluate_inpainting.py
 examples/images/local/
+# written by the examples and scripts/evaluate_inpainting.py
+examples/images/*recovered.bmp
+examples/images/evaluation.html
 
 # test results files
 **/.coverage
 **/.coverage.*
-**/test-results.xml
 coverage.xml
 coverage-cpp.xml
 .scannerwork/
 
 # build artifacts
-**/build/obj/
 **/*.dylib
 *.egg-info/
 
