@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cassert>
 #include <opencv2/core.hpp>
 
@@ -32,82 +31,82 @@ public:
     MaskedImage &operator=(MaskedImage &&) noexcept = default;
     ~MaskedImage() = default;
 
-    inline MaskedImage clone() const
+    MaskedImage clone() const
     {
         return MaskedImage(
             m_image.clone(), m_mask.clone(), m_global_mask.clone(), m_image_grady.clone(), m_image_gradx.clone(),
             m_image_grad_computed);
     }
 
-    inline cv::Size size() const
+    cv::Size size() const
     {
         return m_image.size();
     }
-    inline const cv::Mat &image() const
+    const cv::Mat &image() const
     {
         return m_image;
     }
-    inline const cv::Mat &mask() const
+    const cv::Mat &mask() const
     {
         return m_mask;
     }
-    inline const cv::Mat &global_mask() const
+    const cv::Mat &global_mask() const
     {
         return m_global_mask;
     }
-    inline bool has_global_mask() const
+    bool has_global_mask() const
     {
         return m_has_global_mask;
     }
-    inline const cv::Mat &grady() const
+    const cv::Mat &grady() const
     {
         assert(m_image_grad_computed);
         return m_image_grady;
     }
-    inline const cv::Mat &gradx() const
+    const cv::Mat &gradx() const
     {
         assert(m_image_grad_computed);
         return m_image_gradx;
     }
 
-    inline void init_global_mask_mat()
+    void init_global_mask_mat()
     {
         m_global_mask = cv::Mat(m_mask.size(), CV_8U);
         m_global_mask.setTo(cv::Scalar(0));
         m_has_global_mask = !m_global_mask.empty();
     }
-    inline void set_global_mask_mat(const cv::Mat &other)
+    void set_global_mask_mat(const cv::Mat &other)
     {
         m_global_mask = other;
         m_has_global_mask = !other.empty();
     }
 
-    inline bool is_masked(int y, int x) const
+    bool is_masked(int y, int x) const
     {
         return static_cast<bool>(m_mask.at<unsigned char>(y, x));
     }
-    inline bool is_globally_masked(int y, int x) const
+    bool is_globally_masked(int y, int x) const
     {
         return m_has_global_mask && static_cast<bool>(m_global_mask.at<unsigned char>(y, x));
     }
-    inline void set_mask(int y, int x, bool value)
+    void set_mask(int y, int x, bool value)
     {
         m_mask.at<unsigned char>(y, x) = static_cast<unsigned char>(value);
     }
-    inline void set_global_mask(int y, int x, bool value)
+    void set_global_mask(int y, int x, bool value)
     {
         m_global_mask.at<unsigned char>(y, x) = static_cast<unsigned char>(value);
     }
-    inline void clear_mask()
+    void clear_mask()
     {
         m_mask.setTo(cv::Scalar(0));
     }
 
-    inline const unsigned char *get_image(int y, int x) const
+    const unsigned char *get_image(int y, int x) const
     {
         return m_image.ptr<unsigned char>(y, x);
     }
-    inline unsigned char *get_mutable_image(int y, int x)
+    unsigned char *get_mutable_image(int y, int x)
     {
         return m_image.ptr<unsigned char>(y, x);
     }
@@ -117,9 +116,6 @@ public:
     MaskedImage upsample(int new_w, int new_h) const;
     MaskedImage upsample(int new_w, int new_h, const cv::Mat &new_global_mask) const;
     void compute_image_gradients() const;
-
-    static const cv::Size kDownsampleKernelSize;
-    static const std::array<int, 6> kDownsampleKernel;
 
 private:
     cv::Mat m_image;

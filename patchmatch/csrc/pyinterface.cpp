@@ -67,6 +67,16 @@ namespace
         }
         return PM_mat_t{nullptr, {0, 0, 0}, PM_dtype_e::PM_UINT8};
     }
+
+    PM_mat_t inpaint(
+        PM_mat_t source_py, PM_mat_t mask_py, const PM_mat_t *global_mask_py, const PatchDistanceMetric &metric)
+    {
+        cv::Mat source = _py_to_cv2(source_py);
+        cv::Mat mask = _py_to_cv2(mask_py);
+        cv::Mat global_mask = global_mask_py ? _py_to_cv2(*global_mask_py) : cv::Mat();
+        cv::Mat result = Inpainting(source, mask, global_mask, &metric).run(verbose().load(), random_seed().load());
+        return _cv2_to_py(result);
+    }
 } // namespace
 
 const char *PM_last_error()
@@ -93,11 +103,7 @@ void PM_free_pymat(PM_mat_t pymat)
 PM_mat_t PM_inpaint(PM_mat_t source_py, PM_mat_t mask_py, int patch_size)
 {
     return guarded([source_py, mask_py, patch_size] {
-        cv::Mat source = _py_to_cv2(source_py);
-        cv::Mat mask = _py_to_cv2(mask_py);
-        auto metric = PatchSSDDistanceMetric(patch_size);
-        cv::Mat result = Inpainting(source, mask, &metric).run(verbose().load(), random_seed().load());
-        return _cv2_to_py(result);
+        return inpaint(source_py, mask_py, nullptr, PatchSSDDistanceMetric(patch_size));
     });
 }
 
@@ -105,26 +111,16 @@ PM_mat_t PM_inpaint_regularity(
     PM_mat_t source_py, PM_mat_t mask_py, PM_mat_t ijmap_py, int patch_size, float guide_weight)
 {
     return guarded([source_py, mask_py, ijmap_py, patch_size, guide_weight] {
-        cv::Mat source = _py_to_cv2(source_py);
-        cv::Mat mask = _py_to_cv2(mask_py);
-        cv::Mat ijmap = _py_to_cv2(ijmap_py);
-
-        auto metric = RegularityGuidedPatchDistanceMetricV2(patch_size, ijmap, guide_weight);
-        cv::Mat result = Inpainting(source, mask, &metric).run(verbose().load(), random_seed().load());
-        return _cv2_to_py(result);
+        return inpaint(
+            source_py, mask_py, nullptr,
+            RegularityGuidedPatchDistanceMetricV2(patch_size, _py_to_cv2(ijmap_py), guide_weight));
     });
 }
 
 PM_mat_t PM_inpaint2(PM_mat_t source_py, PM_mat_t mask_py, PM_mat_t global_mask_py, int patch_size)
 {
     return guarded([source_py, mask_py, global_mask_py, patch_size] {
-        cv::Mat source = _py_to_cv2(source_py);
-        cv::Mat mask = _py_to_cv2(mask_py);
-        cv::Mat global_mask = _py_to_cv2(global_mask_py);
-
-        auto metric = PatchSSDDistanceMetric(patch_size);
-        cv::Mat result = Inpainting(source, mask, global_mask, &metric).run(verbose().load(), random_seed().load());
-        return _cv2_to_py(result);
+        return inpaint(source_py, mask_py, &global_mask_py, PatchSSDDistanceMetric(patch_size));
     });
 }
 
@@ -133,14 +129,9 @@ PM_mat_t PM_inpaint2_regularity(
     float guide_weight)
 {
     return guarded([source_py, mask_py, global_mask_py, ijmap_py, patch_size, guide_weight] {
-        cv::Mat source = _py_to_cv2(source_py);
-        cv::Mat mask = _py_to_cv2(mask_py);
-        cv::Mat global_mask = _py_to_cv2(global_mask_py);
-        cv::Mat ijmap = _py_to_cv2(ijmap_py);
-
-        auto metric = RegularityGuidedPatchDistanceMetricV2(patch_size, ijmap, guide_weight);
-        cv::Mat result = Inpainting(source, mask, global_mask, &metric).run(verbose().load(), random_seed().load());
-        return _cv2_to_py(result);
+        return inpaint(
+            source_py, mask_py, &global_mask_py,
+            RegularityGuidedPatchDistanceMetricV2(patch_size, _py_to_cv2(ijmap_py), guide_weight));
     });
 }
 

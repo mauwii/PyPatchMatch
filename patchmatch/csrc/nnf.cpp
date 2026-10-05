@@ -13,14 +13,10 @@
  *
  */
 
-template <typename T>
-T clamp(T value, T min_value, T max_value)
-{
-    return std::min(std::max(value, min_value), max_value);
-}
-
 namespace
 {
+    constexpr int kMaxRetry = 20;
+
     // One generator per thread, so concurrent inpaintings with the same seed give the
     // same results. It only drives the randomized search, which has to be reproducible
     // from a seed, so a standard generator is the right choice. SonarCloud's PRNG rule
@@ -44,7 +40,7 @@ void NearestNeighborField::seed_random(unsigned int seed)
     random_engine().seed(seed);
 }
 
-void NearestNeighborField::_randomize_field(int max_retry, bool reset)
+void NearestNeighborField::_randomize_field(bool reset)
 {
     auto this_size = source_size();
     for (int i = 0; i < this_size.height; ++i)
@@ -55,18 +51,18 @@ void NearestNeighborField::_randomize_field(int max_retry, bool reset)
                 continue;
             if (!reset && at(i, j, 2) < PatchDistanceMetric::kDistanceScale)
                 continue;
-            _randomize_link(i, j, max_retry);
+            _randomize_link(i, j);
         }
     }
 }
 
-void NearestNeighborField::_randomize_link(int y, int x, int max_retry)
+void NearestNeighborField::_randomize_link(int y, int x)
 {
     auto this_target_size = target_size();
     int y_target = 0;
     int x_target = 0;
     int distance = PatchDistanceMetric::kDistanceScale;
-    for (int t = 0; t < max_retry; ++t)
+    for (int t = 0; t < kMaxRetry; ++t)
     {
         y_target = random_int(this_target_size.height);
         x_target = random_int(this_target_size.width);
@@ -80,7 +76,7 @@ void NearestNeighborField::_randomize_link(int y, int x, int max_retry)
     _set(y, x, y_target, x_target, distance);
 }
 
-void NearestNeighborField::_initialize_field_from(const NearestNeighborField &other, int max_retry)
+void NearestNeighborField::_initialize_field_from(const NearestNeighborField &other)
 {
     const auto &this_size = source_size();
     const auto &other_size = other.source_size();
@@ -102,8 +98,10 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
             // Keep the offset within the coarse pixel, so that neighbors still point to
             // neighbors. Without it, both pixels of a pair point to the same target pixel,
             // which makes the upscaled fill blocky.
-            this_value[0] = clamp(static_cast<int>(other_value[0] * fi + (i - ilow * fi)), 0, target_size().height - 1);
-            this_value[1] = clamp(static_cast<int>(other_value[1] * fj + (j - jlow * fj)), 0, target_size().width - 1);
+            this_value[0] =
+                std::clamp(static_cast<int>(other_value[0] * fi + (i - ilow * fi)), 0, target_size().height - 1);
+            this_value[1] =
+                std::clamp(static_cast<int>(other_value[1] * fj + (j - jlow * fj)), 0, target_size().width - 1);
             this_value[2] = _distance(i, j, this_value[0], this_value[1]);
 
             // A hole that is new on this level: search near the patch before a neighbor's link replaces its own.
@@ -114,7 +112,7 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
         }
     }
 
-    _randomize_field(max_retry, false);
+    _randomize_field(false);
 }
 
 void NearestNeighborField::minimize(int nr_pass)
@@ -169,8 +167,8 @@ void NearestNeighborField::_random_search(int y, int x)
     {
         int yp = this_ptr[0] + (random_int(2 * random_scale + 1) - random_scale);
         int xp = this_ptr[1] + (random_int(2 * random_scale + 1) - random_scale);
-        yp = clamp(yp, 0, target_size().height - 1);
-        xp = clamp(xp, 0, target_size().width - 1);
+        yp = std::clamp(yp, 0, target_size().height - 1);
+        xp = std::clamp(xp, 0, target_size().width - 1);
 
         if (m_target.is_globally_masked(yp, xp))
         {

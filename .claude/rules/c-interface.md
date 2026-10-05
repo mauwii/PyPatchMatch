@@ -19,7 +19,8 @@ A change on one side has to be mirrored on the other:
   no export macros.
 
 A new entry point is declared in `pyinterface.h`, implemented in `pyinterface.cpp`
-inside `guarded(...)`, registered in `load_library()` and called through `_call()`.
+as a call of the shared `inpaint` helper inside `guarded(...)`, registered in
+`load_library()` and called through `_call()`.
 
 Memory ownership: `np_to_pymat` wraps a C-contiguous array without copying it, so
 callers convert with `np.ascontiguousarray` first and keep the array alive during the

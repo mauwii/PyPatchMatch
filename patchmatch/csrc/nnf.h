@@ -11,7 +11,7 @@ public:
     explicit PatchDistanceMetric(int patch_size) : m_patch_size(patch_size) {}
     virtual ~PatchDistanceMetric() = default;
 
-    inline int patch_size() const
+    int patch_size() const
     {
         return m_patch_size;
     }
@@ -35,20 +35,19 @@ class NearestNeighborField
 {
 public:
     NearestNeighborField() = default;
-    NearestNeighborField(
-        const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric, int max_retry = 20)
+    NearestNeighborField(const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric)
         : m_source(source), m_target(target), m_distance_metric(metric)
     {
         m_field = cv::Mat(m_source.size(), CV_32SC3);
-        _randomize_field(max_retry);
+        _randomize_field(true);
     }
     NearestNeighborField(
         const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric,
-        const NearestNeighborField &other, int max_retry = 20)
+        const NearestNeighborField &other)
         : m_source(source), m_target(target), m_distance_metric(metric)
     {
         m_field = cv::Mat(m_source.size(), CV_32SC3);
-        _initialize_field_from(other, max_retry);
+        _initialize_field_from(other);
     }
 
     const MaskedImage &source() const
@@ -59,41 +58,37 @@ public:
     {
         return m_target;
     }
-    inline cv::Size source_size() const
+    cv::Size source_size() const
     {
         return m_source.size();
     }
-    inline cv::Size target_size() const
+    cv::Size target_size() const
     {
         return m_target.size();
     }
-    inline void set_source(const MaskedImage &source)
+    void set_source(const MaskedImage &source)
     {
         m_source = source;
     }
-    inline void set_target(const MaskedImage &target)
+    void set_target(const MaskedImage &target)
     {
         m_target = target;
     }
 
-    inline int *mutable_ptr(int y, int x)
+    int *mutable_ptr(int y, int x)
     {
         return m_field.ptr<int>(y, x);
     }
-    inline const int *ptr(int y, int x) const
+    const int *ptr(int y, int x) const
     {
         return m_field.ptr<int>(y, x);
     }
 
-    inline int at(int y, int x, int c) const
+    int at(int y, int x, int c) const
     {
         return m_field.ptr<int>(y, x)[c];
     }
-    inline int &at(int y, int x, int c)
-    {
-        return m_field.ptr<int>(y, x)[c];
-    }
-    inline void set_identity(int y, int x)
+    void set_identity(int y, int x)
     {
         auto ptr = mutable_ptr(y, x);
         ptr[0] = y;
@@ -107,18 +102,18 @@ public:
     static void seed_random(unsigned int seed);
 
 private:
-    inline int _distance(int source_y, int source_x, int target_y, int target_x) const
+    int _distance(int source_y, int source_x, int target_y, int target_x) const
     {
         return (*m_distance_metric)(m_source, source_y, source_x, m_target, target_y, target_x);
     }
-    inline void _link_if_closer(int y, int x, int y_target, int x_target)
+    void _link_if_closer(int y, int x, int y_target, int x_target)
     {
         const int current = at(y, x, 2);
         const int distance = m_distance_metric->distance_below(m_source, y, x, m_target, y_target, x_target, current);
         if (distance < current)
             _set(y, x, y_target, x_target, distance);
     }
-    inline void _set(int y, int x, int y_target, int x_target, int distance)
+    void _set(int y, int x, int y_target, int x_target, int distance)
     {
         auto ptr = mutable_ptr(y, x);
         ptr[0] = y_target;
@@ -126,9 +121,9 @@ private:
         ptr[2] = distance;
     }
 
-    void _randomize_field(int max_retry = 20, bool reset = true);
-    void _randomize_link(int y, int x, int max_retry);
-    void _initialize_field_from(const NearestNeighborField &other, int max_retry);
+    void _randomize_field(bool reset);
+    void _randomize_link(int y, int x);
+    void _initialize_field_from(const NearestNeighborField &other);
     void _minimize_link(int y, int x, int direction);
     void _random_search(int y, int x);
 
