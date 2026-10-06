@@ -1,9 +1,11 @@
 #include "nnf.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <random>
+#include <typeinfo>
 
 #include "masked_image.h"
 
@@ -33,11 +35,183 @@ namespace
     {
         return static_cast<int>(random_engine()() % static_cast<unsigned int>(n));
     }
+
+    inline int pow2(int i)
+    {
+        return i * i;
+    }
+
+    struct Position
+    {
+        int y;
+        int x;
+    };
+
+    // A source and a target image with their sizes, which are read once per patch.
+    struct ImagePair
+    {
+        ImagePair(const MaskedImage &source_image, const MaskedImage &target_image)
+            : source(&source_image), target(&target_image), source_size(source_image.size()),
+              target_size(target_image.size())
+        {
+        }
+
+        bool rows_inside(int ys, int yt) const
+        {
+            return ys >= 0 && ys < source_size.height && yt >= 0 && yt < target_size.height;
+        }
+
+        const MaskedImage *source;
+        const MaskedImage *target;
+        cv::Size source_size;
+        cv::Size target_size;
+    };
+
+    // One row of a source and a target image, both inside their images. The gradients must be computed.
+    class RowPair
+    {
+    public:
+        RowPair(const ImagePair &images, int ys, int yt)
+            : m_source_width(images.source_size.width), m_target_width(images.target_size.width),
+              m_si(images.source->image().ptr<unsigned char>(ys, 0)),
+              m_ti(images.target->image().ptr<unsigned char>(yt, 0)),
+              m_sm(images.source->mask().ptr<unsigned char>(ys, 0)),
+              m_tm(images.target->mask().ptr<unsigned char>(yt, 0)),
+              m_sgm(
+                  images.source->has_global_mask() ? images.source->global_mask().ptr<unsigned char>(ys, 0) : nullptr),
+              m_tgm(
+                  images.target->has_global_mask() ? images.target->global_mask().ptr<unsigned char>(yt, 0) : nullptr),
+              m_sgy(images.source->grady().ptr<unsigned char>(ys, 0)),
+              m_tgy(images.target->grady().ptr<unsigned char>(yt, 0)),
+              m_sgx(images.source->gradx().ptr<unsigned char>(ys, 0)),
+              m_tgx(images.target->gradx().ptr<unsigned char>(yt, 0))
+        {
+        }
+
+        // The SSD over the colors and gradients, kSSDScale where a pixel is masked or outside its image.
+        int cost(int xs, int xt) const
+        {
+            // The bounds first: the masks are read only inside the image.
+            if (xs < 0 || xs >= m_source_width || xt < 0 || xt >= m_target_width || m_sm[xs] || m_tm[xt] ||
+                (m_sgm && m_sgm[xs]) || (m_tgm && m_tgm[xt]))
+                return PatchSSDDistanceMetric::kSSDScale;
+
+            int ssd = 0;
+            for (int c = 0; c < 3; ++c)
+            {
+                ssd += pow2(m_si[xs * 3 + c] - m_ti[xt * 3 + c]);
+                ssd += pow2(m_sgx[xs * 3 + c] - m_tgx[xt * 3 + c]);
+                ssd += pow2(m_sgy[xs * 3 + c] - m_tgy[xt * 3 + c]);
+            }
+            return ssd;
+        }
+
+    private:
+        int m_source_width;
+        int m_target_width;
+        const unsigned char *m_si;
+        const unsigned char *m_ti;
+        const unsigned char *m_sm;
+        const unsigned char *m_tm;
+        const unsigned char *m_sgm;
+        const unsigned char *m_tgm;
+        const unsigned char *m_sgy;
+        const unsigned char *m_tgy;
+        const unsigned char *m_sgx;
+        const unsigned char *m_tgx;
+    };
+
+    // The costs of the row of the patches around s and t.
+    std::int64_t row_sum(const ImagePair &images, Position s, Position t, int patch_size)
+    {
+        if (!images.rows_inside(s.y, t.y))
+            return std::int64_t{PatchSSDDistanceMetric::kSSDScale} * (2 * patch_size + 1);
+        const RowPair row(images, s.y, t.y);
+        std::int64_t sum = 0;
+        for (int dx = -patch_size; dx <= patch_size; ++dx)
+            sum += row.cost(s.x + dx, t.x + dx);
+        return sum;
+    }
+
+    // The costs of the column of the patches around s and t.
+    std::int64_t column_sum(const ImagePair &images, Position s, Position t, int patch_size)
+    {
+        std::int64_t sum = 0;
+        for (int dy = -patch_size; dy <= patch_size; ++dy)
+        {
+            if (images.rows_inside(s.y + dy, t.y + dy))
+                sum += RowPair(images, s.y + dy, t.y + dy).cost(s.x, t.x);
+            else
+                sum += PatchSSDDistanceMetric::kSSDScale;
+        }
+        return sum;
+    }
+
+    // The costs of the patches around s and t, or -1 once their distance is certain to exceed bound.
+    std::int64_t patch_sum(
+        const MaskedImage &source, Position s, const MaskedImage &target, Position t, int patch_size, int bound)
+    {
+        // Exact integer sums: long double is emulated in software on Linux aarch64
+        std::int64_t sum = 0;
+
+        // Above this sum the result is at least bound + 1, a margin for the rounding of the doubles.
+        const double side = 2.0 * patch_size + 1;
+        const double limit =
+            (bound + 1.0) * PatchSSDDistanceMetric::kSSDScale * side * side / PatchDistanceMetric::kDistanceScale;
+
+        source.compute_image_gradients();
+        target.compute_image_gradients();
+
+        const ImagePair images(source, target);
+        for (int dy = -patch_size; dy <= patch_size; ++dy)
+        {
+            if (static_cast<double>(sum) > limit)
+                return -1;
+            sum += row_sum(images, {s.y + dy, s.x}, {t.y + dy, t.x}, patch_size);
+        }
+        return sum;
+    }
+
+    // Scales a sum of costs to [0, kDistanceScale].
+    int scale_sum(std::int64_t sum, int patch_size)
+    {
+        const std::int64_t side = 2 * patch_size + 1;
+        const double scaled = static_cast<double>(sum) / PatchSSDDistanceMetric::kSSDScale;
+        const auto res =
+            static_cast<int>(PatchDistanceMetric::kDistanceScale * scaled / static_cast<double>(side * side));
+        if (res < 0 || res > PatchDistanceMetric::kDistanceScale)
+            return PatchDistanceMetric::kDistanceScale;
+        return res;
+    }
 } // namespace
 
 void NearestNeighborField::seed_random(unsigned int seed)
 {
     random_engine().seed(seed);
+}
+
+void NearestNeighborField::_allocate_sums()
+{
+    // Only the plain SSD adds up line by line; a subclass may measure differently.
+    if (typeid(*m_distance_metric) == typeid(PatchSSDDistanceMetric))
+        m_sums.assign(static_cast<std::size_t>(m_field.rows) * m_field.cols, -1);
+}
+
+NearestNeighborField::Measured NearestNeighborField::_measure(int y, int x, int y_target, int x_target, int bound) const
+{
+    if (m_sums.empty())
+    {
+        const int distance =
+            bound < PatchDistanceMetric::kDistanceScale
+                ? m_distance_metric->distance_below(m_source, y, x, m_target, y_target, x_target, bound)
+                : (*m_distance_metric)(m_source, y, x, m_target, y_target, x_target);
+        return {distance, -1};
+    }
+    const int patch_size = m_distance_metric->patch_size();
+    const std::int64_t sum = patch_sum(m_source, {y, x}, m_target, {y_target, x_target}, patch_size, bound);
+    if (sum < 0)
+        return {PatchDistanceMetric::kDistanceScale, -1};
+    return {scale_sum(sum, patch_size), sum};
 }
 
 void NearestNeighborField::_randomize_field(bool reset)
@@ -61,19 +235,22 @@ void NearestNeighborField::_randomize_link(int y, int x)
     auto this_target_size = target_size();
     int y_target = 0;
     int x_target = 0;
-    int distance = PatchDistanceMetric::kDistanceScale;
+    Measured measured{PatchDistanceMetric::kDistanceScale, -1};
     for (int t = 0; t < kMaxRetry; ++t)
     {
         y_target = random_int(this_target_size.height);
         x_target = random_int(this_target_size.width);
         if (m_target.is_globally_masked(y_target, x_target))
+        {
+            measured.sum = -1; // the distance of an earlier try, which is kDistanceScale
             continue;
+        }
 
-        distance = _distance(y, x, y_target, x_target);
-        if (distance < PatchDistanceMetric::kDistanceScale)
+        measured = _measure(y, x, y_target, x_target, PatchDistanceMetric::kDistanceScale);
+        if (measured.distance < PatchDistanceMetric::kDistanceScale)
             break;
     }
-    _set(y, x, y_target, x_target, distance);
+    _set(y, x, y_target, x_target, measured);
 }
 
 void NearestNeighborField::_initialize_field_from(const NearestNeighborField &other)
@@ -92,22 +269,22 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
 
             auto ilow = static_cast<int>(std::min(i / fi, static_cast<double>(other_size.height - 1)));
             auto jlow = static_cast<int>(std::min(j / fj, static_cast<double>(other_size.width - 1)));
-            auto this_value = mutable_ptr(i, j);
             auto other_value = other.ptr(ilow, jlow);
 
             // Keep the offset within the coarse pixel, so that neighbors still point to
             // neighbors. Without it, both pixels of a pair point to the same target pixel,
             // which makes the upscaled fill blocky.
-            this_value[0] =
+            const int y_target =
                 std::clamp(static_cast<int>(other_value[0] * fi + (i - ilow * fi)), 0, target_size().height - 1);
-            this_value[1] =
+            const int x_target =
                 std::clamp(static_cast<int>(other_value[1] * fj + (j - jlow * fj)), 0, target_size().width - 1);
-            this_value[2] = _distance(i, j, this_value[0], this_value[1]);
+            const Measured measured = _measure(i, j, y_target, x_target, PatchDistanceMetric::kDistanceScale);
+            _set(i, j, y_target, x_target, measured);
 
             // A hole that is new on this level: search near the patch before a neighbor's link replaces its own.
             const bool linked_to_itself = other_value[0] == ilow && other_value[1] == jlow;
-            if (linked_to_itself && this_value[2] > 0 &&
-                m_target.contains_mask(this_value[0], this_value[1], m_distance_metric->patch_size()))
+            if (linked_to_itself && measured.distance > 0 &&
+                m_target.contains_mask(y_target, x_target, m_distance_metric->patch_size()))
                 _random_search(i, j);
         }
     }
@@ -139,21 +316,47 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
 
     // propagation along the y direction.
     if (y - direction >= 0 && y - direction < this_size.height && !m_source.is_globally_masked(y - direction, x))
-    {
-        int yp = at(y - direction, x, 0) + direction;
-        int xp = at(y - direction, x, 1);
-        _link_if_closer(y, x, yp, xp);
-    }
+        _propagate(y, x, direction, 0);
 
     // propagation along the x direction.
     if (x - direction >= 0 && x - direction < this_size.width && !m_source.is_globally_masked(y, x - direction))
-    {
-        int yp = at(y, x - direction, 0);
-        int xp = at(y, x - direction, 1) + direction;
-        _link_if_closer(y, x, yp, xp);
-    }
+        _propagate(y, x, 0, direction);
 
     _random_search(y, x);
+}
+
+// Tries the link of the neighbor (y - dy, x - dx), shifted by (dy, dx). With the neighbor's sum,
+// its distance takes the line that leaves the patch and the one that enters it (paper 3.3).
+void NearestNeighborField::_propagate(int y, int x, int dy, int dx)
+{
+    const int y_target = at(y - dy, x - dx, 0) + dy;
+    const int x_target = at(y - dy, x - dx, 1) + dx;
+    const std::int64_t neighbor_sum = m_sums.empty() ? -1 : m_sums[_index(y - dy, x - dx)];
+    if (neighbor_sum < 0)
+    {
+        _link_if_closer(y, x, y_target, x_target);
+        return;
+    }
+    if (y_target == at(y, x, 0) && x_target == at(y, x, 1))
+        return;
+
+    const int patch_size = m_distance_metric->patch_size();
+    const ImagePair images(m_source, m_target);
+    const auto line_sum = [&images, dy, patch_size](Position s, Position t) {
+        return dy != 0 ? row_sum(images, s, t, patch_size) : column_sum(images, s, t, patch_size);
+    };
+    const int leaving = patch_size + 1;
+    const std::int64_t sum =
+        neighbor_sum -
+        line_sum({y - dy * leaving, x - dx * leaving}, {y_target - dy * leaving, x_target - dx * leaving}) +
+        line_sum({y + dy * patch_size, x + dx * patch_size}, {y_target + dy * patch_size, x_target + dx * patch_size});
+    // The sanitizer build keeps the asserts, so the tests compare every sum with a full measurement.
+    assert(
+        sum ==
+        patch_sum(m_source, {y, x}, m_target, {y_target, x_target}, patch_size, PatchDistanceMetric::kDistanceScale));
+    const int distance = scale_sum(sum, patch_size);
+    if (distance < at(y, x, 2))
+        _set(y, x, y_target, x_target, {distance, sum});
 }
 
 // Random search around the link in windows of decreasing size, clamped to the image.
@@ -180,112 +383,14 @@ const int PatchSSDDistanceMetric::kSSDScale = 9 * 255 * 255;
 
 namespace
 {
-
-    inline int pow2(int i)
-    {
-        return i * i;
-    }
-
-    struct Position
-    {
-        int y;
-        int x;
-    };
-
     // Returns kDistanceScale once the result is certain to reach bound, never for bound kDistanceScale.
     int distance_masked_images(
         const MaskedImage &source, Position source_center, const MaskedImage &target, Position target_center,
         int patch_size, int bound)
     {
-        const auto [ys, xs] = source_center;
-        const auto [yt, xt] = target_center;
-
-        // Exact integer sums: long double is emulated in software on Linux aarch64
-        std::int64_t distance = 0;
-        std::int64_t wsum = 0;
-
-        // Above this sum the result is at least bound + 1, a margin for the rounding of the doubles.
-        const double side = 2.0 * patch_size + 1;
-        const double limit =
-            (bound + 1.0) * PatchSSDDistanceMetric::kSSDScale * side * side / PatchDistanceMetric::kDistanceScale;
-
-        source.compute_image_gradients();
-        target.compute_image_gradients();
-
-        auto source_size = source.size();
-        auto target_size = target.size();
-
-        for (int dy = -patch_size; dy <= patch_size; ++dy)
-        {
-            if (static_cast<double>(distance) > limit)
-                return PatchDistanceMetric::kDistanceScale;
-
-            const int yys = ys + dy;
-            const int yyt = yt + dy;
-
-            if (yys < 0 || yys >= source_size.height || yyt < 0 || yyt >= target_size.height)
-            {
-                distance += std::int64_t{PatchSSDDistanceMetric::kSSDScale} * (2 * patch_size + 1);
-                wsum += 2 * patch_size + 1;
-                continue;
-            }
-
-            const auto *p_si = source.image().ptr<unsigned char>(yys, 0);
-            const auto *p_ti = target.image().ptr<unsigned char>(yyt, 0);
-            const auto *p_sm = source.mask().ptr<unsigned char>(yys, 0);
-            const auto *p_tm = target.mask().ptr<unsigned char>(yyt, 0);
-
-            const unsigned char *p_sgm = nullptr;
-            const unsigned char *p_tgm = nullptr;
-            if (source.has_global_mask())
-                p_sgm = source.global_mask().ptr<unsigned char>(yys, 0);
-            if (target.has_global_mask())
-                p_tgm = target.global_mask().ptr<unsigned char>(yyt, 0);
-
-            const auto *p_sgy = source.grady().ptr<unsigned char>(yys, 0);
-            const auto *p_tgy = target.grady().ptr<unsigned char>(yyt, 0);
-            const auto *p_sgx = source.gradx().ptr<unsigned char>(yys, 0);
-            const auto *p_tgx = target.gradx().ptr<unsigned char>(yyt, 0);
-
-            for (int dx = -patch_size; dx <= patch_size; ++dx)
-            {
-                const int xxs = xs + dx;
-                const int xxt = xt + dx;
-                wsum += 1;
-
-                // The bounds first: the masks are read only inside the image.
-                if (xxs < 0 || xxs >= source_size.width || xxt < 0 || xxt >= target_size.width || p_sm[xxs] ||
-                    p_tm[xxt] || (p_sgm && p_sgm[xxs]) || (p_tgm && p_tgm[xxt]))
-                {
-                    distance += PatchSSDDistanceMetric::kSSDScale;
-                    continue;
-                }
-
-                int ssd = 0;
-                for (int c = 0; c < 3; ++c)
-                {
-                    int s_value = p_si[xxs * 3 + c];
-                    int t_value = p_ti[xxt * 3 + c];
-                    int s_gy = p_sgy[xxs * 3 + c];
-                    int t_gy = p_tgy[xxt * 3 + c];
-                    int s_gx = p_sgx[xxs * 3 + c];
-                    int t_gx = p_tgx[xxt * 3 + c];
-
-                    ssd += pow2(s_value - t_value);
-                    ssd += pow2(s_gx - t_gx);
-                    ssd += pow2(s_gy - t_gy);
-                }
-                distance += ssd;
-            }
-        }
-
-        const double scaled = static_cast<double>(distance) / PatchSSDDistanceMetric::kSSDScale;
-        const auto res = static_cast<int>(PatchDistanceMetric::kDistanceScale * scaled / static_cast<double>(wsum));
-        if (res < 0 || res > PatchDistanceMetric::kDistanceScale)
-            return PatchDistanceMetric::kDistanceScale;
-        return res;
+        const std::int64_t sum = patch_sum(source, source_center, target, target_center, patch_size, bound);
+        return sum < 0 ? PatchDistanceMetric::kDistanceScale : scale_sum(sum, patch_size);
     }
-
 } // namespace
 
 int PatchSSDDistanceMetric::operator()(

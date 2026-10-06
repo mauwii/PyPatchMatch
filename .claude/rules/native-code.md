@@ -90,6 +90,11 @@ ctypes releases the GIL during native calls, so inpaintings run truly concurrent
   1/(2p+1) maximal pixels, above the 10 % at which the table is zero up to
   `patch_size` 4, so that line of a hole at the image border never got a vote and
   stayed flat (`test_inpaint_textures_the_image_border`).
+- With `PatchSSDDistanceMetric` the field keeps the integer sum behind each distance
+  (`m_sums`, -1 where unknown), and the propagation computes a candidate from its
+  neighbor's sum, minus the line that leaves the patch, plus the one that enters it
+  (paper section 3.3). The fills stay byte-identical; the sanitizer build keeps the
+  asserts (`-UNDEBUG`), which compare every such sum with a full measurement.
 - Mask semantics: `mask` non-zero marks the holes (by default all pure white pixels,
   computed in Python by `_default_mask`); `_initialize_pyramid` makes them black on
   level 0 as on the coarser levels, so their colors do not matter
