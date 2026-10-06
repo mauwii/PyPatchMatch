@@ -1,7 +1,10 @@
 #pragma once
 
+#include <algorithm>
+#include <cstdint>
 #include <opencv2/core.hpp>
 #include <stdexcept>
+#include <vector>
 
 #include "masked_image.h"
 
@@ -39,6 +42,7 @@ public:
         : m_source(source), m_target(target), m_distance_metric(metric)
     {
         m_field = cv::Mat(m_source.size(), CV_32SC3);
+        _allocate_sums();
         _randomize_field(true);
     }
     NearestNeighborField(
@@ -47,6 +51,7 @@ public:
         : m_source(source), m_target(target), m_distance_metric(metric)
     {
         m_field = cv::Mat(m_source.size(), CV_32SC3);
+        _allocate_sums();
         _initialize_field_from(other);
     }
 
@@ -69,16 +74,14 @@ public:
     void set_source(const MaskedImage &source)
     {
         m_source = source;
+        std::fill(m_sums.begin(), m_sums.end(), -1);
     }
     void set_target(const MaskedImage &target)
     {
         m_target = target;
+        std::fill(m_sums.begin(), m_sums.end(), -1);
     }
 
-    int *mutable_ptr(int y, int x)
-    {
-        return m_field.ptr<int>(y, x);
-    }
     const int *ptr(int y, int x) const
     {
         return m_field.ptr<int>(y, x);
@@ -88,18 +91,17 @@ public:
     {
         return m_field.ptr<int>(y, x)[c];
     }
+    // The distance 0 is not measured, so the sum stays unknown.
     void set_identity(int y, int x)
     {
-        auto ptr = mutable_ptr(y, x);
-        ptr[0] = y;
-        ptr[1] = x;
-        ptr[2] = 0;
+        _set(y, x, y, x, {0, -1});
     }
     // Measures the link again after an image changed.
     void update_distance(int y, int x)
     {
-        auto ptr = mutable_ptr(y, x);
-        ptr[2] = _distance(y, x, ptr[0], ptr[1]);
+        _set(
+            y, x, at(y, x, 0), at(y, x, 1),
+            _measure(y, x, at(y, x, 0), at(y, x, 1), PatchDistanceMetric::kDistanceScale));
     }
 
     void minimize(int nr_pass);
@@ -108,38 +110,59 @@ public:
     static void seed_random(unsigned int seed);
 
 private:
-    int _distance(int source_y, int source_x, int target_y, int target_x) const
+    // Private: a link written from outside would not update its sum.
+    int *mutable_ptr(int y, int x)
     {
-        return (*m_distance_metric)(m_source, source_y, source_x, m_target, target_y, target_x);
+        return m_field.ptr<int>(y, x);
     }
+
+    // A distance and the sum of the pixel costs behind it, -1 if unknown.
+    struct Measured
+    {
+        int distance;
+        std::int64_t sum;
+    };
+
+    // The distance if it is below bound, otherwise any value >= bound.
+    Measured _measure(int y, int x, int y_target, int x_target, int bound) const;
     void _link_if_closer(int y, int x, int y_target, int x_target)
     {
         // In coherent regions most propagated candidates are the link itself, measured in full otherwise.
         if (y_target == at(y, x, 0) && x_target == at(y, x, 1))
             return;
         const int current = at(y, x, 2);
-        const int distance = m_distance_metric->distance_below(m_source, y, x, m_target, y_target, x_target, current);
-        if (distance < current)
-            _set(y, x, y_target, x_target, distance);
+        const Measured measured = _measure(y, x, y_target, x_target, current);
+        if (measured.distance < current)
+            _set(y, x, y_target, x_target, measured);
     }
-    void _set(int y, int x, int y_target, int x_target, int distance)
+    void _set(int y, int x, int y_target, int x_target, Measured measured)
     {
         auto ptr = mutable_ptr(y, x);
         ptr[0] = y_target;
         ptr[1] = x_target;
-        ptr[2] = distance;
+        ptr[2] = measured.distance;
+        if (!m_sums.empty())
+            m_sums[_index(y, x)] = measured.sum;
+    }
+    std::size_t _index(int y, int x) const
+    {
+        return static_cast<std::size_t>(y) * m_field.cols + x;
     }
 
     void _randomize_field(bool reset);
     void _randomize_link(int y, int x);
     void _initialize_field_from(const NearestNeighborField &other);
+    void _allocate_sums();
     void _minimize_link(int y, int x, int direction);
+    void _propagate(int y, int x, int dy, int dx);
     void _random_search(int y, int x);
 
     MaskedImage m_source;
     MaskedImage m_target;
     // per pixel: the target y and x and the scaled distance to it
     cv::Mat m_field;
+    // per pixel: the sum behind the distance, for updates in O(patch_size); empty for other metrics
+    std::vector<std::int64_t> m_sums;
     const PatchDistanceMetric *m_distance_metric = nullptr;
 };
 

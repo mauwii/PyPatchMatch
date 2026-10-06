@@ -57,8 +57,9 @@ if(PATCHMATCH_SANITIZE)
   endif()
   # GCC's -fsanitize=undefined leaves out float-cast-overflow
   set(PATCHMATCH_SANITIZERS -fsanitize=address,undefined,float-cast-overflow)
+  # -UNDEBUG keeps the asserts, which check the incremental distances of the propagation
   target_compile_options(patchmatch PRIVATE ${PATCHMATCH_SANITIZERS}
-    -fno-sanitize-recover=all -fno-omit-frame-pointer -g)
+    -fno-sanitize-recover=all -fno-omit-frame-pointer -g -UNDEBUG)
   target_link_options(patchmatch PRIVATE ${PATCHMATCH_SANITIZERS})
 endif()
 

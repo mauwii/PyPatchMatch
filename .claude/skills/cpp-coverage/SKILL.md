@@ -26,15 +26,16 @@ uv sync --reinstall-package pypatchmatch             # back to the normal librar
   `--gcov-suspicious-hits-threshold 0`.
 - On macOS add `--gcov-executable "xcrun llvm-cov gcov"`. Clang's counts are not
   reliable: they report a closing brace after a `return` as a missed line, and hundreds
-  of millions of returns through the clamp at the end of `distance_masked_images`,
+  of millions of returns through the clamp at the end of `scale_sum`,
   which recomputing the distances showed to be unreachable. Judge by GCC (the CI job,
   or Docker with `ubuntu:24.04`).
-- Missed on purpose: the `catch (...)` blocks of `guarded()` and `set_last_error()`,
-  the `clone()` of a non-continuous result in `_cv2_to_py`, the clamps at the end of
-  `distance_masked_images` and for targets outside the image in
-  `RegularityGuidedPatchDistanceMetricV2`, and the masked branch of
-  `MaskedImage::upsample` (only called on targets, which have no holes). GCC also
-  reports the closing braces of the functions that return a `MaskedImage`, where it
-  puts the cleanup for exceptions.
+- Missed on purpose: the `catch (...)` blocks of `guarded()` and `set_last_error()`, the
+  `clone()` of a non-continuous result in `_cv2_to_py`, the clamps at the end of
+  `scale_sum` and for targets outside the image in
+  `RegularityGuidedPatchDistanceMetricV2`, `operator()` and `distance_below` of
+  `PatchSSDDistanceMetric` (C++ API; the field measures its sums directly), and the
+  masked branch of `MaskedImage::upsample` (only called on targets, which have no
+  holes). GCC also reports the closing braces of the functions that return a
+  `MaskedImage`, where it puts the cleanup for exceptions.
 - GCC 13 (Docker arm64, `-Og`): 97.0 % of the lines, 95.2 % of the branches. The gates
   are these values rounded down to 5 % with at least two points of margin.
