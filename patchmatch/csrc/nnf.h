@@ -114,6 +114,9 @@ private:
     }
     void _link_if_closer(int y, int x, int y_target, int x_target)
     {
+        // In coherent regions most propagated candidates are the link itself, measured in full otherwise.
+        if (y_target == at(y, x, 0) && x_target == at(y, x, 1))
+            return;
         const int current = at(y, x, 2);
         const int distance = m_distance_metric->distance_below(m_source, y, x, m_target, y_target, x_target, current);
         if (distance < current)
