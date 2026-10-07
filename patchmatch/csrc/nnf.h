@@ -21,13 +21,6 @@ public:
     virtual int operator()(
         const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
         int target_x) const = 0;
-    // The distance if it is below bound, otherwise any value >= bound.
-    virtual int distance_below(
-        const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x,
-        int /* bound */) const
-    {
-        return (*this)(source, source_y, source_x, target, target_y, target_x);
-    }
     static const int kDistanceScale;
 
 private:
@@ -110,12 +103,6 @@ public:
     static void seed_random(unsigned int seed);
 
 private:
-    // Private: a link written from outside would not update its sum.
-    int *mutable_ptr(int y, int x)
-    {
-        return m_field.ptr<int>(y, x);
-    }
-
     // A distance and the sum of the pixel costs behind it, -1 if unknown.
     struct Measured
     {
@@ -137,7 +124,7 @@ private:
     }
     void _set(int y, int x, int y_target, int x_target, Measured measured)
     {
-        auto ptr = mutable_ptr(y, x);
+        auto ptr = m_field.ptr<int>(y, x);
         ptr[0] = y_target;
         ptr[1] = x_target;
         ptr[2] = measured.distance;
@@ -173,9 +160,6 @@ public:
     int operator()(
         const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
         int target_x) const override;
-    int distance_below(
-        const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x,
-        int bound) const override;
     static const int kSSDScale;
 };
 

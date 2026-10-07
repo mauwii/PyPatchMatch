@@ -9,10 +9,6 @@
 
 #include "inpaint.h"
 
-int _dtype_py_to_cv(PM_dtype_e dtype_py);
-cv::Mat _py_to_cv2(PM_mat_t pymat);
-PM_mat_t _cv2_to_py(cv::Mat cvmat);
-
 namespace
 {
     // The settings are set by one thread while others may be inpainting, since ctypes
@@ -66,6 +62,41 @@ namespace
             set_last_error("unknown error");
         }
         return PM_mat_t{nullptr, {0, 0, 0}, PM_dtype_e::PM_UINT8};
+    }
+
+    int _dtype_py_to_cv(PM_dtype_e dtype_py)
+    {
+        switch (dtype_py)
+        {
+        case PM_dtype_e::PM_UINT8:
+            return CV_8U;
+        case PM_dtype_e::PM_FLOAT32:
+            return CV_32F;
+        default:
+            throw std::invalid_argument("unsupported dtype");
+        }
+    }
+
+    cv::Mat _py_to_cv2(PM_mat_t pymat)
+    {
+        int dtype = CV_MAKETYPE(_dtype_py_to_cv(pymat.dtype), pymat.shape.channels);
+        return cv::Mat(cv::Size(pymat.shape.width, pymat.shape.height), dtype, pymat.data_ptr).clone();
+    }
+
+    PM_mat_t _cv2_to_py(const cv::Mat &cvmat)
+    {
+        CV_Assert(cvmat.depth() == CV_8U);
+        PM_shape_t shape = {cvmat.size().width, cvmat.size().height, cvmat.channels()};
+        size_t dsize = cvmat.total() * cvmat.elemSize();
+
+        // A null pointer reports an error to Python, so allocate at least one byte. A failed
+        // allocation throws std::bad_alloc, which guarded() reports.
+        auto data = std::make_unique<unsigned char[]>(dsize > 0 ? dsize : 1);
+        if (dsize > 0)
+            std::memcpy(data.get(), cvmat.data, dsize);
+
+        // Python passes the buffer back to PM_free_pymat, which frees it.
+        return PM_mat_t{data.release(), shape, PM_dtype_e::PM_UINT8};
     }
 
     PM_mat_t inpaint(
@@ -133,42 +164,4 @@ PM_mat_t PM_inpaint2_regularity(
             source_py, mask_py, &global_mask_py,
             RegularityGuidedPatchDistanceMetricV2(patch_size, _py_to_cv2(ijmap_py), guide_weight));
     });
-}
-
-int _dtype_py_to_cv(PM_dtype_e dtype_py)
-{
-    switch (dtype_py)
-    {
-    case PM_dtype_e::PM_UINT8:
-        return CV_8U;
-    case PM_dtype_e::PM_FLOAT32:
-        return CV_32F;
-    default:
-        throw std::invalid_argument("unsupported dtype");
-    }
-}
-
-cv::Mat _py_to_cv2(PM_mat_t pymat)
-{
-    int dtype = CV_MAKETYPE(_dtype_py_to_cv(pymat.dtype), pymat.shape.channels);
-    return cv::Mat(cv::Size(pymat.shape.width, pymat.shape.height), dtype, pymat.data_ptr).clone();
-}
-
-PM_mat_t _cv2_to_py(cv::Mat cvmat)
-{
-    if (!cvmat.isContinuous())
-        cvmat = cvmat.clone();
-
-    CV_Assert(cvmat.depth() == CV_8U);
-    PM_shape_t shape = {cvmat.size().width, cvmat.size().height, cvmat.channels()};
-    size_t dsize = cvmat.total() * cvmat.elemSize();
-
-    // A null pointer reports an error to Python, so allocate at least one byte. A failed
-    // allocation throws std::bad_alloc, which guarded() reports.
-    auto data = std::make_unique<unsigned char[]>(dsize > 0 ? dsize : 1);
-    if (dsize > 0)
-        std::memcpy(data.get(), cvmat.data, dsize);
-
-    // Python passes the buffer back to PM_free_pymat, which frees it.
-    return PM_mat_t{data.release(), shape, PM_dtype_e::PM_UINT8};
 }
