@@ -200,13 +200,7 @@ void NearestNeighborField::_allocate_sums()
 NearestNeighborField::Measured NearestNeighborField::_measure(int y, int x, int y_target, int x_target, int bound) const
 {
     if (m_sums.empty())
-    {
-        const int distance =
-            bound < PatchDistanceMetric::kDistanceScale
-                ? m_distance_metric->distance_below(m_source, y, x, m_target, y_target, x_target, bound)
-                : (*m_distance_metric)(m_source, y, x, m_target, y_target, x_target);
-        return {distance, -1};
-    }
+        return {(*m_distance_metric)(m_source, y, x, m_target, y_target, x_target), -1};
     const int patch_size = m_distance_metric->patch_size();
     const std::int64_t sum = patch_sum(m_source, {y, x}, m_target, {y_target, x_target}, patch_size, bound);
     if (sum < 0)
@@ -398,13 +392,6 @@ int PatchSSDDistanceMetric::operator()(
 {
     return distance_masked_images(
         source, {source_y, source_x}, target, {target_y, target_x}, patch_size(), PatchDistanceMetric::kDistanceScale);
-}
-
-int PatchSSDDistanceMetric::distance_below(
-    const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y, int target_x,
-    int bound) const
-{
-    return distance_masked_images(source, {source_y, source_x}, target, {target_y, target_x}, patch_size(), bound);
 }
 
 int RegularityGuidedPatchDistanceMetricV2::operator()(

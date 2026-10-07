@@ -32,8 +32,8 @@ uv sync --reinstall-package pypatchmatch             # back to the normal librar
 - Missed on purpose: the `catch (...)` blocks of `guarded()` and `set_last_error()`, the
   `clone()` of a non-continuous result in `_cv2_to_py`, the clamps at the end of
   `scale_sum` and for targets outside the image in
-  `RegularityGuidedPatchDistanceMetricV2`, `operator()` and `distance_below` of
-  `PatchSSDDistanceMetric` (C++ API; the field measures its sums directly), and the
+  `RegularityGuidedPatchDistanceMetricV2`, `operator()` of `PatchSSDDistanceMetric`
+  (C++ API; the field measures its sums directly), and the
   masked branch of `MaskedImage::upsample` (only called on targets, which have no
   holes). GCC also reports the closing braces of the functions that return a
   `MaskedImage`, where it puts the cleanup for exceptions.
