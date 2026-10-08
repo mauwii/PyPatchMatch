@@ -1,6 +1,6 @@
 ---
 name: sanitizers
-description: Build the library with ASan and UBSan and run the tests under them, like the CI job sanitizers. Use after changes to memory handling, indexing or integer arithmetic in patchmatch/csrc, or to reproduce a failure of that job.
+description: Build the library with ASan and UBSan and run the tests under them, like the CI job sanitizers. Use after changes to memory handling, indexing, integer arithmetic or the incremental distances of the propagation in patchmatch/csrc, or to reproduce a failure of that job.
 ---
 
 # Sanitizers
@@ -27,6 +27,11 @@ uv sync --reinstall-package pypatchmatch             # back to the normal librar
   start a subprocess abort), and start pytest as `.venv/bin/python .venv/bin/pytest`:
   SIP drops the variable for `/usr/bin/env` and `/bin/sh`, which uv uses as the
   shebang of scripts in long paths.
+- Only this build keeps the asserts (`-UNDEBUG`), which compare every distance sum of
+  the propagation with a full measurement.
+- The weekly and manual CI runs pass `--hypothesis-profile=deep` (5000 examples per
+  property test, `tests/conftest.py`). A failure there prints a `@reproduce_failure`
+  decorator; add it to the test to rerun that input locally.
 - The run takes about 80 s locally. Calling `PM_inpaint` through ctypes with a shape
   larger than the buffer (ASan) or a `patch_size` of `2**31 - 1` (UBSan, `nnf.cpp`)
   shows that both report and abort.
