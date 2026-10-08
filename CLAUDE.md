@@ -1,10 +1,9 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in
-this repository. The details of the native code, the C interface, packaging and CI are
-path-scoped rules in `.claude/rules/`, which load when a matching file is read or
-edited; read the rule before changing such a file through Bash. The sanitizer, C++
-coverage and fill-quality runs are skills in `.claude/skills/`.
+The details of the native code, the C interface, packaging and CI are path-scoped rules
+in `.claude/rules/`, which load when a matching file is read or edited; read the rule
+before changing such a file through Bash. The sanitizer, C++ coverage and fill-quality
+runs are skills in `.claude/skills/`.
 
 ## Project
 
@@ -27,24 +26,18 @@ uv run pre-commit install
 uv run pytest                              # all tests, with the coverage gate
 uv run pytest -m "not e2e"                 # fast unit tests only
 uv run pytest -m e2e --no-cov              # end-to-end tests only
-uv run pytest tests/test_patch_match.py::test_inpaint_global_mask --no-cov
-uv run pytest -k regularity --no-cov
 uv run mypy                                # strict, also a pre-commit hook
 uv run pre-commit run --all-files          # what the CI lint job runs
-uv run ruff check --fix . && uv run ruff format .
 uv build                                   # sdist and wheel into dist/
 ```
 
 - Pass `--no-cov` for any partial run: `addopts` always enables coverage, and
   `fail_under = 95` (branch coverage, subprocesses included through
   `patch = ["subprocess"]`) fails the run otherwise.
-- Use `uv run pytest`, not `python -m pytest`. The latter puts the repository root on
-  `sys.path`, which imports the source tree `patchmatch/` without the compiled library;
-  the symptoms are the warning `patchmatch failed to load: libpatchmatch.* not found`
-  and `RuntimeError: the patchmatch native library is not available` in every test.
-- `--cov=patchmatch` measures the source tree, so coverage only works with the editable
-  install that `uv sync` creates. With a non-editable install (`uv sync --no-editable`,
-  `uv pip install .`) it reports 0 % and the gate fails.
+- Keep the editable install that `uv sync` creates. With a non-editable one
+  (`uv sync --no-editable`, `uv pip install .`), `--cov=patchmatch` measures the unused
+  source tree and reports 0 %, and `python -m pytest` imports the source tree from the
+  repository root, without the compiled library.
 - `uv sync` rebuilds the library only when a `tool.uv.cache-keys` entry changes
   (`CMakeLists.txt`, `patchmatch/csrc/*`, `pyproject.toml`, git commit or tags). Force it
   with `uv sync --reinstall-package pypatchmatch`.
@@ -69,11 +62,8 @@ Other entry points:
 - `uv run python scripts/render_readme_example.py` runs `py_example.py` and renders the
   picture at the top of the README, `examples/images/readme_example.jpg`; rerun it and
   commit the picture after changes that affect the fills.
-- CMake options: `PATCHMATCH_BUILD_EXAMPLES` (OFF), `PATCHMATCH_FAST_MATH` (ON,
-  `-ffast-math` or `/fp:fast`), `PATCHMATCH_SANITIZE` (OFF, ASan and UBSan with
-  `float-cast-overflow`, every finding aborts; turns off fast math, which lets the
-  compiler drop checks; GCC and Clang only), `PATCHMATCH_COVERAGE` (OFF, gcov counters
-  at `-Og`; GCC and Clang only).
+- CMake options: the `option()` lines of `CMakeLists.txt`. `PATCHMATCH_SANITIZE` turns
+  off fast math, which lets the compiler drop checks.
 
 ## Architecture
 
@@ -114,7 +104,8 @@ CMake installs the shared library into the package directory.
   goes through a test parameter instead of a `# type: ignore`.
 - Backwards compatibility: `from patchmatch import patch_match` and
   `patch_match.CShapeT`/`CMatT` keep working (tested).
-- Comments explain why: which crash a check prevents, why a construct is avoided.
+- Comments explain why, in one short line where the code would otherwise be misread or
+  wrongly simplified; details and measurements go into the commit message.
 - No `NOSONAR` markers: change the code so that the SonarCloud rule is satisfied, and ask
   when that seems impossible. The only exception is `nnf.cpp`: cpp:S2245 flags every
   declaration of `std::mt19937`, which only drives the randomized search.

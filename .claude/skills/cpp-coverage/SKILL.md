@@ -27,8 +27,14 @@ uv sync --reinstall-package pypatchmatch             # back to the normal librar
 - On macOS add `--gcov-executable "xcrun llvm-cov gcov"`. Clang's counts are not
   reliable: they report a closing brace after a `return` as a missed line, and hundreds
   of millions of returns through the clamp at the end of `scale_sum`,
-  which recomputing the distances showed to be unreachable. Judge by GCC (the CI job,
-  or Docker with `ubuntu:24.04`).
+  which recomputing the distances showed to be unreachable. Judge by GCC: the CI job, or
+  Docker with `ubuntu:24.04` (GCC 13 like `ubuntu-latest`). There, install uv with
+  `pip3 install --break-system-packages uv`, build the pinned OpenCV once with
+  `scripts/build_opencv.py` into a mounted directory for `OpenCV_ROOT`, and set
+  `UV_PROJECT_ENVIRONMENT=/tmp/venv` and `SETUPTOOLS_SCM_PRETEND_VERSION`, so that
+  neither the macOS `.venv` nor `.git` is needed.
+- When SonarCloud fails the coverage of new code on C++ lines, first look for branches
+  in them that can never be taken and remove those (#106), before adding tests.
 - Missed on purpose: the `catch (...)` blocks of `guarded()` and `set_last_error()`, the
   clamps at the end of `scale_sum` and for targets outside the image in
   `RegularityGuidedPatchDistanceMetricV2`, `operator()` of `PatchSSDDistanceMetric`

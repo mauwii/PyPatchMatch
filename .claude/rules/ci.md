@@ -24,9 +24,10 @@ The workflow files explain their steps in comments; this lists what they do not 
   OpenCV step runs with `--only-group test`: the project cannot be built before OpenCV
   is installed, and the `dev` group may lack wheels for the newest Python.
 - Actions are pinned to full commit SHAs with a `# vX.Y.Z` comment. The pre-commit hooks
-  are frozen the same way (`pre-commit autoupdate --freeze` by hand), except typos, which
-  is pinned by tag: Dependabot matched the frozen comment against the tags of its other
-  crates (#92). MegaLinter was rejected: it duplicates pre-commit in a multi-GB image.
+  are frozen the same way, and Dependabot (ecosystem `pre-commit`) keeps them frozen,
+  except typos, which is pinned by tag: Dependabot matched the frozen comment against
+  the tags of its other crates (#92). MegaLinter was rejected: it duplicates pre-commit
+  in a multi-GB image.
 - Dependabot version updates are off by default on forks; they are enabled in Insights →
   Dependency graph → Dependabot. `uv.lock` is updated by hand (`uv lock --upgrade`):
   Dependabot's `uv lock` builds the project, which fails without OpenCV, because
