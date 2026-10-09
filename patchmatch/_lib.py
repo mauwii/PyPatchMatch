@@ -82,8 +82,9 @@ def find_library() -> Path:
     )
 
 
-def load_library() -> ctypes.CDLL:
-    lib = ctypes.CDLL(str(find_library()))
+def load_library(path: Path | None = None) -> ctypes.CDLL:
+    """Load the installed library, or the build at ``path``."""
+    lib = ctypes.CDLL(str(path or find_library()))
 
     lib.PM_set_random_seed.argtypes = [ctypes.c_uint]
     lib.PM_set_random_seed.restype = None
