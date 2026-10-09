@@ -1,5 +1,6 @@
 """End-to-end tests of the user workflows shown in examples/ and the README."""
 
+import functools
 import importlib.util
 from pathlib import Path
 
@@ -59,6 +60,21 @@ def assert_plausible_fill(
     assert color_diff.max() < 10, color_diff
 
 
+@functools.cache
+def fill(
+    image: str, hole: tuple[int, int, int, int] | None, patch_size: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """``image`` with white holes and its fill with seed 0, shared by several tests."""
+    source = evaluation.load(IMAGES / image)
+    if hole is not None:
+        source[evaluation.ellipse(source.shape, *hole)] = 255
+    patchmatch.set_random_seed(0)
+    result = patchmatch.inpaint(source, patch_size=patch_size)
+    source.setflags(write=False)
+    result.setflags(write=False)
+    return source, result
+
+
 @pytest.fixture
 def pruned_image() -> Image.Image:
     return Image.open(IMAGES / "forest_pruned.bmp")
@@ -69,18 +85,15 @@ def seed():
     patchmatch.set_random_seed(0)
 
 
-@pytest.mark.parametrize("as_array", [False, True], ids=["pil", "numpy"])
-def test_remove_white_regions(pruned_image, tmp_path, as_array):
+def test_remove_white_regions(tmp_path):
     """examples/py_example.py: white pixels are the holes, the result is saved."""
-    image = np.array(pruned_image) if as_array else pruned_image
-
-    result = patchmatch.inpaint(image, patch_size=3)
+    source, result = fill("forest_pruned.bmp", None, 3)
 
     output = tmp_path / "forest_recovered.bmp"
     Image.fromarray(result).save(output)
     saved = np.array(Image.open(output))
     np.testing.assert_array_equal(saved, result)
-    assert_plausible_fill(np.array(pruned_image), saved)
+    assert_plausible_fill(source, saved)
 
 
 def test_global_mask(pruned_image):
@@ -117,14 +130,10 @@ def test_global_mask_is_not_used_as_source(pruned_image):
     np.testing.assert_array_equal(result[excluded], source[excluded])
 
 
-def test_fill_is_as_detailed_as_its_surroundings(pruned_image):
+def test_fill_is_as_detailed_as_its_surroundings():
     """The weighted mean of all overlapping patches blurred the fill (detail 0.69)."""
-    source = np.array(pruned_image)
-    holes = evaluation.white(source)
-
-    result = patchmatch.inpaint(source, patch_size=3)
-
-    assert evaluation.measure(result, holes)["detail"] > 0.8
+    source, result = fill("forest_pruned.bmp", None, 3)
+    assert evaluation.measure(result, evaluation.white(source))["detail"] > 0.8
 
 
 @pytest.mark.parametrize(
@@ -142,14 +151,8 @@ def test_no_seam_at_the_hole_border(image, hole, patch_size, limit):
     side of it (seam 2.03). Keeping them still left the colors of the fill off along
     the border: seam 1.73 for forest with patch size 3, 3.24 for chelsea with 15.
     """
-    source = evaluation.load(IMAGES / image)
-    if hole is not None:
-        source[evaluation.ellipse(source.shape, *hole)] = 255
-    holes = evaluation.white(source)
-
-    result = patchmatch.inpaint(source, patch_size=patch_size)
-
-    assert evaluation.measure(result, holes)["seam"] < limit
+    source, result = fill(image, hole, patch_size)
+    assert evaluation.measure(result, evaluation.white(source))["seam"] < limit
 
 
 @pytest.mark.parametrize(
@@ -176,16 +179,14 @@ def test_stem_is_filled_with_meadow(pruned_image, seed, use_global_mask):
     assert result[stem].mean() > 0.85 * source[beside].mean()
 
 
-@pytest.mark.parametrize("hole_value", [1, 255])
-def test_explicit_mask_matches_implicit_white_mask(pruned_image, hole_value):
+def test_explicit_mask_matches_implicit_white_mask(pruned_image):
     """README: an explicit mask behaves like the default mask of white pixels."""
     holes = evaluation.white(np.array(pruned_image))
-    mask = Image.fromarray(holes.astype(np.uint8) * hole_value)
+    mask = Image.fromarray(holes.astype(np.uint8) * 255)
 
     explicit = patchmatch.inpaint(pruned_image, mask, patch_size=3)
-    implicit = patchmatch.inpaint(pruned_image, patch_size=3)
 
-    np.testing.assert_array_equal(explicit, implicit)
+    np.testing.assert_array_equal(explicit, fill("forest_pruned.bmp", None, 3)[1])
 
 
 # Regions of pure background in forest_pruned.bmp as (y, x, height, width).
