@@ -48,9 +48,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        # oldest and newest supported Python, and the next one; the ctypes library is
-        # version independent
-        python-version: ["3.11", "3.14", "3.15"]
+        # newest supported Python; the ctypes library is version independent, and the
+        # oldest is covered by the job lowest and the wheel tests (cp311)
+        python-version: ["3.15"]
     steps:
       - &checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

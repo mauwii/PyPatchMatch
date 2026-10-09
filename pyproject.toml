@@ -92,7 +92,7 @@ fallback_version = "0.0.0"
 
 [tool.cibuildwheel]
 # The wheels are Python-version independent (py3-none-<platform>), so each platform
-# is built and tested once; the CI workflow covers the other Python versions.
+# is built and tested once; the CI workflow covers the newest Python version.
 build = "cp311-*"
 skip = "*-musllinux_*"
 # OpenCV is built once per job in before-all, only for the runner's native arch
