@@ -12,13 +12,6 @@ public:
         : m_image(image), m_mask(mask), m_global_mask(global_mask), m_has_global_mask(!global_mask.empty())
     {
     }
-    MaskedImage(
-        const cv::Mat &image, const cv::Mat &mask, const cv::Mat &global_mask, const cv::Mat &grady,
-        const cv::Mat &gradx, bool grad_computed)
-        : m_image(image), m_mask(mask), m_global_mask(global_mask), m_has_global_mask(!global_mask.empty()),
-          m_image_grady(grady), m_image_gradx(gradx), m_image_grad_computed(grad_computed)
-    {
-    }
     MaskedImage(int width, int height)
         : m_image(cv::Size(width, height), CV_8UC3, cv::Scalar::all(0)),
           m_mask(cv::Size(width, height), CV_8U, cv::Scalar::all(0))
@@ -31,11 +24,10 @@ public:
     MaskedImage &operator=(MaskedImage &&) noexcept = default;
     ~MaskedImage() = default;
 
+    // Without the gradients, which would be outdated once the clone is changed.
     MaskedImage clone() const
     {
-        return MaskedImage(
-            m_image.clone(), m_mask.clone(), m_global_mask.clone(), m_image_grady.clone(), m_image_gradx.clone(),
-            m_image_grad_computed);
+        return MaskedImage(m_image.clone(), m_mask.clone(), m_global_mask.clone());
     }
 
     cv::Size size() const
