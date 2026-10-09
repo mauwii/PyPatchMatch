@@ -453,6 +453,52 @@ def test_native_rejects_negative_guide_weight(image, hole_mask, ijmap):
         patch_match._call(lib.PM_inpaint_regularity, *args)
 
 
+@pytest.mark.parametrize(
+    ("argument", "value"),
+    [
+        ("image", np.zeros((HEIGHT, WIDTH, 3), dtype=np.float32)),
+        ("image", np.zeros((HEIGHT, WIDTH, 4), dtype=np.uint8)),
+        ("mask", np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)),
+        ("mask", np.zeros((HEIGHT // 2, WIDTH, 1), dtype=np.uint8)),
+        ("global_mask", np.zeros((HEIGHT, WIDTH, 1), dtype=np.float32)),
+        ("global_mask", np.zeros((HEIGHT, WIDTH // 2, 1), dtype=np.uint8)),
+        ("ijmap", np.zeros((0, WIDTH, 3), dtype=np.float32)),
+        ("ijmap", np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)),
+        ("ijmap", np.zeros((HEIGHT, WIDTH, 1), dtype=np.float32)),
+        ("patch_size", ctypes.c_int(0)),
+        ("patch_size", ctypes.c_int(2**30)),
+    ],
+    ids=[
+        "image-float",
+        "image-rgba",
+        "mask-3-channel",
+        "mask-size",
+        "global-mask-float",
+        "global-mask-size",
+        "ijmap-empty",
+        "ijmap-uint8",
+        "ijmap-1-channel",
+        "patch-size-0",
+        "patch-size-2**30",
+    ],
+)
+def test_native_rejects_invalid_inputs(image, hole_mask, ijmap, argument, value):
+    """The C++ code checks what it indexes, for callers that bypass Python."""
+    args = {
+        "image": image,
+        "mask": hole_mask[..., np.newaxis],
+        "global_mask": np.zeros_like(hole_mask)[..., np.newaxis],
+        "ijmap": ijmap,
+        "patch_size": ctypes.c_int(3),
+        "guide_weight": ctypes.c_float(0.25),
+    }
+    args[argument] = value
+    func = patch_match._get_lib().PM_inpaint2_regularity
+    values = list(args.values())
+    with pytest.raises(RuntimeError, match="Assertion failed"):
+        patch_match._call(func, *values)
+
+
 def test_native_accepts_empty_image():
     # Python returns empty images before the native call; C callers still get an
     # empty result instead of a failure. OpenCV 4.6 returns it with shape (0, 0, 1).

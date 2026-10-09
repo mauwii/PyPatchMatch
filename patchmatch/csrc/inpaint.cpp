@@ -58,6 +58,17 @@ namespace
         return count > 0 ? sum / count : sum;
     }
 
+    // The pixel loops read three channels and index the masks with the image coordinates.
+    void check_inputs(const MaskedImage &image)
+    {
+        if (image.image().empty())
+            return;
+        CV_Assert(image.image().type() == CV_8UC3);
+        CV_Assert(image.mask().type() == CV_8UC1 && image.mask().size() == image.size());
+        if (image.has_global_mask())
+            CV_Assert(image.global_mask().type() == CV_8UC1 && image.global_mask().size() == image.size());
+    }
+
     bool is_known(const MaskedImage &image, int y, int x)
     {
         return !image.is_masked(y, x) && !image.is_globally_masked(y, x);
@@ -328,6 +339,8 @@ Inpainting::Inpainting(
 
 void Inpainting::_initialize_pyramid()
 {
+    check_inputs(m_initial);
+
     // The colors under the holes would reach the fill through the gradients of their
     // neighbors and the target of a single-level pyramid. Black, like on coarser levels.
     auto source = m_initial.clone();
