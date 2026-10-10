@@ -33,5 +33,4 @@ uv sync --reinstall-package pypatchmatch             # back to the normal librar
   property test, `tests/conftest.py`). A failure there prints a `@reproduce_failure`
   decorator; add it to the test to rerun that input locally.
 - The run takes about 80 s locally. Calling `PM_inpaint` through ctypes with a shape
-  larger than the buffer (ASan) or a `patch_size` of `2**31 - 1` (UBSan, `nnf.cpp`)
-  shows that both report and abort.
+  larger than the buffer shows that ASan reports and aborts.

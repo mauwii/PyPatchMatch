@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <opencv2/core.hpp>
 #include <stdexcept>
 #include <vector>
@@ -11,7 +12,11 @@
 class PatchDistanceMetric
 {
 public:
-    explicit PatchDistanceMetric(int patch_size) : m_patch_size(patch_size) {}
+    explicit PatchDistanceMetric(int patch_size) : m_patch_size(patch_size)
+    {
+        // 0 crashes, negative sizes never terminate, and 2 * patch_size + 1 has to fit an int.
+        CV_Assert(patch_size >= 1 && patch_size <= (std::numeric_limits<int>::max() - 1) / 2);
+    }
     virtual ~PatchDistanceMetric() = default;
 
     int patch_size() const
@@ -172,6 +177,8 @@ public:
         // The distance is divided by 1 + weight, so a negative weight flips its sign.
         if (!(weight >= 0))
             throw std::invalid_argument("the guide weight must be >= 0");
+        // operator() reads the first two channels at coordinates scaled to the map.
+        CV_Assert(!ijmap.empty() && ijmap.depth() == CV_32F && ijmap.channels() >= 2);
     }
     int operator()(
         const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,

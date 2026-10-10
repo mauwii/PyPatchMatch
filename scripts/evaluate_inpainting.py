@@ -194,12 +194,6 @@ def measure(
     return values
 
 
-def load_library(path: Path) -> ctypes.CDLL:
-    """Load another build of the library than the installed one."""
-    _lib.find_library = lambda: path
-    return _lib.load_library()
-
-
 def evaluate(library: ctypes.CDLL, case: Case, patch_size: int, seeds: int) -> Result:
     patch_match._lib = library
     mask = case.holes.astype(np.uint8)
@@ -523,12 +517,14 @@ def main() -> None:
     if args.seeds < 1:
         parser.error("--seeds must be at least 1")
 
-    current = load_library(args.library.resolve()) if args.library else patch_match._lib
+    current = (
+        _lib.load_library(args.library.resolve()) if args.library else patch_match._lib
+    )
     if current is None:
         parser.error("the installed package has no native library, pass --library")
     libraries, labels = [current], ["fill"]
     if args.baseline:
-        libraries.insert(0, load_library(args.baseline.resolve()))
+        libraries.insert(0, _lib.load_library(args.baseline.resolve()))
         labels = ["baseline", "current"]
     selected = set(args.cases.split(",")) if args.cases else None
 
