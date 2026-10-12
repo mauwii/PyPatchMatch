@@ -87,8 +87,13 @@ again.
   against #148 (smooth sources for smooth fills): comparing the hole pixels of the fill
   with the low pass of the sources and without gradients (brick 8.6 → 15.7, the mortar
   got lost), and a penalty for sources with less gradient energy than the ring around
-  the holes (coffee with 7 improved, chelsea 14.8 → 19.8 and grass 18.9 → 25.4); a
-  reference energy per pixel instead of per level was not tried.
+  the holes (coffee with 7 improved, chelsea 14.8 → 19.8 and grass 18.9 → 25.4). With
+  the energy of the known pixels around each patch as the reference instead, it copied
+  salient sources such as a clover into grass (25.8) on the coarse levels; on levels 0
+  and 1 alone it had the best numbers with 7 (coffee detail 0.35 → 1.09, error 19.2 →
+  17.8, brick 7.6 → 9.0), but filled the holes with hard-edged blocks of differently
+  oriented fur and specks in the bricks. A band that also penalizes sources with more
+  energy did not help grass.
 - More, with measurements, in the issues closed as not planned: #115 (start radius of
   the new-hole search, merging random fields), #120 (several cores) and #124 (confidence
   weighting for large holes).
