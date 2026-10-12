@@ -80,6 +80,15 @@ again.
   them (border patches dominate it), a margin in their favor (from 1.05 on, forest
   fills got worse), and choosing by the depth of the hole (the same for the failing
   pattern and the forest holes).
+- Split votes (mean of the low frequencies plus the detail of the best vote) on coarser
+  levels than the two finest: from level 2 on they helped coffee with `patch_size` 3, but
+  raised the error of brick with 7 from 6.96 to 8.99 and of brick-global from 6.30 to
+  7.82. A low pass wider than 3x3 gained nothing with `patch_size` 7. Also rejected
+  against #148 (smooth sources for smooth fills): comparing the hole pixels of the fill
+  with the low pass of the sources and without gradients (brick 8.6 → 15.7, the mortar
+  got lost), and a penalty for sources with less gradient energy than the ring around
+  the holes (coffee with 7 improved, chelsea 14.8 → 19.8 and grass 18.9 → 25.4); a
+  reference energy per pixel instead of per level was not tried.
 - More, with measurements, in the issues closed as not planned: #115 (start radius of
   the new-hole search, merging random fields), #120 (several cores) and #124 (confidence
   weighting for large holes).
