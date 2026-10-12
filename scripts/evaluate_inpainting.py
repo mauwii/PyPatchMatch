@@ -5,9 +5,11 @@ in examples/images/SOURCES.md. forest_pruned.bmp and every ``*_pruned.*`` image 
 git-ignored examples/images/local/ are added as object removals without a ground
 truth; their pure white pixels are the holes. grass-edge cuts a band at the right
 border, as in outpainting; brick-large and grass-large cut a circle of radius 242 into
-the center, 70 % of the image. forest-global and brick-global add a global mask,
-darkened in the report: the plant of examples/py_example_global_mask.py and the left
-third of brick.png.
+the center, 70 % of the image. pattern repeats almost exactly, so its error tells a fill
+that continues it (2 to 6) from a broken one; pattern-wide widens the hole to a radius
+of 60, where patch size 3 mixed the rings (error 37). forest-global and brick-global add
+a global mask, darkened in the report: the plant of examples/py_example_global_mask.py
+and the left third of brick.png.
 
 Usage:
     uv run python scripts/evaluate_inpainting.py
@@ -66,6 +68,7 @@ HOLES = {
     "gravel": (256, 256, 60, 60),
     "coffee": (260, 85, 55, 60),
     "chelsea": (52, 215, 24, 40),
+    "pattern": (320, 320, 40, 40),
 }
 COLUMNS = ("seam", "detail", "error")
 
@@ -127,6 +130,8 @@ def cases() -> Iterator[Case]:
     for name in ("brick", "grass"):
         truth = load(IMAGES / f"{name}.png")
         yield cut(f"{name}-large", truth, ellipse(truth.shape, 256, 256, 242, 242))
+    pattern = load(IMAGES / "pattern.png")
+    yield cut("pattern-wide", pattern, ellipse(pattern.shape, 320, 320, 60, 60))
     plant = np.zeros(pruned.shape[:2], dtype=bool)
     plant[290:, 100:180] = True
     yield Case("forest-global", pruned, white(pruned), None, plant)
