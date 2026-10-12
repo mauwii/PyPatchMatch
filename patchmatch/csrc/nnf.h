@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <opencv2/core.hpp>
 #include <stdexcept>
 #include <vector>
@@ -26,6 +27,11 @@ public:
     virtual int operator()(
         const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
         int target_x) const = 0;
+    // The same metric with another patch size, or nullptr if it has none.
+    virtual std::unique_ptr<PatchDistanceMetric> with_patch_size(int) const
+    {
+        return nullptr;
+    }
     static const int kDistanceScale;
 
 private:
@@ -165,6 +171,10 @@ public:
     int operator()(
         const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
         int target_x) const override;
+    std::unique_ptr<PatchDistanceMetric> with_patch_size(int patch_size) const override
+    {
+        return std::make_unique<PatchSSDDistanceMetric>(patch_size);
+    }
     static const int kSSDScale;
 };
 
@@ -183,6 +193,10 @@ public:
     int operator()(
         const MaskedImage &source, int source_y, int source_x, const MaskedImage &target, int target_y,
         int target_x) const override;
+    std::unique_ptr<PatchDistanceMetric> with_patch_size(int patch_size) const override
+    {
+        return std::make_unique<RegularityGuidedPatchDistanceMetricV2>(patch_size, m_ijmap, m_weight);
+    }
 
 private:
     cv::Mat m_ijmap;
