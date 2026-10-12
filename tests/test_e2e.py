@@ -131,17 +131,20 @@ def test_global_mask_is_not_used_as_source(pruned_image):
 
 
 @pytest.mark.parametrize(
-    ("image", "hole"),
-    [("forest_pruned.bmp", None), ("coffee.png", evaluation.HOLES["coffee"])],
+    ("image", "hole", "limit"),
+    [
+        ("forest_pruned.bmp", None, 0.8),
+        ("chelsea.png", evaluation.HOLES["chelsea"], 0.7),
+    ],
 )
-def test_fill_is_as_detailed_as_its_surroundings(image, hole):
+def test_fill_is_as_detailed_as_its_surroundings(image, hole, limit):
     """The weighted mean of all overlapping patches blurred the fill (detail 0.69).
 
-    On the finer levels it kept the fill of the wood in coffee smooth, which then
-    matched smooth sources such as the blurred wood best (detail 0.68).
+    On the finer levels it kept the fill of the fur in chelsea smooth, which then
+    matched smooth sources best (detail 0.40).
     """
     source, result = fill(image, hole, 3)
-    assert evaluation.measure(result, evaluation.white(source))["detail"] > 0.8
+    assert evaluation.measure(result, evaluation.white(source))["detail"] > limit
 
 
 @pytest.mark.parametrize(
