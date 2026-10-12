@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -16,6 +17,9 @@ public:
 
 private:
     void _initialize_pyramid(void);
+    MaskedImage _run_levels(int from, int to, MaskedImage target, const PatchDistanceMetric *metric, bool verbose);
+    MaskedImage _fill_coarse_levels(const MaskedImage &target, bool verbose);
+    double _hole_energy(int level, const MaskedImage &target) const;
     MaskedImage _expectation_maximization(const MaskedImage &source, MaskedImage target, int level, bool verbose);
     void _update_links(const MaskedImage &source, bool image_changed);
     void _expectation_step(
@@ -29,4 +33,9 @@ private:
     std::optional<NearestNeighborField> m_source2target;
     NearestNeighborField m_target2source;
     const PatchDistanceMetric *m_distance_metric;
+    // Searches on the levels that lay out the fill, if patch_size is smaller than kCoarsePatchSize.
+    std::unique_ptr<PatchDistanceMetric> m_coarse_metric;
+    int m_coarsest_hole_level = -1;
+    // Searches on the current level; the votes use patch_size.
+    const PatchDistanceMetric *m_level_metric = nullptr;
 };

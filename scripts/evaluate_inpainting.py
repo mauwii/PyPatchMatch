@@ -7,9 +7,9 @@ truth; their pure white pixels are the holes. grass-edge cuts a band at the righ
 border, as in outpainting; brick-large and grass-large cut a circle of radius 242 into
 the center, 70 % of the image. pattern repeats almost exactly, so its error tells a fill
 that continues it (2 to 6) from a broken one; pattern-wide widens the hole to a radius
-of 60, where patch size 3 mixed the rings (error 37). forest-global and brick-global add
-a global mask, darkened in the report: the plant of examples/py_example_global_mask.py
-and the left third of brick.png.
+of 60, where patch size 3 mixed the rings before 2.2 (error 37). forest-global and
+brick-global add a global mask, darkened in the report: the plant of
+examples/py_example_global_mask.py and the left third of brick.png.
 
 Usage:
     uv run python scripts/evaluate_inpainting.py

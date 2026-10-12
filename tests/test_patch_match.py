@@ -210,6 +210,24 @@ def test_inpaint_textures_the_image_border(patch_size, transpose):
     assert outermost > 0.5 * known, outermost / known
 
 
+def test_inpaint_continues_a_repeating_pattern():
+    """A hole over the center of concentric rings that repeat every 64 pixels.
+
+    The 7x7 patches of patch_size 3 were smaller than the hole on its coarsest
+    level, so they filled it from several shifted copies (error 56 to 60).
+    """
+    palette = np.array([[230, 60, 90], [40, 70, 140], [250, 240, 190], [90, 200, 190]])
+    y, x = np.mgrid[0:128, 0:128]
+    rings = np.hypot(y % 64 - 32, x % 64 - 32) // 8
+    image = palette[rings.astype(int) % 4].astype(np.uint8)
+    mask = (np.hypot(y - 96, x - 96) < 20).astype(np.uint8)
+
+    result = patchmatch.inpaint(image, mask, patch_size=3)
+
+    error = np.abs(result.astype(int) - image)[mask == 1].mean()
+    assert error < 5, error
+
+
 @pytest.mark.parametrize("regularity", [False, True], ids=["inpaint", "regularity"])
 @pytest.mark.parametrize("tall", [True, False], ids=["tall", "wide"])
 def test_inpaint_very_large_image(tall, regularity):

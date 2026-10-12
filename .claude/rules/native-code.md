@@ -71,6 +71,15 @@ again.
   for the gradients: up to `patch_size` 4 every patch over it is above the 10 %, so that
   line of a hole at the image border never got a vote and stayed flat
   (`test_inpaint_textures_the_image_border`).
+- The larger patches of `_fill_coarse_levels` without the energy comparison: they lock
+  onto repeating patterns but take flat sources in foliage, which filled holes in
+  `forest.bmp` gray (11 of 20 positions worse, `test_reconstructs_known_background`
+  5.9 → 8.4). Also rejected: voting with them (coffee detail 0.34 → 0.29), a radius of
+  7 (coffee error 17.5 → 20.0, up to 3× the time) or 4 (a fifth faster, but the
+  pattern with a hole of radius 50 stayed broken), the energy on the level right below
+  them (border patches dominate it), a margin in their favor (from 1.05 on, forest
+  fills got worse), and choosing by the depth of the hole (the same for the failing
+  pattern and the forest holes).
 - More, with measurements, in the issues closed as not planned: #115 (start radius of
   the new-hole search, merging random fields), #120 (several cores) and #124 (confidence
   weighting for large holes).

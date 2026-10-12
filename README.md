@@ -68,7 +68,9 @@ The previous import path `from patchmatch import patch_match` keeps working.
 
 `patch_size` is the radius of the compared patches, which span `2 * patch_size + 1`
 pixels in each direction. Larger patches follow larger structures but are much slower;
-the default of 15 compares 31x31 patches, the examples use 3.
+the default of 15 compares 31x31 patches, the examples use 3. Below 5, the coarse levels
+that lay out the fill are also tried with a radius of 5, which is kept where it fits
+the surroundings better, so that repeating patterns continue across larger holes.
 
 `patchmatch.set_random_seed(seed)` sets the seed of the randomized search, modulo
 `2**32`, and `patchmatch.set_verbose(True)` prints the progress of the native code to
