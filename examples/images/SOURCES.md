@@ -1,9 +1,10 @@
 # Sources of the test images
 
 `scripts/evaluate_inpainting.py` cuts holes into these images and compares the fills
-with the original content. They are taken from the sample data of scikit-image 0.26
-(`skimage.data`), which documents their sources and licenses; `brick`, `grass` and
-`gravel` are grayscale.
+with the original content. All but `pattern.png` are taken from the sample data of
+scikit-image 0.26 (`skimage.data`), which documents their sources and licenses; `brick`,
+`grass` and `gravel` are grayscale. `pattern.png` is not CC0, so keep it out of the
+sdist.
 
 | File | Content | Source | License |
 | --- | --- | --- | --- |
@@ -12,3 +13,4 @@ with the original content. They are taken from the sample data of scikit-image 0
 | `gravel.png` | gravel | [CC0Textures, Gravel04](https://cc0textures.com/view.php?tex=Gravel04) (now ambientCG), scaled and cropped by scikit-image | CC0 1.0 |
 | `coffee.png` | coffee cup | photograph by Rachel Michetti, courtesy of Pikolo Espresso Bar | CC0 1.0 |
 | `chelsea.png` | Chelsea the cat | photograph by Stefan van der Walt | CC0 1.0 |
+| `pattern.png` | repeating pattern of circles | [Pixabay, illustration 9825482](https://pixabay.com/illustrations/repeat-pattern-design-seamless-9825482/), scaled from 1280 to 640 pixels and reduced to 256 colors | [Pixabay Content License](https://pixabay.com/service/license-summary/) |
