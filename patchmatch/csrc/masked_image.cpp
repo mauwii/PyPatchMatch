@@ -52,19 +52,31 @@ namespace
 
 bool MaskedImage::contains_mask(int y, int x, int patch_size) const
 {
-    auto mask_size = size();
-    for (int dy = -patch_size; dy <= patch_size; ++dy)
+    const auto size = this->size();
+    if (!m_hole_sums_computed)
     {
-        for (int dx = -patch_size; dx <= patch_size; ++dx)
+        m_hole_sums = cv::Mat(size.height + 1, size.width + 1, CV_32S, cv::Scalar(0));
+        for (int yy = 0; yy < size.height; ++yy)
         {
-            const int yy = y + dy;
-            const int xx = x + dx;
-            if (yy >= 0 && yy < mask_size.height && xx >= 0 && xx < mask_size.width && is_masked(yy, xx) &&
-                !is_globally_masked(yy, xx))
-                return true;
+            for (int xx = 0; xx < size.width; ++xx)
+            {
+                const int hole = is_masked(yy, xx) && !is_globally_masked(yy, xx) ? 1 : 0;
+                m_hole_sums.at<int>(yy + 1, xx + 1) = hole + m_hole_sums.at<int>(yy, xx + 1) +
+                                                      m_hole_sums.at<int>(yy + 1, xx) - m_hole_sums.at<int>(yy, xx);
+            }
         }
+        m_hole_sums_computed = true;
     }
-    return false;
+    // In 64 bits: patch_size may be close to the largest int.
+    const auto clip = [](std::int64_t value, int limit) {
+        return static_cast<int>(std::clamp<std::int64_t>(value, 0, limit));
+    };
+    const int top = clip(std::int64_t{y} - patch_size, size.height);
+    const int bottom = clip(std::int64_t{y} + patch_size + 1, size.height);
+    const int left = clip(std::int64_t{x} - patch_size, size.width);
+    const int right = clip(std::int64_t{x} + patch_size + 1, size.width);
+    const auto sum = [this](int yy, int xx) { return m_hole_sums.at<int>(yy, xx); };
+    return sum(bottom, right) - sum(top, right) - sum(bottom, left) + sum(top, left) > 0;
 }
 
 MaskedImage MaskedImage::downsample() const

@@ -253,6 +253,7 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
     const auto &other_size = other.source_size();
     double fi = static_cast<double>(this_size.height) / other_size.height;
     double fj = static_cast<double>(this_size.width) / other_size.width;
+    const int patch_size = m_distance_metric->patch_size();
 
     for (int i = 0; i < this_size.height; ++i)
     {
@@ -260,6 +261,12 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
         {
             if (m_source.is_globally_masked(i, j))
                 continue;
+            // The inpainting links them to themselves (_update_links); measuring them first took half its time.
+            if (!m_source.contains_mask(i, j, patch_size) && !m_target.contains_mask(i, j, patch_size))
+            {
+                set_identity(i, j);
+                continue;
+            }
 
             auto ilow = static_cast<int>(std::min(i / fi, static_cast<double>(other_size.height - 1)));
             auto jlow = static_cast<int>(std::min(j / fj, static_cast<double>(other_size.width - 1)));
@@ -277,8 +284,7 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
 
             // A hole that is new on this level: search near the patch before a neighbor's link replaces its own.
             const bool linked_to_itself = other_value[0] == ilow && other_value[1] == jlow;
-            if (linked_to_itself && measured.distance > 0 &&
-                m_target.contains_mask(y_target, x_target, m_distance_metric->patch_size()))
+            if (linked_to_itself && measured.distance > 0 && m_target.contains_mask(y_target, x_target, patch_size))
                 _random_search(i, j);
         }
     }
