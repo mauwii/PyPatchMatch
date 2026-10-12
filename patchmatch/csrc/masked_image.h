@@ -66,11 +66,13 @@ public:
         m_global_mask = cv::Mat(m_mask.size(), CV_8U);
         m_global_mask.setTo(cv::Scalar(0));
         m_has_global_mask = !m_global_mask.empty();
+        m_hole_sums_computed = false;
     }
     void set_global_mask_mat(const cv::Mat &other)
     {
         m_global_mask = other;
         m_has_global_mask = !other.empty();
+        m_hole_sums_computed = false;
     }
 
     bool is_masked(int y, int x) const
@@ -84,14 +86,17 @@ public:
     void set_mask(int y, int x, bool value)
     {
         m_mask.at<unsigned char>(y, x) = static_cast<unsigned char>(value);
+        m_hole_sums_computed = false;
     }
     void set_global_mask(int y, int x, bool value)
     {
         m_global_mask.at<unsigned char>(y, x) = static_cast<unsigned char>(value);
+        m_hole_sums_computed = false;
     }
     void clear_mask()
     {
         m_mask.setTo(cv::Scalar(0));
+        m_hole_sums_computed = false;
     }
 
     const unsigned char *get_image(int y, int x) const
@@ -119,4 +124,9 @@ private:
     mutable cv::Mat m_image_grady;
     mutable cv::Mat m_image_gradx;
     mutable bool m_image_grad_computed = false;
+    // computed on first use by contains_mask: the masked pixels outside the global mask
+    // above and left of each pixel. Copies share them with the masks, so change a mask only
+    // through an image that nothing has copied yet, as downsample and upsample do.
+    mutable cv::Mat m_hole_sums;
+    mutable bool m_hole_sums_computed = false;
 };
