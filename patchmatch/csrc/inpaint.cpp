@@ -191,6 +191,32 @@ namespace
         target_ptr[3] += weight;
     }
 
+    // A split vote: the weighted low frequencies and their weight, the detail of the best vote and its weight.
+    constexpr int kSplitChannels = 8;
+
+    // The mean color of the known pixels around each pixel, the part of the split votes that is averaged.
+    cv::Mat low_pass(const MaskedImage &image)
+    {
+        const auto size = image.size();
+        const auto known = [&image](int y, int x) { return is_known(image, y, x); };
+        const auto color = [&image](int y, int x) {
+            const auto *pixel = image.get_image(y, x);
+            return cv::Vec3d(pixel[0], pixel[1], pixel[2]);
+        };
+        cv::Mat low(size, CV_8UC3);
+        for (int y = 0; y < size.height; ++y)
+        {
+            for (int x = 0; x < size.width; ++x)
+            {
+                const cv::Vec3d mean = window_mean(size, y, x, 1, known, color);
+                auto *pixel = low.ptr<unsigned char>(y, x);
+                for (int c = 0; c < 3; ++c)
+                    pixel[c] = cv::saturate_cast<unsigned char>(mean[c]);
+            }
+        }
+        return low;
+    }
+
     // Replaces the vote of the pixel if the new one weighs more. It is stored like the
     // sums of _weighted_copy, so the maximization step divides it by its weight.
     inline void _best_copy(const MaskedImage &source, int ys, int xs, cv::Mat &target, int yt, int xt, double weight)
@@ -262,7 +288,8 @@ namespace
             bool upscaled, bool best_only, const HoleCounter *holes)
             : m_nnf(&nnf), m_vote(&vote), m_source(&source), m_holes(holes), m_source_size(nnf.source_size()),
               m_target_size(nnf.target_size()), m_source2target(source2target), m_upscaled(upscaled),
-              m_best_only(best_only)
+              m_best_only(best_only), m_split(vote.channels() == kSplitChannels),
+              m_low(m_split ? low_pass(source) : cv::Mat())
         {
         }
 
@@ -290,7 +317,7 @@ namespace
                         continue;
                     // Near ties go to the patch centered closest, not the first cast, which made blocks.
                     const double offset2 = static_cast<double>(di) * di + static_cast<double>(dj) * dj;
-                    cast_pair(ys, xs, yt, xt, m_best_only ? weight * (1 - 1e-5 * offset2) : weight);
+                    cast_pair(ys, xs, yt, xt, weight, weight * (1 - 1e-5 * offset2));
                 }
             }
         }
@@ -305,7 +332,7 @@ namespace
                 scale * (std::int64_t{y} + patch_size + 1) - 1, scale * (std::int64_t{x} + patch_size + 1) - 1);
         }
 
-        void cast_pair(int ys, int xs, int yt, int xt, double weight) const
+        void cast_pair(int ys, int xs, int yt, int xt, double weight, double best_weight) const
         {
             if (!m_source2target)
             {
@@ -314,20 +341,41 @@ namespace
             }
             if (!m_upscaled)
             {
-                copy(ys, xs, yt, xt, weight);
+                copy(ys, xs, yt, xt, weight, best_weight);
                 return;
             }
             for (int uy = 0; uy < 2; ++uy)
                 for (int ux = 0; ux < 2; ++ux)
-                    copy(2 * ys + uy, 2 * xs + ux, 2 * yt + uy, 2 * xt + ux, weight);
+                    copy(2 * ys + uy, 2 * xs + ux, 2 * yt + uy, 2 * xt + ux, weight, best_weight);
         }
 
-        void copy(int ys, int xs, int yt, int xt, double weight) const
+        void copy(int ys, int xs, int yt, int xt, double weight, double best_weight) const
         {
             if (m_best_only)
-                _best_copy(*m_source, ys, xs, *m_vote, yt, xt, weight);
+                _best_copy(*m_source, ys, xs, *m_vote, yt, xt, best_weight);
+            else if (m_split)
+                split_copy(ys, xs, yt, xt, weight, best_weight);
             else
                 _weighted_copy(*m_source, ys, xs, *m_vote, yt, xt, weight);
+        }
+
+        // Adds the low frequencies of the source pixel to the sums, and keeps the rest if the vote weighs most.
+        void split_copy(int ys, int xs, int yt, int xt, double weight, double best_weight) const
+        {
+            if (!is_known(*m_source, ys, xs))
+                return;
+
+            const auto *color = m_source->get_image(ys, xs);
+            const auto *low = m_low.ptr<unsigned char>(ys, xs);
+            auto *vote = m_vote->ptr<double>(yt, xt);
+            for (int c = 0; c < 3; ++c)
+                vote[c] += low[c] * weight;
+            vote[3] += weight;
+            if (best_weight <= vote[7])
+                return;
+            for (int c = 0; c < 3; ++c)
+                vote[4 + c] = color[c] - low[c];
+            vote[7] = best_weight;
         }
 
         const NearestNeighborField *m_nnf;
@@ -339,6 +387,9 @@ namespace
         bool m_source2target;
         bool m_upscaled;
         bool m_best_only;
+        // cv::Mat::empty() is not inline in OpenCV 5, too slow to call for every vote
+        bool m_split;
+        cv::Mat m_low; // split votes only
     };
 } // namespace
 
@@ -559,14 +610,10 @@ MaskedImage Inpainting::_expectation_maximization(
             new_target = target.clone();
         }
 
-        auto vote = cv::Mat(new_target.size(), CV_64FC4);
-        vote.setTo(cv::Scalar::all(0));
-
         // The weighted mean of all overlapping patches blurs the fill, so in the last
         // iteration of the finest level each pixel takes the value of its most similar
         // patch instead (similar to "Space-Time Completion of Video", which takes the
-        // mode of the votes). On coarser levels the mean is kept: it lays out the smooth
-        // structure that the finer levels refine, the best vote there makes seams.
+        // mode of the votes). On coarser levels the best vote makes seams.
         const bool best_only = level == 0 && iter_em == nr_iters_em - 1;
 
         // Known pixels are kept on the two finest levels only. On coarser levels those
@@ -575,6 +622,12 @@ MaskedImage Inpainting::_expectation_maximization(
         // smooth regions, e.g. a concrete wall into the foliage above it.
         const int new_level = upscaled ? level - 1 : level;
         const bool keep_known = new_level <= 1;
+
+        // The other votes for these levels average only their low frequencies and add the
+        // detail of the best vote: with the plain mean the fill stayed smooth, and smooth
+        // fills match smooth sources best. On coarser levels the mean lays out the structure.
+        const bool split = keep_known && !best_only;
+        auto vote = cv::Mat(new_target.size(), CV_64FC(split ? kSplitChannels : 4), cv::Scalar::all(0));
 
         // Votes for best patch from NNF Source->Target (completeness) and Target->Source (coherence).
         if (m_source2target)
@@ -645,12 +698,15 @@ void Inpainting::_expectation_step(
 void Inpainting::_maximization_step(
     MaskedImage &target, const cv::Mat &vote, const MaskedImage &source, bool keep_known) const
 {
+    constexpr std::array<double, 3> kNoDetail = {0, 0, 0};
+    const bool split = vote.channels() == kSplitChannels;
     auto target_size = target.size();
     for (int i = 0; i < target_size.height; ++i)
     {
         for (int j = 0; j < target_size.width; ++j)
         {
             const double *source_ptr = vote.ptr<double>(i, j);
+            const double *detail = split ? source_ptr + 4 : kNoDetail.data();
             unsigned char *target_ptr = target.get_mutable_image(i, j);
 
             if (target.is_globally_masked(i, j))
@@ -671,9 +727,9 @@ void Inpainting::_maximization_step(
             if (source_ptr[3] > 0)
             {
                 // All three before the stores: they may alias the votes, which changes the fast-math divisions.
-                const auto r = cv::saturate_cast<unsigned char>(source_ptr[0] / source_ptr[3]);
-                const auto g = cv::saturate_cast<unsigned char>(source_ptr[1] / source_ptr[3]);
-                const auto b = cv::saturate_cast<unsigned char>(source_ptr[2] / source_ptr[3]);
+                const auto r = cv::saturate_cast<unsigned char>(source_ptr[0] / source_ptr[3] + detail[0]);
+                const auto g = cv::saturate_cast<unsigned char>(source_ptr[1] / source_ptr[3] + detail[1]);
+                const auto b = cv::saturate_cast<unsigned char>(source_ptr[2] / source_ptr[3] + detail[2]);
                 target_ptr[0] = r;
                 target_ptr[1] = g;
                 target_ptr[2] = b;
