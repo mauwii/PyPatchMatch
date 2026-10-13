@@ -165,6 +165,28 @@ def test_fill_is_as_detailed_as_its_surroundings(image, hole, patch_size, limit)
     assert evaluation.measure(result, evaluation.white(source))["detail"] > limit
 
 
+def test_no_part_of_the_fill_is_flat():
+    """The finest level linked the left of the hole in chelsea to the blurred fur at
+    the border of the image. That part stayed flat (detail 0.30 in the flattest 16x16
+    block) while the whole fill reached 0.70.
+    """
+    source, result = fill("chelsea.png", evaluation.HOLES["chelsea"], 7)
+    holes = evaluation.white(source)
+    inside = holes & ~evaluation.grow(~holes, 2)
+    around = evaluation.grow(holes, 24) & ~evaluation.grow(holes, 2)
+    ys, xs = np.nonzero(inside)
+    details = []
+    for y in range(ys.min(), ys.max() + 1, 16):
+        for x in range(xs.min(), xs.max() + 1, 16):
+            block = np.zeros_like(inside)
+            block[y : y + 16, x : x + 16] = True
+            block &= inside
+            if block.sum() > 128:
+                details.append(evaluation.neighbor_difference(result, block, block))
+    reference = evaluation.neighbor_difference(result, around, around)
+    assert min(details) / reference > 0.5
+
+
 @pytest.mark.parametrize(
     ("image", "hole", "patch_size", "limit"),
     [

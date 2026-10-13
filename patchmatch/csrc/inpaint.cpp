@@ -340,8 +340,9 @@ namespace
         target_ptr[3] += weight;
     }
 
-    // A split vote: the weighted low frequencies and their weight, the detail of the best vote and its weight.
-    constexpr int kSplitChannels = 8;
+    // A split vote: the weighted low frequencies and their weight, the detail of the best vote and its weight,
+    // and the weighted texture of the source pixels.
+    constexpr int kSplitChannels = 9;
 
     // The mean color of the known pixels around each pixel, the part of the split votes that is averaged.
     cv::Mat low_pass(const MaskedImage &image)
@@ -508,7 +509,8 @@ namespace
                 _weighted_copy(*m_source, ys, xs, *m_vote, yt, xt, weight);
         }
 
-        // Adds the low frequencies of the source pixel to the sums, and keeps the rest if the vote weighs most.
+        // Adds the low frequencies and the texture of the source pixel to the sums, and keeps the rest if the
+        // vote weighs most.
         void split_copy(int ys, int xs, int yt, int xt, double weight, double best_weight) const
         {
             if (!is_known(*m_source, ys, xs))
@@ -520,6 +522,7 @@ namespace
             for (int c = 0; c < 3; ++c)
                 vote[c] += low[c] * weight;
             vote[3] += weight;
+            vote[8] += m_source->texture().at<unsigned char>(ys, xs) * weight;
             if (best_weight <= vote[7])
                 return;
             for (int c = 0; c < 3; ++c)
@@ -540,6 +543,23 @@ namespace
         bool m_split;
         cv::Mat m_low; // split votes only
     };
+
+    // The known texture, and in the holes twice the mean texture of the pixels that the split votes came from:
+    // the distances charge a deficit below half of it, so a fill expects the full texture of its sources.
+    cv::Mat voted_texture(const MaskedImage &source, const cv::Mat &vote)
+    {
+        cv::Mat texture = source.texture().clone();
+        for (int y = 0; y < texture.rows; ++y)
+        {
+            for (int x = 0; x < texture.cols; ++x)
+            {
+                const auto *sums = vote.ptr<double>(y, x);
+                if (is_hole(source, y, x) && sums[3] > 0)
+                    texture.at<unsigned char>(y, x) = cv::saturate_cast<unsigned char>(2 * sums[8] / sums[3]);
+            }
+        }
+        return texture;
+    }
 } // namespace
 
 /**
@@ -773,8 +793,6 @@ MaskedImage Inpainting::_expectation_maximization(
             new_source = m_pyramid[level];
             new_target = target.clone();
         }
-        // The fill expects the texture of its level: the known one, or that around the holes.
-        new_target.set_texture(new_source.texture());
 
         // The weighted mean of all overlapping patches blurs the fill, so in the last
         // iteration of the finest level each pixel takes the value of its most similar
@@ -807,6 +825,11 @@ MaskedImage Inpainting::_expectation_maximization(
         // Compile votes and update pixel values.
         _maximization_step(new_target, vote, new_source, keep_known);
         trace(verbose, "  Minimization step finished.");
+
+        // The fill expects the texture of its level: the known one, or that around the holes. On level 0
+        // that of the sources chosen on level 1: with the texture around the holes, the search there took
+        // blurred sources beside detailed surroundings, and parts of the fill stayed flat.
+        new_target.set_texture(upscaled && level == 1 ? voted_texture(new_source, vote) : new_source.texture());
     }
 
     return new_target;
