@@ -81,19 +81,20 @@ again.
   fills got worse), and choosing by the depth of the hole (the same for the failing
   pattern and the forest holes).
 - Split votes (mean of the low frequencies plus the detail of the best vote) on coarser
-  levels than the two finest: from level 2 on they helped coffee with `patch_size` 3, but
-  raised the error of brick with 7 from 6.96 to 8.99 and of brick-global from 6.30 to
-  7.82. A low pass wider than 3x3 gained nothing with `patch_size` 7. Also rejected
-  against #148 (smooth sources for smooth fills): comparing the hole pixels of the fill
-  with the low pass of the sources and without gradients (brick 8.6 → 15.7, the mortar
-  got lost), and a penalty for sources with less gradient energy than the ring around
-  the holes (coffee with 7 improved, chelsea 14.8 → 19.8 and grass 18.9 → 25.4). With
-  the energy of the known pixels around each patch as the reference instead, it copied
-  salient sources such as a clover into grass (25.8) on the coarse levels; on levels 0
-  and 1 alone it had the best numbers with 7 (coffee detail 0.35 → 1.09, error 19.2 →
-  17.8, brick 7.6 → 9.0), but filled the holes with hard-edged blocks of differently
-  oriented fur and specks in the bricks. A band that also penalizes sources with more
-  energy did not help grass.
+  levels than the two finest: from level 2 on they helped coffee with `patch_size` 3,
+  but raised the error of brick with 7 from 6.96 to 8.99 and of brick-global from 6.30
+  to 7.82; `edges` agrees (#157, with 15: coffee 6.59 → 8.59, grass 7.00 → 8.28). A low
+  pass wider than 3x3 gained nothing with `patch_size` 7. Also rejected against #148
+  (smooth sources for smooth fills): comparing the hole pixels of the fill with the low
+  pass of the sources and without gradients (brick 8.6 → 15.7, the mortar got lost), and
+  a penalty for sources with less gradient energy than the ring around the holes (coffee
+  with 7 improved, chelsea 14.8 → 19.8 and grass 18.9 → 25.4). With the energy of the
+  known pixels around each patch as the reference instead, it copied salient sources
+  such as a clover into grass (25.8) on the coarse levels; on levels 0 and 1 alone it
+  had the best numbers with 7 (coffee detail 0.35 → 1.09, error 19.2 → 17.8, brick 7.6 →
+  9.0), but filled the holes with hard-edged blocks of differently oriented fur and
+  specks in the bricks. A band that also penalizes sources with more energy did not help
+  grass.
 - Other forms of the texture deficit in `RowPair::cost`: a texture channel voted like
   the colors on every level (Newson et al. 2014) takes the texture of whatever the
   coarse levels chose (coffee with 7 copied the reddish wood beside the saucer, error
@@ -111,8 +112,17 @@ again.
   raised brick with 15 from 6.1 to 6.4; the texture of the best vote instead of the
   mean was slightly worse.
 - The fitting metrics without the minimum of 7: with `patch_size` 7, brick rose from
-  6.8 to 8.2 and grass from 18.8 to 21.3. A fourth or an eighth of the smaller side
-  instead of a sixth: mean error ratio with 15 of 0.849 and 0.846 instead of 0.835.
+  6.8 to 8.2 and grass from 18.8 to 21.3. A minimum of 4 did not help brick-large
+  either (#157, `edges` with 15: 4.59 → 5.11; brick with 7: 2.96 → 3.88). A fourth or
+  an eighth of the smaller side instead of a sixth: mean error ratio with 15 of 0.849
+  and 0.846 instead of 0.835.
+- Rotated sources (generalized PatchMatch, Barnes et al. 2010) for the perspective wall
+  of brick-large, simulated with rotated copies of the image as extra sources: the
+  stripes kept their missing joints, and the error rose with every patch size.
+- A penalty for the distance between a patch and its source, so that the inside of a
+  large hole continues the nearest border: brick-large continued each side but got
+  seams where they met; with a weight of 200 grass, trees, pattern-wide and
+  brick-global got worse, with 500 pattern-wide with 3 broke (error 5.31 → 44.50).
 - More, with measurements, in the issues closed as not planned: #115 (start radius of
-  the new-hole search, merging random fields), #120 (several cores) and #124 (confidence
-  weighting for large holes).
+  the new-hole search, merging random fields), #120 (several cores), #124 (confidence
+  weighting for large holes) and #157 (stripes in brick-large: rotation, locality).
