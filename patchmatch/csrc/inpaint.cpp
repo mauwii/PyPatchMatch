@@ -171,8 +171,8 @@ namespace
     {
         const double cy = std::clamp((y + 0.5) / 2 - 0.5, 0.0, coarse.rows - 1.0);
         const double cx = std::clamp((x + 0.5) / 2 - 0.5, 0.0, coarse.cols - 1.0);
-        const int y0 = static_cast<int>(cy);
-        const int x0 = static_cast<int>(cx);
+        const auto y0 = static_cast<int>(cy);
+        const auto x0 = static_cast<int>(cx);
         const int y1 = std::min(y0 + 1, coarse.rows - 1);
         const int x1 = std::min(x0 + 1, coarse.cols - 1);
         const double fy = cy - y0;
