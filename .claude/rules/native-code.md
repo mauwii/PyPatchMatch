@@ -123,6 +123,23 @@ again.
   large hole continues the nearest border: brick-large continued each side but got
   seams where they met; with a weight of 200 grass, trees, pattern-wide and
   brick-global got worse, with 500 pattern-wide with 3 broke (error 5.31 → 44.50).
+- Weighting the votes with `exp(-d / 2p)`, p a percentile of the distances of the field
+  (Wexler et al. 2007), instead of `distance2similarity`, which gives every match up to
+  an RMS error of about 40 per channel a weight of 0.90 or more: on all averaged votes
+  or on the coarse levels only, with the median or the 75th percentile, the mean error
+  stayed within 2 % (10 seeds). Like the split votes on coarser levels, it helped brick
+  with 3 (10.66 → 9.07) and hurt it with 7 (6.75 → 7.67, brick-global 6.06 → 7.14).
+- Spreading the color steps at the border over the whole hole with `pull_push` (a
+  membrane, as in seamless cloning) instead of the ramp of `blend_hole_borders`: camera
+  improved a lot (with 7: 7.94 → 4.28, with 15: 8.89 → 3.79), so its fill is off in
+  color as a whole, but in textures the steps are noise that shifted the whole fill
+  (grass with 15: 18.56 → 23.66, pattern with 7: 2.50 → 4.38); the mean error rose by
+  0.5, 3.2 and 6.3 % with 3, 7 and 15. With the raw steps instead of their mean along
+  the border, the seam fell below that of the originals (0.69 to 0.76).
+- Not tried: starting the holes of the coarsest level smoothly instead of black. No case
+  of the evaluation keeps a hole there, as the downsampling shrinks them; only
+  outpainting of a third to half of the image with 7 or 15, or a hole over 75 % of the
+  image with 15, does.
 - More, with measurements, in the issues closed as not planned: #115 (start radius of
   the new-hole search, merging random fields), #120 (several cores), #124 (confidence
   weighting for large holes) and #157 (stripes in brick-large: rotation, locality).
