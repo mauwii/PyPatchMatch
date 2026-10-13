@@ -36,15 +36,21 @@ def surrounding(mask: np.ndarray, width: int = 10) -> np.ndarray:
 
 
 def assert_plausible_fill(
-    source: np.ndarray, result: np.ndarray, excluded: np.ndarray | None = None
+    source: np.ndarray,
+    result: np.ndarray,
+    excluded: np.ndarray | None = None,
+    holes: np.ndarray | None = None,
 ) -> None:
     """Check an inpainting result of ``source`` without a ground truth image.
 
-    ``excluded`` marks the pixels of a global mask, which are not filled.
+    ``excluded`` marks the pixels of a global mask, which are not filled. ``holes``
+    defaults to the white pixels of ``source``.
     """
     if excluded is None:
         excluded = np.zeros(source.shape[:2], dtype=bool)
-    holes = evaluation.white(source) & ~excluded
+    if holes is None:
+        holes = evaluation.white(source)
+    holes = holes & ~excluded
     assert holes.any()
     assert result.shape == source.shape
     assert result.dtype == np.uint8
@@ -128,6 +134,16 @@ def test_global_mask_is_not_used_as_source(pruned_image):
     assert not red_in_hole(result)
     excluded = global_mask == 1
     np.testing.assert_array_equal(result[excluded], source[excluded])
+
+
+def test_restore_aged_photo():
+    """Scratches, holes and a torn corner, light but not white, given as a mask."""
+    source = Image.open(IMAGES / "camera_damaged.png")
+    mask = Image.open(IMAGES / "camera_damaged_mask.png")
+
+    result = patchmatch.inpaint(source, mask, patch_size=3)
+
+    assert_plausible_fill(np.array(source), result, holes=np.array(mask) > 0)
 
 
 @pytest.mark.parametrize(

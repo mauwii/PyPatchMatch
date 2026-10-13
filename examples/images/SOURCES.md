@@ -6,6 +6,11 @@ scikit-image 0.26 (`skimage.data`), which documents their sources and licenses; 
 `grass` and `gravel` are grayscale. `pattern.png` is not CC0, so keep it out of the
 sdist.
 
+`camera_aged.png` is aged like an old print, with sepia, grain, fading and a vignette.
+`camera_damaged.png` adds scratches, a crease, holes, dust and a torn corner. The damage
+is not white, so pass `camera_damaged_mask.png` (255 = damage, 3.5 % of the pixels) as
+the mask.
+
 | File | Content | Source | License |
 | --- | --- | --- | --- |
 | `brick.png` | brick wall | [CC0Textures, Bricks25](https://cc0textures.com/view.php?tex=Bricks25) (now ambientCG), transformed, cropped and scaled by scikit-image | CC0 1.0 |
@@ -13,4 +18,5 @@ sdist.
 | `gravel.png` | gravel | [CC0Textures, Gravel04](https://cc0textures.com/view.php?tex=Gravel04) (now ambientCG), scaled and cropped by scikit-image | CC0 1.0 |
 | `coffee.png` | coffee cup | photograph by Rachel Michetti, courtesy of Pikolo Espresso Bar | CC0 1.0 |
 | `chelsea.png` | Chelsea the cat | photograph by Stefan van der Walt | CC0 1.0 |
+| `camera_aged.png` | cameraman with a tripod | `skimage.data.camera()`, photograph by Lav Varshney, aged | CC0 1.0 |
 | `pattern.png` | repeating pattern of circles | [Pixabay, illustration 9825482](https://pixabay.com/illustrations/repeat-pattern-design-seamless-9825482/), scaled from 1280 to 640 pixels and reduced to 256 colors | [Pixabay Content License](https://pixabay.com/service/license-summary/) |
