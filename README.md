@@ -108,7 +108,13 @@ uv run pre-commit install      # enable ruff and the other hooks on commit
 uv run pytest                  # run the test suite
 uv run pytest -m "not e2e"     # only the fast unit tests
 uv run python scripts/evaluate_inpainting.py  # measure the fill quality
+uv run --group gui gui/app.py  # draw masks in the browser, http://127.0.0.1:7860
 ```
+
+The GUI tries new images quickly, without writing a script for each one, e.g. to pick
+new examples or to verify edge cases: load an image, paint the holes (every painted
+pixel is one) and compare the original with the fill. Its test runs with
+`uv run --group gui pytest gui --no-cov`.
 
 The evaluation cuts holes into the images of `examples/images`, compares the fills with
 the original content and writes `examples/images/evaluation.html`, which shows them side
