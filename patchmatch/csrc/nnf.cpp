@@ -88,7 +88,7 @@ namespace
                 return PatchSSDDistanceMetric::kSSDScale;
             const unsigned char *s = m_source + static_cast<std::ptrdiff_t>(xs) * MaskedImage::kFeatureChannels;
             const unsigned char *t = m_target + static_cast<std::ptrdiff_t>(xt) * MaskedImage::kFeatureChannels;
-            if (s[MaskedImage::kMaskedFeature] | t[MaskedImage::kMaskedFeature])
+            if (s[MaskedImage::kMaskedFeature] || t[MaskedImage::kMaskedFeature])
                 return PatchSSDDistanceMetric::kSSDScale;
 
             int ssd = 0;
