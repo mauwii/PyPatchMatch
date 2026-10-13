@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-26.04, macos-latest, windows-latest]
         # newest supported Python; the ctypes library is version independent, and the
         # oldest is covered by the job lowest and the wheel tests (cp311)
         python-version: ["3.15"]
@@ -76,7 +76,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.OpenCV_ROOT }}
-          key: opencv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_opencv.py') }}
+          key: opencv-u2604-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_opencv.py') }}
 
       # the project needs OpenCV to build, so only the locked test group
       - &opencv-build
@@ -88,7 +88,7 @@ jobs:
       - run: uv run --locked --no-build --no-default-groups --group test pytest
 
   sanitizers:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: ${{ contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name) && 90 || 30 }}
     env:
       SKBUILD_CMAKE_DEFINE: PATCHMATCH_SANITIZE=ON
@@ -116,7 +116,7 @@ jobs:
           UBSAN_OPTIONS: print_stacktrace=1
 
   coverage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
       SKBUILD_CMAKE_DEFINE: PATCHMATCH_COVERAGE=ON;CMAKE_EXPORT_COMPILE_COMMANDS=ON
@@ -150,7 +150,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   lowest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
       - *checkout
@@ -182,7 +182,7 @@ jobs:
   ci-ok:
     if: always()
     needs: [lint, test, sanitizers, coverage, lowest, system-opencv]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0

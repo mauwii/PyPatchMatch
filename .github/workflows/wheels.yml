@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   sdist:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,7 +51,7 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-latest
+          - ubuntu-26.04
           - ubuntu-24.04-arm
           - macos-latest
           - macos-15-intel
@@ -120,7 +120,7 @@ jobs:
   # reaches the publish job.
   sdist-fallback:
     needs: sdist
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -147,7 +147,7 @@ jobs:
   wheels-ok:
     if: always()
     needs: [sdist, wheels, sdist-fallback]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
@@ -157,7 +157,7 @@ jobs:
   publish:
     needs: [wheels, sdist, sdist-fallback]
     if: github.event_name == 'release' && github.repository == 'mauwii/PyPatchMatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     environment:
       name: pypi
