@@ -64,11 +64,15 @@ jobs:
           prune-cache: true
           python-version: ${{ matrix.python-version }}
 
-      # actions/cache rejects ".." in paths, and the job env has no runner context
+      # actions/cache rejects ".." in paths, and the job env has no runner context.
+      # ImageOS (ubuntu24, win25) keeps an OpenCV built on a newer image off older ones
+      # while a -latest label migrates; the env context lacks it as well.
       - &opencv-root
         name: Set OpenCV_ROOT
         shell: bash
-        run: echo "OpenCV_ROOT=$RUNNER_TEMP/opencv" >> "$GITHUB_ENV"
+        run: |
+          echo "OpenCV_ROOT=$RUNNER_TEMP/opencv" >> "$GITHUB_ENV"
+          echo "ImageOS=$ImageOS" >> "$GITHUB_ENV"
 
       - &opencv-cache
         name: Cache OpenCV
@@ -76,7 +80,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.OpenCV_ROOT }}
-          key: opencv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_opencv.py') }}
+          key: opencv-${{ runner.os }}-${{ env.ImageOS }}-${{ runner.arch }}-${{ hashFiles('scripts/build_opencv.py') }}
 
       # the project needs OpenCV to build, so only the locked test group
       - &opencv-build
