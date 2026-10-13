@@ -94,6 +94,17 @@ again.
   17.8, brick 7.6 → 9.0), but filled the holes with hard-edged blocks of differently
   oriented fur and specks in the bricks. A band that also penalizes sources with more
   energy did not help grass.
+- Other forms of the texture deficit in `RowPair::cost`: a texture channel voted like
+  the colors (Newson et al. 2014) takes the texture of whatever the coarse levels chose
+  (coffee with 7 copied the reddish wood beside the saucer, error 19.2 → 22.4); a
+  two-sided squared difference prescribes the mean texture and drops sparse structures
+  such as mortar joints (brick with 3: 10.0 → 11.8), also with windows of 13x13 and
+  25x25. A margin of 3/4 or a weight of 4 broke pattern with 3 (5.4 → 14.1); a weight
+  of 1 and windows from 9x9 to 33x33 were within the noise. brick-global with 3 looked
+  worse with 10 seeds (5.8 → 6.8), but main has 6.8 ± 0.3 with 40.
+- The fitting metrics without the minimum of 7: with `patch_size` 7, brick rose from
+  6.8 to 8.2 and grass from 18.8 to 21.3. A fourth or an eighth of the smaller side
+  instead of a sixth: mean error ratio with 15 of 0.849 and 0.846 instead of 0.835.
 - More, with measurements, in the issues closed as not planned: #115 (start radius of
   the new-hole search, merging random fields), #120 (several cores) and #124 (confidence
   weighting for large holes).

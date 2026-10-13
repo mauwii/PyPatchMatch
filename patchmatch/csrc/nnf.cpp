@@ -52,7 +52,7 @@ namespace
     {
         ImagePair(const MaskedImage &source_image, const MaskedImage &target_image)
             : source(&source_image), target(&target_image), source_size(source_image.size()),
-              target_size(target_image.size())
+              target_size(target_image.size()), textured(source_image.has_texture() && target_image.has_texture())
         {
         }
 
@@ -65,6 +65,7 @@ namespace
         const MaskedImage *target;
         cv::Size source_size;
         cv::Size target_size;
+        bool textured;
     };
 
     // One row of a source and a target image, both inside their images. The gradients must be computed.
@@ -84,7 +85,9 @@ namespace
               m_sgy(images.source->grady().ptr<unsigned char>(ys, 0)),
               m_tgy(images.target->grady().ptr<unsigned char>(yt, 0)),
               m_sgx(images.source->gradx().ptr<unsigned char>(ys, 0)),
-              m_tgx(images.target->gradx().ptr<unsigned char>(yt, 0))
+              m_tgx(images.target->gradx().ptr<unsigned char>(yt, 0)),
+              m_st(images.textured ? images.source->texture().ptr<unsigned char>(ys) : nullptr),
+              m_tt(images.textured ? images.target->texture().ptr<unsigned char>(yt) : nullptr)
         {
         }
 
@@ -103,6 +106,10 @@ namespace
                 ssd += pow2(m_sgx[xs * 3 + c] - m_tgx[xt * 3 + c]);
                 ssd += pow2(m_sgy[xs * 3 + c] - m_tgy[xt * 3 + c]);
             }
+            // Smooth fills matched smooth sources and stayed flat, so a target pixel with less than half the
+            // texture of its source pixel costs extra. Not a two-sided difference: it removed mortar joints.
+            if (m_st)
+                ssd += 2 * pow2(std::max(m_st[xs] / 2 - m_tt[xt], 0));
             return ssd;
         }
 
@@ -119,6 +126,8 @@ namespace
         const unsigned char *m_tgy;
         const unsigned char *m_sgx;
         const unsigned char *m_tgx;
+        const unsigned char *m_st; // the textures, nullptr unless both images have one
+        const unsigned char *m_tt;
     };
 
     // The costs of the row of the patches around s and t.

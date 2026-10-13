@@ -131,19 +131,21 @@ def test_global_mask_is_not_used_as_source(pruned_image):
 
 
 @pytest.mark.parametrize(
-    ("image", "hole", "limit"),
+    ("image", "hole", "patch_size", "limit"),
     [
-        ("forest_pruned.bmp", None, 0.8),
-        ("chelsea.png", evaluation.HOLES["chelsea"], 0.7),
+        ("forest_pruned.bmp", None, 3, 0.8),
+        ("chelsea.png", evaluation.HOLES["chelsea"], 3, 0.7),
+        ("chelsea.png", evaluation.HOLES["chelsea"], 15, 0.4),
     ],
 )
-def test_fill_is_as_detailed_as_its_surroundings(image, hole, limit):
+def test_fill_is_as_detailed_as_its_surroundings(image, hole, patch_size, limit):
     """The weighted mean of all overlapping patches blurred the fill (detail 0.69).
 
     On the finer levels it kept the fill of the fur in chelsea smooth, which then
-    matched smooth sources best (detail 0.40).
+    matched smooth sources best (detail 0.40). With patch size 15, the coarser levels
+    already took smooth sources, which look like fur once downsampled (detail 0.29).
     """
-    source, result = fill(image, hole, 3)
+    source, result = fill(image, hole, patch_size)
     assert evaluation.measure(result, evaluation.white(source))["detail"] > limit
 
 
@@ -200,13 +202,22 @@ def test_explicit_mask_matches_implicit_white_mask(pruned_image):
     np.testing.assert_array_equal(explicit, fill("forest_pruned.bmp", None, 3)[1])
 
 
-# Regions of pure background in forest_pruned.bmp as (y, x, height, width).
-BACKGROUND_REGIONS = [(20, 400, 60, 80), (40, 520, 60, 60)]
+# Regions of pure background in forest_pruned.bmp as (y, x, height, width), with the
+# patch size to fill them.
+BACKGROUND_REGIONS = [
+    ((20, 400, 60, 80), 3),
+    ((40, 520, 60, 60), 3),
+    ((25, 505, 90, 110), 15),
+]
 
 
-@pytest.mark.parametrize("region", BACKGROUND_REGIONS)
-def test_reconstructs_known_background(pruned_image, region):
-    """Cut a hole into known background and compare with the original pixels."""
+@pytest.mark.parametrize(("region", "patch_size"), BACKGROUND_REGIONS)
+def test_reconstructs_known_background(pruned_image, region, patch_size):
+    """Cut a hole into known background and compare with the original pixels.
+
+    With patch size 15, the coarser levels found no sources inside the image and
+    outside the hole, and the trees got a lighter patch (0.90 of the naive error).
+    """
     truth = np.array(pruned_image)
     y, x, height, width = region
     mask = np.zeros(truth.shape[:2], dtype=bool)
@@ -215,7 +226,7 @@ def test_reconstructs_known_background(pruned_image, region):
 
     source = truth.copy()
     source[mask] = 255
-    result = patchmatch.inpaint(source, mask.astype(np.uint8), patch_size=3)
+    result = patchmatch.inpaint(source, mask.astype(np.uint8), patch_size=patch_size)
 
     # baseline: fill the hole with the mean color of its surroundings
     naive = source.copy()
