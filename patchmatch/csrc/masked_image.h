@@ -24,10 +24,12 @@ public:
     MaskedImage &operator=(MaskedImage &&) noexcept = default;
     ~MaskedImage() = default;
 
-    // Without the gradients, which would be outdated once the clone is changed.
+    // Without the gradients, which would be outdated once the clone is changed. It shares the texture.
     MaskedImage clone() const
     {
-        return MaskedImage(m_image.clone(), m_mask.clone(), m_global_mask.clone());
+        MaskedImage copy(m_image.clone(), m_mask.clone(), m_global_mask.clone());
+        copy.set_texture(m_texture);
+        return copy;
     }
 
     cv::Size size() const
@@ -59,6 +61,22 @@ public:
     {
         assert(m_image_grad_computed);
         return m_image_gradx;
+    }
+
+    // The texture energy that the distances compare (CV_8UC1, see Inpainting), or empty.
+    // It is never changed, and the resampling does not carry it over.
+    const cv::Mat &texture() const
+    {
+        return m_texture;
+    }
+    bool has_texture() const
+    {
+        return m_has_texture;
+    }
+    void set_texture(const cv::Mat &texture)
+    {
+        m_texture = texture;
+        m_has_texture = !texture.empty();
     }
 
     void init_global_mask_mat()
@@ -118,8 +136,10 @@ private:
     cv::Mat m_image;
     cv::Mat m_mask;
     cv::Mat m_global_mask;
+    cv::Mat m_texture;
     // cv::Mat::empty() is not inline in OpenCV 5, too slow to call for every pixel
     bool m_has_global_mask = false;
+    bool m_has_texture = false;
     // computed on first use by compute_image_gradients
     mutable cv::Mat m_image_grady;
     mutable cv::Mat m_image_gradx;

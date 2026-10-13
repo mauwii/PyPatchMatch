@@ -131,19 +131,21 @@ def test_global_mask_is_not_used_as_source(pruned_image):
 
 
 @pytest.mark.parametrize(
-    ("image", "hole", "limit"),
+    ("image", "hole", "patch_size", "limit"),
     [
-        ("forest_pruned.bmp", None, 0.8),
-        ("chelsea.png", evaluation.HOLES["chelsea"], 0.7),
+        ("forest_pruned.bmp", None, 3, 0.8),
+        ("chelsea.png", evaluation.HOLES["chelsea"], 3, 0.7),
+        ("chelsea.png", evaluation.HOLES["chelsea"], 15, 0.4),
     ],
 )
-def test_fill_is_as_detailed_as_its_surroundings(image, hole, limit):
+def test_fill_is_as_detailed_as_its_surroundings(image, hole, patch_size, limit):
     """The weighted mean of all overlapping patches blurred the fill (detail 0.69).
 
     On the finer levels it kept the fill of the fur in chelsea smooth, which then
-    matched smooth sources best (detail 0.40).
+    matched smooth sources best (detail 0.40). With patch size 15, the coarser levels
+    already took smooth sources, which look like fur once downsampled (detail 0.29).
     """
-    source, result = fill(image, hole, 3)
+    source, result = fill(image, hole, patch_size)
     assert evaluation.measure(result, evaluation.white(source))["detail"] > limit
 
 

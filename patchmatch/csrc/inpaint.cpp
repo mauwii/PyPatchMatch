@@ -92,6 +92,150 @@ namespace
         return false;
     }
 
+    // The gradient magnitude at a known pixel, summed over the channels, or -1 if it or a neighbor is unknown.
+    double gradient_magnitude(const MaskedImage &image, int y, int x)
+    {
+        const auto size = image.size();
+        const int up = std::max(y - 1, 0);
+        const int down = std::min(y + 1, size.height - 1);
+        const int left = std::max(x - 1, 0);
+        const int right = std::min(x + 1, size.width - 1);
+        if (!is_known(image, y, x) || !is_known(image, up, x) || !is_known(image, down, x) ||
+            !is_known(image, y, left) || !is_known(image, y, right))
+            return -1;
+        int magnitude = 0;
+        for (int c = 0; c < 3; ++c)
+            magnitude += std::abs(image.get_image(down, x)[c] - image.get_image(up, x)[c]) +
+                         std::abs(image.get_image(y, right)[c] - image.get_image(y, left)[c]);
+        return magnitude / 2.0;
+    }
+
+    // The mean gradient magnitude around each known pixel, -1 elsewhere or without one. Gradients
+    // across unknown pixels are left out, so the colors under the holes do not matter.
+    cv::Mat texture_energy(const MaskedImage &image)
+    {
+        constexpr int kRadius = 2;
+        const auto size = image.size();
+        // above and left of each pixel: the sum of the magnitudes and their number
+        cv::Mat sums(size.height + 1, size.width + 1, CV_64FC2, cv::Scalar::all(0));
+        for (int y = 0; y < size.height; ++y)
+        {
+            for (int x = 0; x < size.width; ++x)
+            {
+                const double magnitude = gradient_magnitude(image, y, x);
+                const cv::Vec2d measured = magnitude >= 0 ? cv::Vec2d(magnitude, 1) : cv::Vec2d();
+                sums.at<cv::Vec2d>(y + 1, x + 1) =
+                    measured + sums.at<cv::Vec2d>(y, x + 1) + sums.at<cv::Vec2d>(y + 1, x) - sums.at<cv::Vec2d>(y, x);
+            }
+        }
+
+        cv::Mat energy(size, CV_64F, cv::Scalar(-1));
+        for (int y = 0; y < size.height; ++y)
+        {
+            const int top = std::max(y - kRadius, 0);
+            const int bottom = std::min(y + kRadius + 1, size.height);
+            for (int x = 0; x < size.width; ++x)
+            {
+                const int left = std::max(x - kRadius, 0);
+                const int right = std::min(x + kRadius + 1, size.width);
+                const cv::Vec2d window = sums.at<cv::Vec2d>(bottom, right) - sums.at<cv::Vec2d>(top, right) -
+                                         sums.at<cv::Vec2d>(bottom, left) + sums.at<cv::Vec2d>(top, left);
+                if (is_known(image, y, x) && window[1] > 0)
+                    energy.at<double>(y, x) = window[0] / window[1];
+            }
+        }
+        return energy;
+    }
+
+    // The mean of the values >= 0 in the 2x2 block from (y, x), -1 if there is none.
+    double block_mean(const cv::Mat &values, int y, int x)
+    {
+        double sum = 0;
+        int count = 0;
+        for (int yy = y; yy < std::min(y + 2, values.rows); ++yy)
+        {
+            for (int xx = x; xx < std::min(x + 2, values.cols); ++xx)
+            {
+                if (values.at<double>(yy, xx) >= 0)
+                {
+                    sum += values.at<double>(yy, xx);
+                    ++count;
+                }
+            }
+        }
+        return count > 0 ? sum / count : -1;
+    }
+
+    // The value of coarse, which has half the resolution, at the center of pixel (y, x), bilinear.
+    double interpolate(const cv::Mat &coarse, int y, int x)
+    {
+        const double cy = std::clamp((y + 0.5) / 2 - 0.5, 0.0, coarse.rows - 1.0);
+        const double cx = std::clamp((x + 0.5) / 2 - 0.5, 0.0, coarse.cols - 1.0);
+        const int y0 = static_cast<int>(cy);
+        const int x0 = static_cast<int>(cx);
+        const int y1 = std::min(y0 + 1, coarse.rows - 1);
+        const int x1 = std::min(x0 + 1, coarse.cols - 1);
+        const double fy = cy - y0;
+        const double fx = cx - x0;
+        return (1 - fy) * ((1 - fx) * coarse.at<double>(y0, x0) + fx * coarse.at<double>(y0, x1)) +
+               fy * ((1 - fx) * coarse.at<double>(y1, x0) + fx * coarse.at<double>(y1, x1));
+    }
+
+    // Not std::all_of: libstdc++ subtracts the iterators, which divides by zero for an empty cv::Mat.
+    bool has_unknown(const cv::Mat &values)
+    {
+        for (int y = 0; y < values.rows; ++y)
+            for (int x = 0; x < values.cols; ++x)
+                if (values.at<double>(y, x) < 0)
+                    return true;
+        return false;
+    }
+
+    // Replaces the values below 0 from a pyramid of the others (pull-push), which carries the
+    // values around a hole smoothly into it.
+    void pull_push(cv::Mat &values)
+    {
+        if (!has_unknown(values))
+            return;
+        if (values.total() == 1)
+        {
+            values.at<double>(0, 0) = 0; // nothing is known
+            return;
+        }
+        cv::Mat coarse((values.rows + 1) / 2, (values.cols + 1) / 2, CV_64F);
+        for (int y = 0; y < coarse.rows; ++y)
+            for (int x = 0; x < coarse.cols; ++x)
+                coarse.at<double>(y, x) = block_mean(values, 2 * y, 2 * x);
+        pull_push(coarse);
+        for (int y = 0; y < values.rows; ++y)
+        {
+            for (int x = 0; x < values.cols; ++x)
+            {
+                if (values.at<double>(y, x) < 0)
+                    values.at<double>(y, x) = interpolate(coarse, y, x);
+            }
+        }
+    }
+
+    // The texture of the next level: the means of the 2x2 blocks.
+    cv::Mat halve(const cv::Mat &values, cv::Size size)
+    {
+        cv::Mat half(size, CV_64F);
+        for (int y = 0; y < size.height; ++y)
+            for (int x = 0; x < size.width; ++x)
+                half.at<double>(y, x) = block_mean(values, 2 * y, 2 * x);
+        return half;
+    }
+
+    cv::Mat to_bytes(const cv::Mat &values)
+    {
+        cv::Mat bytes(values.size(), CV_8U);
+        for (int y = 0; y < values.rows; ++y)
+            for (int x = 0; x < values.cols; ++x)
+                bytes.at<unsigned char>(y, x) = cv::saturate_cast<unsigned char>(values.at<double>(y, x));
+        return bytes;
+    }
+
     // A patch smaller than a structure cannot tell where it continues: on the coarsest level
     // with a hole, holes wider than the patches were filled from several shifted copies.
     constexpr int kCoarsePatchSize = 5;
@@ -434,6 +578,17 @@ void Inpainting::_initialize_pyramid()
         m_pyramid.push_back(source);
     }
 
+    // The coarser levels cannot tell blurred from sharp sources by their colors, so every level
+    // compares the texture of the finest one, carried into the holes from their surroundings.
+    cv::Mat texture = texture_energy(m_pyramid[0]);
+    pull_push(texture);
+    for (std::size_t level = 0; level < m_pyramid.size(); ++level)
+    {
+        if (level > 0)
+            texture = halve(texture, m_pyramid[level].size());
+        m_pyramid[level].set_texture(to_bytes(texture));
+    }
+
     for (int level = 0; level < static_cast<int>(m_pyramid.size()); ++level)
     {
         if (has_hole(m_pyramid[level]))
@@ -609,6 +764,8 @@ MaskedImage Inpainting::_expectation_maximization(
             new_source = m_pyramid[level];
             new_target = target.clone();
         }
+        // The fill expects the texture of its level: the known one, or that around the holes.
+        new_target.set_texture(new_source.texture());
 
         // The weighted mean of all overlapping patches blurs the fill, so in the last
         // iteration of the finest level each pixel takes the value of its most similar
