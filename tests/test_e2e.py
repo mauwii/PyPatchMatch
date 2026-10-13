@@ -202,13 +202,22 @@ def test_explicit_mask_matches_implicit_white_mask(pruned_image):
     np.testing.assert_array_equal(explicit, fill("forest_pruned.bmp", None, 3)[1])
 
 
-# Regions of pure background in forest_pruned.bmp as (y, x, height, width).
-BACKGROUND_REGIONS = [(20, 400, 60, 80), (40, 520, 60, 60)]
+# Regions of pure background in forest_pruned.bmp as (y, x, height, width), with the
+# patch size to fill them.
+BACKGROUND_REGIONS = [
+    ((20, 400, 60, 80), 3),
+    ((40, 520, 60, 60), 3),
+    ((25, 505, 90, 110), 15),
+]
 
 
-@pytest.mark.parametrize("region", BACKGROUND_REGIONS)
-def test_reconstructs_known_background(pruned_image, region):
-    """Cut a hole into known background and compare with the original pixels."""
+@pytest.mark.parametrize(("region", "patch_size"), BACKGROUND_REGIONS)
+def test_reconstructs_known_background(pruned_image, region, patch_size):
+    """Cut a hole into known background and compare with the original pixels.
+
+    With patch size 15, the coarser levels found no sources inside the image and
+    outside the hole, and the trees got a lighter patch (0.90 of the naive error).
+    """
     truth = np.array(pruned_image)
     y, x, height, width = region
     mask = np.zeros(truth.shape[:2], dtype=bool)
@@ -217,7 +226,7 @@ def test_reconstructs_known_background(pruned_image, region):
 
     source = truth.copy()
     source[mask] = 255
-    result = patchmatch.inpaint(source, mask.astype(np.uint8), patch_size=3)
+    result = patchmatch.inpaint(source, mask.astype(np.uint8), patch_size=patch_size)
 
     # baseline: fill the hole with the mean color of its surroundings
     naive = source.copy()

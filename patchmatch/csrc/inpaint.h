@@ -35,7 +35,9 @@ private:
     const PatchDistanceMetric *m_distance_metric;
     // Searches on the levels that lay out the fill, if patch_size is smaller than kCoarsePatchSize.
     std::unique_ptr<PatchDistanceMetric> m_coarse_metric;
+    // Per level: smaller patches where patch_size does not fit, otherwise nullptr.
+    std::vector<std::unique_ptr<PatchDistanceMetric>> m_fitting_metrics;
     int m_coarsest_hole_level = -1;
-    // Searches on the current level; the votes use patch_size.
+    // Searches on the current level; the votes use the smaller of its patch size and patch_size.
     const PatchDistanceMetric *m_level_metric = nullptr;
 };

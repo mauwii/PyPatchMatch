@@ -240,6 +240,11 @@ namespace
     // with a hole, holes wider than the patches were filled from several shifted copies.
     constexpr int kCoarsePatchSize = 5;
 
+    // A patch wider than a sixth of a level found no sources there inside the image and outside
+    // the holes, and the fill stayed flat. Patches up to 7 keep their size: smaller ones lost the joints of bricks.
+    constexpr int kLevelSidesPerPatch = 6;
+    constexpr int kMinFittingPatchSize = 7;
+
     int nnf_iterations(int level)
     {
         return std::min(7, 1 + level);
@@ -593,6 +598,10 @@ void Inpainting::_initialize_pyramid()
     {
         if (has_hole(m_pyramid[level]))
             m_coarsest_hole_level = level;
+        const int side = std::min(m_pyramid[level].size().height, m_pyramid[level].size().width);
+        const int fitting = std::max(kMinFittingPatchSize, (side / kLevelSidesPerPatch - 1) / 2);
+        m_fitting_metrics.push_back(
+            fitting < m_distance_metric->patch_size() ? m_distance_metric->with_patch_size(fitting) : nullptr);
     }
     if (m_distance_metric->patch_size() < kCoarsePatchSize)
         m_coarse_metric = m_distance_metric->with_patch_size(kCoarsePatchSize);
@@ -637,12 +646,12 @@ cv::Mat Inpainting::run(bool verbose, unsigned int random_seed)
 MaskedImage Inpainting::_run_levels(
     int from, int to, MaskedImage target, const PatchDistanceMetric *metric, bool verbose)
 {
-    m_level_metric = metric;
     for (int level = from; level >= to; --level)
     {
         trace(verbose, "Inpainting level: ", level);
 
         const MaskedImage &source = m_pyramid[level];
+        m_level_metric = m_fitting_metrics[level] ? m_fitting_metrics[level].get() : metric;
         const bool coarsest = level == static_cast<int>(m_pyramid.size()) - 1;
         if (coarsest)
         {
@@ -654,10 +663,10 @@ MaskedImage Inpainting::_run_levels(
         if (level < 2)
             m_source2target.reset();
         else
-            m_source2target = coarsest ? NearestNeighborField(source, target, metric)
-                                       : NearestNeighborField(source, target, metric, *m_source2target);
-        m_target2source = coarsest ? NearestNeighborField(target, source, metric)
-                                   : NearestNeighborField(target, source, metric, m_target2source);
+            m_source2target = coarsest ? NearestNeighborField(source, target, m_level_metric)
+                                       : NearestNeighborField(source, target, m_level_metric, *m_source2target);
+        m_target2source = coarsest ? NearestNeighborField(target, source, m_level_metric)
+                                   : NearestNeighborField(target, source, m_level_metric, m_target2source);
 
         trace(verbose, "Initialization done.");
 
@@ -838,7 +847,7 @@ void Inpainting::_expectation_step(
     const VoteCaster caster(
         nnf, source2target, vote, source, upscaled, best_only, holes.has_value() ? &holes.value() : nullptr);
     // The larger patches of m_coarse_metric would average more votes, which blurred the fills.
-    const int patch_size = m_distance_metric->patch_size();
+    const int patch_size = std::min(m_distance_metric->patch_size(), m_level_metric->patch_size());
     const auto &kDistance2Similarity = distance2similarity();
     const auto source_size = nnf.source_size();
     for (int i = 0; i < source_size.height; ++i)
