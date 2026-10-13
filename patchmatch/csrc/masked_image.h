@@ -52,15 +52,16 @@ public:
     {
         return m_has_global_mask;
     }
-    const cv::Mat &grady() const
+    // Per pixel the colors, the gradients along x and y, the texture and whether it is masked, packed so that
+    // a distance reads one place per pixel.
+    static constexpr int kFeatureChannels = 12;
+    static constexpr int kColorAndGradientFeatures = 9;
+    static constexpr int kTextureFeature = 9;
+    static constexpr int kMaskedFeature = 10;
+    const cv::Mat &features() const
     {
-        assert(m_image_grad_computed);
-        return m_image_grady;
-    }
-    const cv::Mat &gradx() const
-    {
-        assert(m_image_grad_computed);
-        return m_image_gradx;
+        assert(m_features_computed);
+        return m_features;
     }
 
     // The texture energy that the distances compare (CV_8UC1, see Inpainting), or empty.
@@ -77,6 +78,7 @@ public:
     {
         m_texture = texture;
         m_has_texture = !texture.empty();
+        m_features_computed = false;
     }
 
     void init_global_mask_mat()
@@ -85,12 +87,14 @@ public:
         m_global_mask.setTo(cv::Scalar(0));
         m_has_global_mask = !m_global_mask.empty();
         m_hole_sums_computed = false;
+        m_features_computed = false;
     }
     void set_global_mask_mat(const cv::Mat &other)
     {
         m_global_mask = other;
         m_has_global_mask = !other.empty();
         m_hole_sums_computed = false;
+        m_features_computed = false;
     }
 
     bool is_masked(int y, int x) const
@@ -105,16 +109,19 @@ public:
     {
         m_mask.at<unsigned char>(y, x) = static_cast<unsigned char>(value);
         m_hole_sums_computed = false;
+        m_features_computed = false;
     }
     void set_global_mask(int y, int x, bool value)
     {
         m_global_mask.at<unsigned char>(y, x) = static_cast<unsigned char>(value);
         m_hole_sums_computed = false;
+        m_features_computed = false;
     }
     void clear_mask()
     {
         m_mask.setTo(cv::Scalar(0));
         m_hole_sums_computed = false;
+        m_features_computed = false;
     }
 
     const unsigned char *get_image(int y, int x) const
@@ -130,7 +137,7 @@ public:
     MaskedImage downsample() const;
     MaskedImage upsample(int new_w, int new_h) const;
     MaskedImage upsample(int new_w, int new_h, const cv::Mat &new_global_mask) const;
-    void compute_image_gradients() const;
+    void compute_features() const;
 
 private:
     cv::Mat m_image;
@@ -140,10 +147,9 @@ private:
     // cv::Mat::empty() is not inline in OpenCV 5, too slow to call for every pixel
     bool m_has_global_mask = false;
     bool m_has_texture = false;
-    // computed on first use by compute_image_gradients
-    mutable cv::Mat m_image_grady;
-    mutable cv::Mat m_image_gradx;
-    mutable bool m_image_grad_computed = false;
+    // computed on first use by compute_features
+    mutable cv::Mat m_features;
+    mutable bool m_features_computed = false;
     // computed on first use by contains_mask: the masked pixels outside the global mask
     // above and left of each pixel. Copies share them with the masks, so change a mask only
     // through an image that nothing has copied yet, as downsample and upsample do.

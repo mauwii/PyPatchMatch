@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <random>
 #include <typeinfo>
@@ -68,66 +69,44 @@ namespace
         bool textured;
     };
 
-    // One row of a source and a target image, both inside their images. The gradients must be computed.
+    // One row of a source and a target image, both inside their images. The features must be computed.
     class RowPair
     {
     public:
         RowPair(const ImagePair &images, int ys, int yt)
             : m_source_width(images.source_size.width), m_target_width(images.target_size.width),
-              m_si(images.source->image().ptr<unsigned char>(ys, 0)),
-              m_ti(images.target->image().ptr<unsigned char>(yt, 0)),
-              m_sm(images.source->mask().ptr<unsigned char>(ys, 0)),
-              m_tm(images.target->mask().ptr<unsigned char>(yt, 0)),
-              m_sgm(
-                  images.source->has_global_mask() ? images.source->global_mask().ptr<unsigned char>(ys, 0) : nullptr),
-              m_tgm(
-                  images.target->has_global_mask() ? images.target->global_mask().ptr<unsigned char>(yt, 0) : nullptr),
-              m_sgy(images.source->grady().ptr<unsigned char>(ys, 0)),
-              m_tgy(images.target->grady().ptr<unsigned char>(yt, 0)),
-              m_sgx(images.source->gradx().ptr<unsigned char>(ys, 0)),
-              m_tgx(images.target->gradx().ptr<unsigned char>(yt, 0)),
-              m_st(images.textured ? images.source->texture().ptr<unsigned char>(ys) : nullptr),
-              m_tt(images.textured ? images.target->texture().ptr<unsigned char>(yt) : nullptr)
+              m_source(images.source->features().ptr<unsigned char>(ys)),
+              m_target(images.target->features().ptr<unsigned char>(yt)), m_textured(images.textured)
         {
         }
 
         // The SSD over the colors and gradients, kSSDScale where a pixel is masked or outside its image.
         int cost(int xs, int xt) const
         {
-            // The bounds first: the masks are read only inside the image.
-            if (xs < 0 || xs >= m_source_width || xt < 0 || xt >= m_target_width || m_sm[xs] || m_tm[xt] ||
-                (m_sgm && m_sgm[xs]) || (m_tgm && m_tgm[xt]))
+            // The bounds first: the features are read only inside the image.
+            if (xs < 0 || xs >= m_source_width || xt < 0 || xt >= m_target_width)
+                return PatchSSDDistanceMetric::kSSDScale;
+            const unsigned char *s = m_source + static_cast<std::ptrdiff_t>(xs) * MaskedImage::kFeatureChannels;
+            const unsigned char *t = m_target + static_cast<std::ptrdiff_t>(xt) * MaskedImage::kFeatureChannels;
+            if (s[MaskedImage::kMaskedFeature] | t[MaskedImage::kMaskedFeature])
                 return PatchSSDDistanceMetric::kSSDScale;
 
             int ssd = 0;
-            for (int c = 0; c < 3; ++c)
-            {
-                ssd += pow2(m_si[xs * 3 + c] - m_ti[xt * 3 + c]);
-                ssd += pow2(m_sgx[xs * 3 + c] - m_tgx[xt * 3 + c]);
-                ssd += pow2(m_sgy[xs * 3 + c] - m_tgy[xt * 3 + c]);
-            }
+            for (int k = 0; k < MaskedImage::kColorAndGradientFeatures; ++k)
+                ssd += pow2(s[k] - t[k]);
             // Smooth fills matched smooth sources and stayed flat, so a target pixel with less than half the
             // texture of its source pixel costs extra. Not a two-sided difference: it removed mortar joints.
-            if (m_st)
-                ssd += 2 * pow2(std::max(m_st[xs] / 2 - m_tt[xt], 0));
+            if (m_textured)
+                ssd += 2 * pow2(std::max(s[MaskedImage::kTextureFeature] / 2 - t[MaskedImage::kTextureFeature], 0));
             return ssd;
         }
 
     private:
         int m_source_width;
         int m_target_width;
-        const unsigned char *m_si;
-        const unsigned char *m_ti;
-        const unsigned char *m_sm;
-        const unsigned char *m_tm;
-        const unsigned char *m_sgm;
-        const unsigned char *m_tgm;
-        const unsigned char *m_sgy;
-        const unsigned char *m_tgy;
-        const unsigned char *m_sgx;
-        const unsigned char *m_tgx;
-        const unsigned char *m_st; // the textures, nullptr unless both images have one
-        const unsigned char *m_tt;
+        const unsigned char *m_source;
+        const unsigned char *m_target;
+        bool m_textured; // false unless both images have a texture
     };
 
     // The costs of the row of the patches around s and t.
@@ -168,8 +147,8 @@ namespace
         const double limit =
             (bound + 1.0) * PatchSSDDistanceMetric::kSSDScale * side * side / PatchDistanceMetric::kDistanceScale;
 
-        source.compute_image_gradients();
-        target.compute_image_gradients();
+        source.compute_features();
+        target.compute_features();
 
         const ImagePair images(source, target);
         for (int dy = -patch_size; dy <= patch_size; ++dy)

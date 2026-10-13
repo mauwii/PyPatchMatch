@@ -152,16 +152,15 @@ MaskedImage MaskedImage::upsample(int new_w, int new_h, const cv::Mat &new_globa
     return ret;
 }
 
-void MaskedImage::compute_image_gradients() const
+void MaskedImage::compute_features() const
 {
-    if (m_image_grad_computed)
+    if (m_features_computed)
     {
         return;
     }
 
     const auto size = m_image.size();
-    m_image_grady = cv::Mat(size, CV_8UC3);
-    m_image_gradx = cv::Mat(size, CV_8UC3);
+    m_features = cv::Mat(size, CV_8UC(kFeatureChannels));
 
     // The border replicates its pixels, so that patches over the outermost line compare it as well.
     for (int y = 0; y < size.height; ++y)
@@ -179,15 +178,20 @@ void MaskedImage::compute_image_gradients() const
             const unsigned char *above = get_image(up, x);
             const unsigned char *next = get_image(y, right);
             const unsigned char *previous = get_image(y, left);
-            auto *grady = m_image_grady.ptr<unsigned char>(y, x);
-            auto *gradx = m_image_gradx.ptr<unsigned char>(y, x);
+            auto *features = m_features.ptr<unsigned char>(y, x);
+            std::fill_n(features, kFeatureChannels, 0);
+            const unsigned char *color = get_image(y, x);
             for (int c = 0; c < 3; ++c)
             {
-                grady[c] = static_cast<unsigned char>(skip_y ? 128 : below[c] / 2 - above[c] / 2 + 128);
-                gradx[c] = static_cast<unsigned char>(skip_x ? 128 : next[c] / 2 - previous[c] / 2 + 128);
+                features[c] = color[c];
+                features[3 + c] = static_cast<unsigned char>(skip_x ? 128 : next[c] / 2 - previous[c] / 2 + 128);
+                features[6 + c] = static_cast<unsigned char>(skip_y ? 128 : below[c] / 2 - above[c] / 2 + 128);
             }
+            if (m_has_texture)
+                features[kTextureFeature] = m_texture.at<unsigned char>(y, x);
+            features[kMaskedFeature] = static_cast<unsigned char>(is_masked(y, x) || is_globally_masked(y, x));
         }
     }
 
-    m_image_grad_computed = true;
+    m_features_computed = true;
 }
