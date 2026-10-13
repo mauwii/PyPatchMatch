@@ -3,13 +3,16 @@
 The holes are cut into images whose content is known: forest.bmp and the images listed
 in examples/images/SOURCES.md. forest_pruned.bmp and every ``*_pruned.*`` image in the
 git-ignored examples/images/local/ are added as object removals without a ground
-truth; their pure white pixels are the holes. grass-edge cuts a band at the right
-border, as in outpainting; brick-large and grass-large cut a circle of radius 242 into
-the center, 70 % of the image. pattern repeats almost exactly, so its error tells a fill
-that continues it (2 to 6) from a broken one; pattern-wide widens the hole to a radius
-of 60, where patch size 3 mixed the rings before 2.2 (error 37). forest-global and
-brick-global add a global mask, darkened in the report: the plant of
-examples/py_example_global_mask.py and the left third of brick.png.
+truth; their pure white pixels are the holes. camera restores the damage of
+camera_damaged.png, which camera_damaged_mask.png marks, against camera_aged.png; its
+error covers the larger holes and the torn corner, the scratches are narrower than the
+cells it compares. grass-edge cuts a band at the right border, as in outpainting;
+brick-large and grass-large cut a circle of radius 242 into the center, 70 % of the
+image. pattern repeats almost exactly, so its error tells a fill that continues it (2 to
+6) from a broken one; pattern-wide widens the hole to a radius of 60, where patch size 3
+mixed the rings before 2.2 (error 37). forest-global and brick-global add a global mask,
+darkened in the report: the plant of examples/py_example_global_mask.py and the left
+third of brick.png.
 
 Usage:
     uv run python scripts/evaluate_inpainting.py
@@ -116,6 +119,9 @@ def cases() -> Iterator[Case]:
     forest = load(IMAGES / "forest.bmp")
     pruned = load(IMAGES / "forest_pruned.bmp")
     yield Case("forest", pruned, white(pruned), None)
+    damaged = load(IMAGES / "camera_damaged.png")
+    damage = np.array(Image.open(IMAGES / "camera_damaged_mask.png")) > 0
+    yield Case("camera", damaged, damage, load(IMAGES / "camera_aged.png"))
     yield cut("trees", forest, ellipse(forest.shape, 70, 560, 45, 55))
     meadow = np.zeros(forest.shape[:2], dtype=bool)
     meadow[318:350, 380:470] = True
