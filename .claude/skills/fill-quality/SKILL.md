@@ -32,4 +32,4 @@ uv run --no-sync python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1
 - `examples/images/local/` is for your own images, which the script adds as object
   removals; never commit them, nor `evaluation.html`, which embeds them.
 - The workflow `Fill quality` compares every PR that changes the native code with its
-  base branch (job summary, artifact `fill-quality`); a report, not a gate.
+  base branch (job summary, artifact `evaluation.html`); a report, not a gate.

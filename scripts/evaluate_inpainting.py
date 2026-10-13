@@ -23,8 +23,8 @@ Usage:
 workflow "Fill quality" redirects it to the job summary.
 
 Besides the table, it writes examples/images/evaluation.html (git-ignored): the holes,
-the fills (of --baseline too) and the originals side by side. It embeds the images of
-examples/images/local/ as well, so keep it out of the repository.
+the fills (of --baseline too) and the originals side by side, cut to the holes. It
+embeds the images of examples/images/local/ as well, so keep it out of the repository.
 
 The e2e tests use measure() to check the seam and the detail of forest_pruned.bmp.
 
@@ -310,19 +310,13 @@ figure { margin: 0; cursor: zoom-in; }
 figcaption { font-size: 13px; color: var(--muted); margin-top: 4px;
   font-variant-numeric: tabular-nums; }
 figcaption b { color: var(--fg); font-weight: 600; margin-right: 6px; }
-.frame { position: relative; overflow: hidden; width: 100%;
-  aspect-ratio: var(--crop); background: var(--line); }
-.frame img { position: absolute; display: block; max-width: none; height: auto;
-  left: var(--left); top: var(--top); width: var(--width); }
-body.whole .frame { aspect-ratio: var(--full); }
-body.whole .frame img { left: 0; top: 0; width: 100%; }
+figure img { display: block; width: 100%; height: auto; }
 body.pixels img { image-rendering: pixelated; }
 #viewer { position: fixed; inset: 0; z-index: 10; display: flex;
   flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   background: rgb(0 0 0 / 0.9); cursor: zoom-out; }
 #viewer[hidden] { display: none; }
-#viewer .frame { width: min(94vw, calc(86vh * var(--crop))); cursor: pointer; }
-body.whole #viewer .frame { width: min(94vw, calc(86vh * var(--full))); }
+#viewer img { width: 94vw; height: 86vh; object-fit: contain; cursor: pointer; }
 #viewer p { color: #ddd; font-size: 14px; margin: 0; }
 """
 
@@ -334,7 +328,7 @@ function show(i) {
   index = (i + figures.length) % figures.length;
   const figure = figures[index];
   viewer.querySelector(".slot").replaceChildren(
-    figure.querySelector(".frame").cloneNode(true));
+    figure.querySelector("img").cloneNode());
   viewer.querySelector("p").textContent = figure.dataset.title
     + "  (" + (index + 1) + "/" + figures.length + ")";
 }
@@ -346,7 +340,7 @@ for (const figure of document.querySelectorAll("figure")) {
   });
 }
 viewer.addEventListener("click", (event) => {
-  if (event.target.closest(".frame")) show(index + 1);
+  if (event.target.closest("img")) show(index + 1);
   else viewer.hidden = true;
 });
 document.addEventListener("keydown", (event) => {
@@ -357,12 +351,10 @@ document.addEventListener("keydown", (event) => {
   else return;
   event.preventDefault();
 });
-for (const name of ["whole", "pixels"]) {
-  const box = document.getElementById(name);
-  const apply = () => document.body.classList.toggle(name, box.checked);
-  box.addEventListener("change", apply);
-  apply();  // browsers restore the checkboxes on reload
-}
+const pixels = document.getElementById("pixels");
+const apply = () => document.body.classList.toggle("pixels", pixels.checked);
+pixels.addEventListener("change", apply);
+apply();  // browsers restore the checkbox on reload
 """
 
 
@@ -384,18 +376,6 @@ def crop_box(holes: np.ndarray) -> tuple[int, int, int, int]:
     if (x1 - x0) * (y1 - y0) > 0.6 * width * height:
         return 0, 0, width, height
     return int(x0), int(y0), int(x1 - x0), int(y1 - y0)
-
-
-def frame(image: np.ndarray, box: tuple[int, int, int, int]) -> str:
-    """The image, cut to ``box`` by CSS unless the whole images are shown."""
-    height, width = image.shape[:2]
-    x, y, w, h = box
-    style = (
-        f"--crop:{w / h:.5f};--full:{width / height:.5f};--width:{100 * width / w:.4f}%;"
-        f"--left:{-100 * x / w:.4f}%;--top:{-100 * y / h:.4f}%"
-    )
-    source = f"data:image/png;base64,{png(image)}"
-    return f'<div class="frame" style="{style}"><img alt="" src="{source}"></div>'
 
 
 def verdict(key: str, old: float, new: float) -> str:
@@ -436,7 +416,7 @@ def caption(label: str, result: Result | None) -> str:
 
 
 def section(case: Case, results: list[Result], labels: list[str]) -> str:
-    box = crop_box(case.holes)
+    x, y, w, h = crop_box(case.holes)
     shown = case.image.copy()
     if case.global_mask is not None:
         shown[case.global_mask] //= 2
@@ -446,7 +426,8 @@ def section(case: Case, results: list[Result], labels: list[str]) -> str:
         versions.append(("original", case.truth, None))
     figures = "".join(
         f'<figure data-title="{html.escape(case.name)}: {label}">'
-        f"{frame(image, box)}<figcaption>{caption(label, result)}</figcaption></figure>"
+        f'<img alt="" src="data:image/png;base64,{png(image[y : y + h, x : x + w])}">'
+        f"<figcaption>{caption(label, result)}</figcaption></figure>"
         for label, image, result in versions
     )
     height, width = case.holes.shape
@@ -480,7 +461,6 @@ def write_report(
             f"<title>patchmatch evaluation</title><style>{STYLE}</style></head><body>"
             f"<main><header><h1>patchmatch evaluation</h1>{meta}</header>"
             '<div class="controls">'
-            '<label><input type="checkbox" id="whole"> whole images</label>'
             '<label><input type="checkbox" id="pixels"> show pixels</label>'
             '<p class="hint">Click an image to enlarge it; click it, &larr; or &rarr; '
             "switches between the versions, Esc closes.</p></div>"
