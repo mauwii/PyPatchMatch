@@ -32,7 +32,9 @@ jobs:
           prune-cache: true
 
       - name: Set OpenCV_ROOT
-        run: echo "OpenCV_ROOT=$RUNNER_TEMP/opencv" >> "$GITHUB_ENV"
+        run: |
+          echo "OpenCV_ROOT=$RUNNER_TEMP/opencv" >> "$GITHUB_ENV"
+          echo "ImageOS=$ImageOS" >> "$GITHUB_ENV"
 
       # the same key as in ci.yml, which fills the cache on main
       - name: Cache OpenCV
@@ -40,7 +42,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.OpenCV_ROOT }}
-          key: opencv-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build_opencv.py') }}
+          key: opencv-${{ runner.os }}-${{ env.ImageOS }}-${{ runner.arch }}-${{ hashFiles('scripts/build_opencv.py') }}
 
       - name: Build OpenCV
         if: steps.cache-opencv.outputs.cache-hit != 'true'

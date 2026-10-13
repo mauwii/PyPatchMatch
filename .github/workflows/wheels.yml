@@ -70,6 +70,8 @@ jobs:
           # there is no checkout, the cache key hashes these files of the sdist
           name=$(basename "$sdist" .tar.gz)
           tar -xzf "$sdist" -C dist "$name/scripts/build_opencv.py" "$name/pyproject.toml"
+          # the cache key keeps the images of a migrating -latest label apart (ci.yml)
+          echo "ImageOS=$ImageOS" >> "$GITHUB_ENV"
       - name: Restore OpenCV
         id: opencv
         # wheels of a tag (releases, manual runs on a tag) are always built from scratch
@@ -77,7 +79,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.os == 'Windows' && 'C:/opencv' || '/tmp/opencv' }}
-          key: opencv-wheel-${{ matrix.os }}-${{ hashFiles('dist/*/scripts/build_opencv.py', 'dist/*/pyproject.toml') }}
+          key: opencv-wheel-${{ matrix.os }}-${{ env.ImageOS }}-${{ hashFiles('dist/*/scripts/build_opencv.py', 'dist/*/pyproject.toml') }}
       # the frontend build[uv] of cibuildwheel uses this uv on macOS and Windows
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
