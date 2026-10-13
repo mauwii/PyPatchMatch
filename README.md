@@ -11,7 +11,10 @@
 This library implements the PatchMatch based inpainting algorithm. It provides both C++
 and Python interfaces. This implementation is heavily based on the implementation by
 Younesse ANDAM: [younesse-cv/PatchMatch](https://github.com/younesse-cv/PatchMatch),
-with some bug fixes, and updates.
+with some bug fixes, and updates. This repository continues
+[vacancy/PyPatchMatch](https://github.com/vacancy/PyPatchMatch) by Jiayuan Mao, through
+the forks [lkwq007/PyPatchMatch](https://github.com/lkwq007/PyPatchMatch) and
+[invoke-ai/PyPatchMatch](https://github.com/invoke-ai/PyPatchMatch).
 
 ![Birdhouses removed from a photo by patchmatch.inpaint](examples/images/readme_example.jpg)
 
