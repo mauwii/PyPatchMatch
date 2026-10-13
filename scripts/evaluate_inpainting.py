@@ -34,7 +34,11 @@ Columns, means over the seeds:
     detail  color difference of neighbors inside the holes, relative to their
             surroundings; 0.85 to 1.1 in the original images, lower is blurrier
     error   mean color error against the original on images reduced to 1/8, which
-            compares the structure of the fill rather than its pixels
+            compares the structure of the fill rather than its pixels; it rates a flat
+            fill better than a texture whose structures are shifted
+    edges   difference of the gradient directions from the original, in histograms
+            weighted by magnitude per 32x32 cell of the holes; lowest for the right
+            texture, also when shifted, highest for a flat fill
     fills   with --baseline: whether the fills of all seeds are byte-identical to the
             baseline's, as they have to be after a change that only makes it faster
 """
@@ -73,7 +77,7 @@ HOLES = {
     "chelsea": (52, 215, 24, 40),
     "pattern": (320, 320, 40, 40),
 }
-COLUMNS = ("seam", "detail", "error")
+COLUMNS = ("seam", "detail", "error", "edges")
 
 
 class Case(NamedTuple):
@@ -182,6 +186,25 @@ def coarse_error(image: np.ndarray, truth: np.ndarray, holes: np.ndarray) -> flo
     return float(np.abs(reduce(image)[cells] - reduce(truth)[cells]).mean())
 
 
+EDGE_CELL = 32
+EDGE_BINS = 8
+
+
+def edge_error(image: np.ndarray, truth: np.ndarray, holes: np.ndarray) -> float:
+    """Difference of the gradient directions, weighted by magnitude, per cell of holes."""
+    ys, xs = np.nonzero(holes)
+    cells = (ys // EDGE_CELL) * (holes.shape[1] // EDGE_CELL + 1) + xs // EDGE_CELL
+    length = (int(cells.max()) + 1) * EDGE_BINS
+
+    def histograms(array: np.ndarray) -> np.ndarray:
+        gy, gx = np.gradient(array.astype(float).mean(axis=2))
+        bins = (np.arctan2(gy, gx) % np.pi * EDGE_BINS / np.pi).astype(int) % EDGE_BINS
+        weights = np.hypot(gx, gy)[holes]
+        return np.bincount(cells * EDGE_BINS + bins[holes], weights, length)
+
+    return float(np.abs(histograms(image) - histograms(truth)).sum() / len(ys))
+
+
 def measure(
     result: np.ndarray, holes: np.ndarray, truth: np.ndarray | None = None
 ) -> dict[str, float]:
@@ -202,6 +225,7 @@ def measure(
     }
     if truth is not None:
         values["error"] = coarse_error(result, truth, holes)
+        values["edges"] = edge_error(result, truth, holes)
     return values
 
 
@@ -499,8 +523,8 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
     lines += [
         "",
         "Means over the seeds. seam and detail are best at 1.0, as in the original "
-        "images, error at 0. With a baseline: baseline → current, 🟢 better and 🔴 worse "
-        "by more than 2 % (time: 10 %).",
+        "images, error and edges at 0. With a baseline: baseline → current, 🟢 better "
+        "and 🔴 worse by more than 2 % (time: 10 %).",
     ]
     return "\n".join(lines)
 
@@ -542,7 +566,7 @@ def main() -> None:
     out = sys.stderr if args.markdown else sys.stdout
     print(f"patch_size={args.patch_size} seeds={args.seeds}", file=out)
     fills = "fills" if args.baseline else ""
-    header = f"{'case':14} {'seam':16}{'detail':16}{'error':16}{'time':16}{fills}"
+    header = f"{'case':14} {''.join(f'{key:16}' for key in COLUMNS)}{'time':16}{fills}"
     print(header.rstrip(), file=out)
     rows = []
     for case in cases():
