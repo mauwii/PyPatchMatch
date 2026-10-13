@@ -63,10 +63,16 @@ jobs:
           --baseline "$RUNNER_TEMP/base/build/libpatchmatch.so"
           --markdown >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Note the limits of the times
-        run: echo "The times are from a shared runner and only show large differences." >> "$GITHUB_STEP_SUMMARY"
-
+      # unzipped, so that the browser opens it; GitHub strips data: images from the summary
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: report
         with:
-          name: fill-quality
           path: examples/images/evaluation.html
+          archive: false
+
+      - name: Link the report
+        env:
+          URL: ${{ steps.report.outputs.artifact-url }}
+        run: |
+          echo "The times are from a shared runner and only show large differences." >> "$GITHUB_STEP_SUMMARY"
+          echo "The fills side by side: [evaluation.html]($URL)" >> "$GITHUB_STEP_SUMMARY"
