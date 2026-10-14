@@ -136,6 +136,15 @@ again.
   (grass with 15: 18.56 → 23.66, pattern with 7: 2.50 → 4.38); the mean error rose by
   0.5, 3.2 and 6.3 % with 3, 7 and 15. With the raw steps instead of their mean along
   the border, the seam fell below that of the originals (0.69 to 0.76).
+- Other forms of the color shift of the votes for levels 0 and 1: also compensating it
+  in the distances (Image Melding, Darabi et al. 2012) did worse than the votes alone,
+  and in the distances alone the fill took the colors of brighter or darker sources
+  (camera with 3: 5.1 → 29.8). On the coarser levels too it lost the layout (coffee
+  with 15: 18.7 → 21.4, on them alone 25.3). The median of the differences kept
+  pattern but broke bricks (brick-global with 3: 6.9 → 9.0, brick-large with 15: 16.0
+  → 19.4); a shift of the luminance only, or a limit of 2 or 4, gained less for the
+  same losses. The split votes or the best vote alone gained half (error with 7 −2.3
+  and −2.6 % instead of −5.3 %).
 - Not tried: starting the holes of the coarsest level smoothly instead of black. No case
   of the evaluation keeps a hole there, as the downsampling shrinks them; only
   outpainting of a third to half of the image with 7 or 15, or a hole over 75 % of the

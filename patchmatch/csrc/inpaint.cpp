@@ -369,18 +369,15 @@ namespace
 
     // Replaces the vote of the pixel if the new one weighs more. It is stored like the
     // sums of _weighted_copy, so the maximization step divides it by its weight.
-    inline void _best_copy(const MaskedImage &source, int ys, int xs, cv::Mat &target, int yt, int xt, double weight)
+    inline void _best_copy(
+        const unsigned char *color, const cv::Vec3d &shift, cv::Mat &target, int yt, int xt, double weight)
     {
-        if (source.is_masked(ys, xs))
-            return;
-
-        auto source_ptr = source.get_image(ys, xs);
         auto target_ptr = target.ptr<double>(yt, xt);
         if (weight <= target_ptr[3])
             return;
 
         for (int c = 0; c < 3; ++c)
-            target_ptr[c] = static_cast<double>(source_ptr[c]) * weight;
+            target_ptr[c] = (static_cast<double>(color[c]) + shift[c]) * weight;
         target_ptr[3] = weight;
     }
 
@@ -451,6 +448,7 @@ namespace
             const int xp = m_nnf->at(i, j, 1);
             if (m_holes && !votes_for_hole(m_source2target ? yp : i, m_source2target ? xp : j, patch_size))
                 return;
+            const cv::Vec3d shift = m_holes ? color_shift(i, j, yp, xp, patch_size) : cv::Vec3d();
             for (int di = -patch_size; di <= patch_size; ++di)
             {
                 for (int dj = -patch_size; dj <= patch_size; ++dj)
@@ -467,12 +465,47 @@ namespace
                         continue;
                     // Near ties go to the patch centered closest, not the first cast, which made blocks.
                     const double offset2 = static_cast<double>(di) * di + static_cast<double>(dj) * dj;
-                    cast_pair(ys, xs, yt, xt, weight, weight * (1 - 1e-5 * offset2));
+                    cast_pair(ys, xs, yt, xt, weight, weight * (1 - 1e-5 * offset2), shift);
                 }
             }
         }
 
     private:
+        // The mean color difference of the voted image to the voting source over the pixels known in both patches.
+        // The votes of the finest levels add it: their sources lie elsewhere in the image, and with their colors
+        // the fill of a vignetted photo came out lighter than the colors the coarser levels had laid out.
+        cv::Vec3d color_shift(int i, int j, int yp, int xp, int patch_size) const
+        {
+            const MaskedImage &source = m_nnf->source();
+            const MaskedImage &target = m_nnf->target();
+            cv::Vec3d sum;
+            int count = 0;
+            for (int di = -patch_size; di <= patch_size; ++di)
+            {
+                for (int dj = -patch_size; dj <= patch_size; ++dj)
+                {
+                    const int ys = i + di;
+                    const int xs = j + dj;
+                    const int yt = yp + di;
+                    const int xt = xp + dj;
+                    if (ys < 0 || ys >= m_source_size.height || xs < 0 || xs >= m_source_size.width || yt < 0 ||
+                        yt >= m_target_size.height || xt < 0 || xt >= m_target_size.width)
+                        continue;
+                    if (!is_known(source, ys, xs) || !is_known(target, yt, xt))
+                        continue;
+                    const auto *s = source.get_image(ys, xs);
+                    const auto *t = target.get_image(yt, xt);
+                    for (int c = 0; c < 3; ++c)
+                        sum[c] += s[c] - t[c];
+                    ++count;
+                }
+            }
+            if (count == 0)
+                return {};
+            // The voted image is the source of the coherence field and the target of the completeness field.
+            return sum * ((m_source2target ? -1.0 : 1.0) / count);
+        }
+
         // Whether the patch around (y, x) of the voted image, scaled like the votes, has a hole.
         bool votes_for_hole(int y, int x, int patch_size) const
         {
@@ -482,7 +515,7 @@ namespace
                 scale * (std::int64_t{y} + patch_size + 1) - 1, scale * (std::int64_t{x} + patch_size + 1) - 1);
         }
 
-        void cast_pair(int ys, int xs, int yt, int xt, double weight, double best_weight) const
+        void cast_pair(int ys, int xs, int yt, int xt, double weight, double best_weight, const cv::Vec3d &shift) const
         {
             if (!m_source2target)
             {
@@ -491,27 +524,30 @@ namespace
             }
             if (!m_upscaled)
             {
-                copy(ys, xs, yt, xt, weight, best_weight);
+                copy(ys, xs, yt, xt, weight, best_weight, shift);
                 return;
             }
             for (int uy = 0; uy < 2; ++uy)
                 for (int ux = 0; ux < 2; ++ux)
-                    copy(2 * ys + uy, 2 * xs + ux, 2 * yt + uy, 2 * xt + ux, weight, best_weight);
+                    copy(2 * ys + uy, 2 * xs + ux, 2 * yt + uy, 2 * xt + ux, weight, best_weight, shift);
         }
 
-        void copy(int ys, int xs, int yt, int xt, double weight, double best_weight) const
+        void copy(int ys, int xs, int yt, int xt, double weight, double best_weight, const cv::Vec3d &shift) const
         {
             if (m_best_only)
-                _best_copy(*m_source, ys, xs, *m_vote, yt, xt, best_weight);
+            {
+                if (!m_source->is_masked(ys, xs))
+                    _best_copy(m_source->get_image(ys, xs), shift, *m_vote, yt, xt, best_weight);
+            }
             else if (m_split)
-                split_copy(ys, xs, yt, xt, weight, best_weight);
+                split_copy(ys, xs, yt, xt, weight, best_weight, shift);
             else
                 _weighted_copy(*m_source, ys, xs, *m_vote, yt, xt, weight);
         }
 
-        // Adds the low frequencies and the texture of the source pixel to the sums, and keeps the rest if the
-        // vote weighs most.
-        void split_copy(int ys, int xs, int yt, int xt, double weight, double best_weight) const
+        // Adds the shifted low frequencies and the texture of the source pixel to the sums, and keeps the rest if
+        // the vote weighs most.
+        void split_copy(int ys, int xs, int yt, int xt, double weight, double best_weight, const cv::Vec3d &shift) const
         {
             if (!is_known(*m_source, ys, xs))
                 return;
@@ -520,7 +556,7 @@ namespace
             const auto *low = m_low.ptr<unsigned char>(ys, xs);
             auto *vote = m_vote->ptr<double>(yt, xt);
             for (int c = 0; c < 3; ++c)
-                vote[c] += low[c] * weight;
+                vote[c] += (low[c] + shift[c]) * weight;
             vote[3] += weight;
             vote[8] += m_source->texture().at<unsigned char>(ys, xs) * weight;
             if (best_weight <= vote[7])
