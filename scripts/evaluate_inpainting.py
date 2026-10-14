@@ -42,6 +42,10 @@ Columns, means over the seeds:
     edges   difference of the gradient directions from the original, in histograms
             weighted by magnitude per 32x32 cell of the holes; lowest for the right
             texture, also when shifted, highest for a flat fill
+    variety difference of the 8x8 patches of the holes, without their mean color, to
+            the closest one that does not overlap them, relative to the original;
+            lower where the fill repeats its sources or blurs (the tiles of
+            grass-large: about 0.25), higher for fragments
     fills   with --baseline: whether the fills of all seeds are byte-identical to the
             baseline's, as they have to be after a change that only makes it faster
 """
@@ -63,6 +67,7 @@ from pathlib import Path
 from typing import NamedTuple, TextIO
 
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 from PIL import Image
 
 import patchmatch
@@ -81,7 +86,7 @@ HOLES = {
     "chelsea": (52, 215, 24, 40),
     "pattern": (320, 320, 40, 40),
 }
-COLUMNS = ("seam", "detail", "error", "edges")
+COLUMNS = ("seam", "detail", "error", "edges", "variety")
 
 
 class Case(NamedTuple):
@@ -209,6 +214,36 @@ def edge_error(image: np.ndarray, truth: np.ndarray, holes: np.ndarray) -> float
     return float(np.abs(histograms(image) - histograms(truth)).sum() / len(ys))
 
 
+PATCH = 8
+
+
+def patches(image: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """The PATCHxPATCH patches inside ``mask`` on a grid, flattened, and their corners."""
+    grid = (slice(None, None, PATCH // 2),) * 2
+    windows = sliding_window_view(image, (PATCH, PATCH), axis=(0, 1))[grid]
+    inside = sliding_window_view(mask, (PATCH, PATCH))[grid].all(axis=(2, 3))
+    flat = windows[inside].reshape(int(inside.sum()), 3, -1).astype(np.float32)
+    # without their mean color, which the votes shift for repeated sources too
+    flat -= flat.mean(axis=2, keepdims=True)
+    return flat.reshape(len(flat), -1), np.argwhere(inside) * (PATCH // 2)
+
+
+def variety(image: np.ndarray, truth: np.ndarray, holes: np.ndarray) -> float:
+    def mean(array: np.ndarray) -> float:
+        """Mean distance of the patches to the closest one that does not overlap them."""
+        found, corners = patches(array, holes)
+        norms = (found**2).sum(axis=1)
+        closest = []
+        for start in range(0, len(found), 512):  # bounds the memory of the distances
+            chunk, where = found[start : start + 512], corners[start : start + 512]
+            distances = norms[start : start + 512, None] + norms - 2 * chunk @ found.T
+            distances[np.abs(where[:, None] - corners).max(axis=2) < PATCH] = np.inf
+            closest.append(distances.min(axis=1))
+        return float(np.sqrt(np.maximum(np.concatenate(closest), 0)).mean())
+
+    return mean(image) / mean(truth)
+
+
 def measure(
     result: np.ndarray, holes: np.ndarray, truth: np.ndarray | None = None
 ) -> dict[str, float]:
@@ -230,6 +265,9 @@ def measure(
     if truth is not None:
         values["error"] = coarse_error(result, truth, holes)
         values["edges"] = edge_error(result, truth, holes)
+        # holes thinner than a patch, such as scratches, have none to compare
+        if sliding_window_view(holes, (PATCH, PATCH)).all(axis=(2, 3)).any():
+            values["variety"] = variety(result, truth, holes)
     return values
 
 
@@ -396,7 +434,7 @@ def verdict(key: str, old: float, new: float) -> str:
     """CSS class of ``new`` compared with ``old``: better, worse or none."""
     if abs(new - old) <= (0.1 if key == "time" else 0.02) * abs(old):
         return ""
-    if key in ("seam", "detail"):  # best at 1.0, as in the original images
+    if key in ("seam", "detail", "variety"):  # best at 1.0, as in the original images
         old, new = abs(old - 1), abs(new - 1)
     return "better" if new < old else "worse"
 
@@ -516,9 +554,9 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
         ]
     lines += [
         "",
-        "Means over the seeds. seam and detail are best at 1.0, as in the original "
-        "images, error and edges at 0. With a baseline: baseline → current, 🟢 better "
-        "and 🔴 worse by more than 2 % (time: 10 %).",
+        "Means over the seeds. seam, detail and variety are best at 1.0, as in the "
+        "original images, error and edges at 0. With a baseline: baseline → current, "
+        "🟢 better and 🔴 worse by more than 2 % (time: 10 %).",
     ]
     return "\n".join(lines)
 
