@@ -24,7 +24,8 @@ uv run --no-sync python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1
   ```
 
 - A speed-up has to keep the fills byte-identical; the column `fills` reports it per
-  case, and a few seeds suffice.
+  case, and a few seeds suffice. Time it with `--jobs 1`: the parallel processes slow
+  each other down.
 - Judge a change of the fills on all cases with 10 seeds (`--seeds 10`) and patch sizes
   3, 7 and 15: the mean error of brick varied from 10.2 to 12.5 between sets of 3 seeds,
   and fixes for one image regressed others before. Look at the fills in
