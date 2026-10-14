@@ -19,6 +19,9 @@ Usage:
     uv run python scripts/evaluate_inpainting.py --baseline main/libpatchmatch.dylib
     uv run python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1 --cases brick
 
+The inpaintings run in parallel processes, one per CPU unless --jobs says otherwise.
+They slow each other down, so time a speed-up with --jobs 1.
+
 --markdown prints the table as Markdown and moves the plain one to stderr; the CI
 workflow "Fill quality" redirects it to the job summary.
 
@@ -47,13 +50,14 @@ from __future__ import annotations
 
 import argparse
 import base64
-import ctypes
+import functools
 import hashlib
 import html
 import io
 import sys
 import time
 from collections.abc import Iterator
+from concurrent.futures import Future, ProcessPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple, TextIO
@@ -229,23 +233,33 @@ def measure(
     return values
 
 
-def evaluate(library: ctypes.CDLL, case: Case, patch_size: int, seeds: int) -> Result:
-    patch_match._lib = library
-    mask = case.holes.astype(np.uint8)
-    rows, fills = [], []
+Seed = tuple[np.ndarray, dict[str, float], float]  # fill, measures, seconds
+
+library = functools.cache(_lib.load_library)
+
+
+def fill_seed(path: str, case: Case, patch_size: int, seed: int) -> Seed:
+    """One inpainting, in a worker process."""
+    # processes, not threads: the seed and patch_match._lib are global
+    patch_match._lib = library(Path(path))
+    patchmatch.set_random_seed(seed)
     start = time.perf_counter()
-    for seed in range(seeds):
-        patchmatch.set_random_seed(seed)
-        fills.append(
-            patchmatch.inpaint(
-                case.image, mask, global_mask=case.global_mask, patch_size=patch_size
-            )
-        )
-        rows.append(measure(fills[-1], case.holes, case.truth))
-    seconds = (time.perf_counter() - start) / seeds
+    fill = patchmatch.inpaint(
+        case.image,
+        case.holes.astype(np.uint8),
+        global_mask=case.global_mask,
+        patch_size=patch_size,
+    )
+    seconds = time.perf_counter() - start
+    return fill, measure(fill, case.holes, case.truth), seconds
+
+
+def evaluate(jobs: list[Future[Seed]]) -> Result:
+    """The result of one case and library from the jobs of all seeds, in order."""
+    fills, rows, seconds = zip(*(job.result() for job in jobs), strict=True)
     values = {key: float(np.mean([row[key] for row in rows])) for key in rows[0]}
     digest = hashlib.sha256(b"".join(fill.tobytes() for fill in fills)).hexdigest()
-    return Result(values, seconds, fills[0], digest)
+    return Result(values, float(np.mean(seconds)), fills[0], digest)
 
 
 def identical(results: list[Result]) -> str:
@@ -525,6 +539,7 @@ def main() -> None:
     parser.add_argument("--patch-size", type=int, default=3)
     parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--cases", help="comma-separated names, default: all")
+    parser.add_argument("--jobs", type=int, help="processes, default: one per CPU")
     parser.add_argument(
         "--markdown", action="store_true", help="print the table as Markdown"
     )
@@ -541,7 +556,9 @@ def main() -> None:
     if args.baseline:
         libraries.insert(0, _lib.load_library(args.baseline.resolve()))
         labels = ["baseline", "current"]
+    paths = [lib._name for lib in libraries]
     selected = set(args.cases.split(",")) if args.cases else None
+    chosen = [case for case in cases() if not selected or case.name in selected]
 
     out = sys.stderr if args.markdown else sys.stdout
     print(f"patch_size={args.patch_size} seeds={args.seeds}", file=out)
@@ -549,16 +566,28 @@ def main() -> None:
     header = f"{'case':14} {''.join(f'{key:16}' for key in COLUMNS)}{'time':16}{fills}"
     print(header.rstrip(), file=out)
     rows = []
-    for case in cases():
-        if selected and case.name not in selected:
-            continue
-        results = [
-            evaluate(lib, case, args.patch_size, args.seeds) for lib in libraries
+    pool = ProcessPoolExecutor(args.jobs)
+    try:
+        # all at once, the seeds outside, so that the libraries run under equal load
+        jobs = [
+            {
+                (index, seed): pool.submit(fill_seed, path, case, args.patch_size, seed)
+                for seed in range(args.seeds)
+                for index, path in enumerate(paths)
+            }
+            for case in chosen
         ]
-        print_row(case.name, results, out)
-        rows.append((case, results))
+        for case, futures in zip(chosen, jobs, strict=True):
+            results = [
+                evaluate([futures[index, seed] for seed in range(args.seeds)])
+                for index in range(len(paths))
+            ]
+            print_row(case.name, results, out)
+            rows.append((case, results))
+    finally:
+        pool.shutdown(cancel_futures=True)  # Ctrl+C stops after the running jobs
 
-    meta = describe(args, labels, [lib._name for lib in libraries])
+    meta = describe(args, labels, paths)
     write_report(rows, labels, meta)
     print(f"report: {REPORT}", file=out)
     if args.markdown:
