@@ -137,13 +137,21 @@ def test_global_mask_is_not_used_as_source(pruned_image):
 
 
 def test_restore_aged_photo():
-    """Scratches, holes and a torn corner, light but not white, given as a mask."""
+    """Scratches, holes and a torn corner, light but not white, given as a mask.
+
+    The finest levels averaged the colors of sources from elsewhere in the vignetted
+    photo, so the torn corner came out lighter (error 4.6 to 6.1 with ten seeds).
+    """
     source = Image.open(IMAGES / "camera_damaged.png")
     mask = Image.open(IMAGES / "camera_damaged_mask.png")
+    holes = np.array(mask) > 0
 
     result = patchmatch.inpaint(source, mask, patch_size=3)
 
-    assert_plausible_fill(np.array(source), result, holes=np.array(mask) > 0)
+    assert_plausible_fill(np.array(source), result, holes=holes)
+    truth = evaluation.load(IMAGES / "camera_aged.png")
+    error = evaluation.coarse_error(result, truth, holes)
+    assert error < 4.2, error
 
 
 @pytest.mark.parametrize(
