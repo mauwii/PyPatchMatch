@@ -145,6 +145,37 @@ again.
   → 19.4); a shift of the luminance only, or a limit of 2 or 4, gained less for the
   same losses. The split votes or the best vote alone gained half (error with 7 −2.3
   and −2.6 % instead of −5.3 %).
+- More EM iterations or NNF passes on level 0 (1 and 1) or level 1 (3 and 2): level 0
+  is converged; 3 iterations with 2 passes stayed within the noise (error +0.2 to
+  +0.5 %, 3 seeds) for up to 95 % more time, and 5 iterations on level 1 raised the
+  error by up to 1.9 %. A single iteration on level 1 saved 8 to 21 % of the time but
+  broke the patterns (pattern-wide with 15: 3.41 → 4.08) and brick with 15 (6.13 →
+  6.62).
+- Preferring the best votes of patches with known pixels on level 0, weight ×
+  (1 + β · their known fraction): at the border of stochastic textures the best vote
+  comes from the patch shifted farthest into the hole, which matches the fill copied
+  from it (grass with 7: offset 6.88 of 7, 59 % with a known pixel; brick picks
+  centered patches). With β 0.02 the means improved (10 seeds: seam −7 to −10 %, error
+  up to −5.9 %), but the seam moved inward: a ring of splinters in gravel, a block of
+  fur in chelsea, fragments in trees and meadow, which `seam` does not see. Favoring
+  every patch with a known pixel equally let those with one known row win, and the seam
+  stayed: each patch with more known pixels matches worse, so the choice of the vote
+  only moves the seam. Neither boosting only the pixels within patch_size of the border
+  nor anchoring the split votes too, with 3 iterations for the inside to adapt, helped.
+- Other weights of the features in `RowPair::cost`: luminance and half the chroma
+  instead of the channels (coffee with 15: 18.7 → 27.1), or the gradients weighted 2 or
+  4 times, did worse; the gradients at a half, a quarter or not at all stayed within
+  about 1 % of the mean error, but without them the joints of brick-global with 3
+  kinked (5.6 → 7.3, 10 seeds) and pattern with 3 got worse (4.1 → 5.0). Not measured:
+  leaving them out from patch size 7 on as a speed-up (3 instead of 9 channels).
+- Drawing each candidate of the random search again, up to 4 or 16 times, while its
+  patch has a hole: within the noise (error ±2 %), large holes unchanged, up to 11 %
+  slower. The search does not lack candidates.
+- An occurrence penalty (Kaspar et al. 2015) in the search of the coherence field,
+  λ · (link centers per pixel of the source window − 1): large holes gained (brick-large
+  `edges` with 7: 5.10 → 3.42, grass-large error 19.5 → 17.0), but small holes have to
+  reuse their few fitting sources (coffee with 7 and 15: 18 → 23.5), and the fills got
+  blurrier (detail −2 to −6 %). On the coarse levels alone as well.
 - Not tried: starting the holes of the coarsest level smoothly instead of black. No case
   of the evaluation keeps a hole there, as the downsampling shrinks them; only
   outpainting of a third to half of the image with 7 or 15, or a hole over 75 % of the
