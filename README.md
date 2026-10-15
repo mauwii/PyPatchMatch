@@ -1,12 +1,17 @@
 # PatchMatch based Inpainting
 
-[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=mauwii_PyPatchMatch&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=mauwii_PyPatchMatch)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blueviolet.svg)](https://github.com/mauwii/PyPatchMatch/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/PyPatchMatch)](https://pypi.org/project/PyPatchMatch/)
-[![Downloads](https://static.pepy.tech/badge/pypatchmatch)](https://pepy.tech/projects/pypatchmatch)
+[![Python](https://img.shields.io/pypi/pyversions/PyPatchMatch)](https://pypi.org/project/PyPatchMatch/)
+[![Downloads](https://img.shields.io/pepy/dt/pypatchmatch)](https://pepy.tech/projects/pypatchmatch)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blueviolet.svg)](https://github.com/mauwii/PyPatchMatch/blob/main/LICENSE)
+
+[![Tests](https://img.shields.io/github/actions/workflow/status/mauwii/PyPatchMatch/ci.yml?branch=main&label=tests)](https://github.com/mauwii/PyPatchMatch/actions/workflows/ci.yml?query=branch%3Amain)
+[![Coverage](https://img.shields.io/sonar/coverage/mauwii_PyPatchMatch?server=https%3A%2F%2Fsonarcloud.io)](https://sonarcloud.io/component_measures?id=mauwii_PyPatchMatch&metric=coverage)
+[![Quality Gate](https://img.shields.io/sonar/quality_gate/mauwii_PyPatchMatch?server=https%3A%2F%2Fsonarcloud.io)](https://sonarcloud.io/summary/new_code?id=mauwii_PyPatchMatch)
+
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![ponytail](https://img.shields.io/badge/over--engineering-ponytail_audited-111111)](https://github.com/DietrichGebert/ponytail)
-[![caveman](https://img.shields.io/badge/agent-caveman-F0A63C)](https://github.com/JuliusBrussee/caveman)
 
 This library implements the PatchMatch based inpainting algorithm. It provides both C++
 and Python interfaces. This implementation is heavily based on the implementation by
