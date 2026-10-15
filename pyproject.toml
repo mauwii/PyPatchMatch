@@ -120,6 +120,8 @@ environment = { OpenCV_ROOT = "/tmp/opencv", MACOSX_DEPLOYMENT_TARGET = "11.0" }
 environment = { OpenCV_ROOT = "C:/opencv" }
 
 [tool.uv]
+# the cooldown of dependabot.yml for uv lock --upgrade
+exclude-newer = "7 days"
 # Rebuild the package whenever the native sources or the git version change.
 cache-keys = [
     { file = "CMakeLists.txt" },
@@ -131,7 +133,6 @@ cache-keys = [
 [tool.ruff]
 extend-exclude = ["patchmatch/csrc"]
 line-length = 88
-target-version = "py311"
 
 [tool.ruff.lint]
 select = ["B", "C4", "E", "F", "I", "RUF", "SIM", "UP", "W"]
@@ -163,6 +164,7 @@ warn_return_any = false
 addopts = ["--cov-branch", "--cov-report=term:skip-covered", "--cov=patchmatch"]
 # shows which test hangs before the job timeout kills the run
 faulthandler_timeout = 300
+filterwarnings = ["error"]
 markers = ["e2e: end-to-end tests of the user workflows (deselect with -m 'not e2e')"]
 minversion = "9.0"
 python_files = ["test_*.py"]

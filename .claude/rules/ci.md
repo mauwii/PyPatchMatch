@@ -29,8 +29,8 @@ The workflow files explain their steps in comments; this lists what they do not 
   the tags of its other crates (#92). MegaLinter was rejected: it duplicates pre-commit
   in a multi-GB image.
 - Dependabot version updates are off by default on forks; they are enabled in Insights →
-  Dependency graph → Dependabot. `uv.lock` is updated by hand (`uv lock --upgrade`):
-  Dependabot's `uv lock` builds the project, which fails without OpenCV, because
-  scikit-build-core hides the `prepare_metadata_for_build_*` hooks when an override uses
-  `if.failed`.
+  Dependency graph → Dependabot. `uv.lock` is updated by hand (`uv lock --upgrade`,
+  with the same 7-day cooldown through `exclude-newer`): Dependabot's `uv lock` builds
+  the project, which fails without OpenCV, because scikit-build-core hides the
+  `prepare_metadata_for_build_*` hooks when an override uses `if.failed`.
 - The environment `pypi` deploys only from tags `v*`.
