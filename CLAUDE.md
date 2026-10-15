@@ -134,4 +134,6 @@ CMake installs the shared library into the package directory.
   `invoke-ai/PyPatchMatch`. `gh` resolves the default repository to upstream, so pass
   `-R mauwii/PyPatchMatch`.
 - Releases: creating a GitHub release with a tag like `v2.0.0` (or `v2.0.0rc2` for
-  pre-releases) builds the wheels and publishes them to PyPI.
+  pre-releases) builds the wheels and publishes them to PyPI. The workflow `Fill
+  quality` compares the release with the last stable one; read its summary before
+  approving the job `publish`.
