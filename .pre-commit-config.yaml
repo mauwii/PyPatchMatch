@@ -12,17 +12,24 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
       - id: trailing-whitespace
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: f12be1ebaa5351c1fc76472de98db2c3446c8253  # frozen: v0.16.10
-    hooks:
-      - id: ruff-check
-        args: [--fix]
-      - id: ruff-format
+  # ruff and mypy from uv.lock, the versions of the editor; like the lint job, without
+  # building the library, which needs OpenCV
   - repo: local
     hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --locked --no-build --only-group dev ruff check --force-exclude --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --locked --no-build --only-group dev ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
       - id: mypy
         name: mypy
-        # like the lint job, without building the library, which needs OpenCV
         entry: uv run --locked --no-build --only-group dev mypy
         language: system
         types: [python]

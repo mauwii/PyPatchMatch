@@ -26,8 +26,9 @@ The workflow files explain their steps in comments; this lists what they do not 
 - Actions are pinned to full commit SHAs with a `# vX.Y.Z` comment. The pre-commit hooks
   are frozen the same way, and Dependabot (ecosystem `pre-commit`) keeps them frozen,
   except typos, which is pinned by tag: Dependabot matched the frozen comment against
-  the tags of its other crates (#92). MegaLinter was rejected: it duplicates pre-commit
-  in a multi-GB image.
+  the tags of its other crates (#92). ruff and mypy are local hooks from `uv.lock`, so
+  they move with `uv lock --upgrade`, not with Dependabot. MegaLinter was rejected: it
+  duplicates pre-commit in a multi-GB image.
 - Dependabot version updates are off by default on forks; they are enabled in Insights →
   Dependency graph → Dependabot. `uv.lock` is updated by hand (`uv lock --upgrade`,
   with the same 7-day cooldown through `exclude-newer`): Dependabot's `uv lock` builds
