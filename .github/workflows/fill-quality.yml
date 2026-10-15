@@ -8,6 +8,9 @@ on:
       - patchmatch/csrc/**
       - scripts/evaluate_inpainting.py
       - .github/workflows/fill-quality.yml
+  # releases against the last stable one, before the approval of the job publish
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -19,7 +22,7 @@ concurrency:
 jobs:
   report:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60 # a release takes about 30 minutes
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -36,10 +39,11 @@ jobs:
           echo "OpenCV_ROOT=$RUNNER_TEMP/opencv" >> "$GITHUB_ENV"
           echo "ImageOS=$ImageOS" >> "$GITHUB_ENV"
 
-      # the same key as in ci.yml, which fills the cache on main
-      - name: Cache OpenCV
+      # the same key as in ci.yml, which fills the cache on main; restore only, because
+      # zizmor (cache-poisoning) flags actions/cache in workflows that releases trigger
+      - name: Restore OpenCV
         id: cache-opencv
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.OpenCV_ROOT }}
           key: opencv-${{ runner.os }}-${{ env.ImageOS }}-${{ runner.arch }}-${{ hashFiles('scripts/build_opencv.py') }}
@@ -48,20 +52,30 @@ jobs:
         if: steps.cache-opencv.outputs.cache-hit != 'true'
         run: uv run --locked --no-build --only-group test python scripts/build_opencv.py
 
-      - name: Build the library of the base branch
+      - name: Build the library of the baseline
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          # stable tags only: v2.2.0b3 against v2.2.0b2 would hide the drift since v2.1.1
+          base=${BASE_SHA:-$(git describe --tags --abbrev=0 --exclude 'v*[a-z]*' "$GITHUB_SHA^")}
+          echo "Baseline: $base" >> "$GITHUB_STEP_SUMMARY"
           mkdir "$RUNNER_TEMP/base"
-          git archive "$BASE_SHA" CMakeLists.txt patchmatch/csrc | tar -x -C "$RUNNER_TEMP/base"
+          git archive "$base" CMakeLists.txt patchmatch/csrc | tar -x -C "$RUNNER_TEMP/base"
           cmake -S "$RUNNER_TEMP/base" -B "$RUNNER_TEMP/base/build" -DCMAKE_BUILD_TYPE=Release
           cmake --build "$RUNNER_TEMP/base/build" --parallel
 
+      # releases with the seeds and patch sizes of the skill fill-quality; 3 last, the
+      # default, because each run overwrites evaluation.html
       - name: Evaluate the fills
-        run: >-
-          uv run --locked --no-build python scripts/evaluate_inpainting.py
-          --baseline "$RUNNER_TEMP/base/build/libpatchmatch.so"
-          --markdown >> "$GITHUB_STEP_SUMMARY"
+        env:
+          SIZES: ${{ github.event_name == 'release' && '15 7 3' || '3' }}
+          SEEDS: ${{ github.event_name == 'release' && '10' || '3' }}
+        run: |
+          for size in $SIZES; do
+            uv run --locked --no-build python scripts/evaluate_inpainting.py \
+              --baseline "$RUNNER_TEMP/base/build/libpatchmatch.so" \
+              --patch-size "$size" --seeds "$SEEDS" --markdown >> "$GITHUB_STEP_SUMMARY"
+          done
 
       # unzipped, so that the browser opens it; GitHub strips data: images from the summary
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
