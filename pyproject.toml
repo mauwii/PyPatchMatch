@@ -133,7 +133,6 @@ cache-keys = [
 [tool.ruff]
 extend-exclude = ["patchmatch/csrc"]
 line-length = 88
-target-version = "py311"
 
 [tool.ruff.lint]
 select = ["B", "C4", "E", "F", "I", "RUF", "SIM", "UP", "W"]
