@@ -4,10 +4,9 @@
 # Distributed under terms of the MIT license.
 
 from pathlib import Path
-from typing import Any
 
-from numpy import dtype, ndarray
-from numpy._typing._shape import _AnyShape
+import numpy as np
+from numpy.typing import NDArray
 from PIL import Image
 from PIL.ImageFile import ImageFile
 
@@ -17,7 +16,5 @@ IMAGES: Path = Path(__file__).parent / "images"
 
 if __name__ == "__main__":
     source: ImageFile = Image.open(fp=IMAGES / "forest_pruned.bmp")
-    result: ndarray[_AnyShape, dtype[Any]] = patchmatch.inpaint(
-        image=source, patch_size=3
-    )
+    result: NDArray[np.uint8] = patchmatch.inpaint(image=source, patch_size=3)
     Image.fromarray(obj=result).save(fp=IMAGES / "forest_recovered.bmp")
