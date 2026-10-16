@@ -145,7 +145,7 @@ patch = ["subprocess"]
 fail_under = 95
 
 [tool.mypy]
-files = ["patchmatch", "tests"]
+files = ["examples", "patchmatch", "scripts", "tests"]
 strict = true
 
 [[tool.mypy.overrides]]

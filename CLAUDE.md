@@ -102,8 +102,10 @@ CMake installs the shared library into the package directory.
   members, `k` constants. Commit a reformat separately and add its hash to
   `.git-blame-ignore-revs`.
 - The package ships `py.typed`; public functions are fully annotated. mypy checks
-  `patchmatch` and `tests` in strict mode (`[tool.mypy]`); the tests have to use the
-  API correctly but need no annotations of their own. A deliberately wrong argument
+  `examples`, `patchmatch`, `scripts` and `tests` in strict mode (`[tool.mypy]`); the
+  tests have to use the API correctly but need no annotations of their own. Only the
+  examples annotate their locals and pass arguments by keyword, for readers who copy
+  them. A deliberately wrong argument
   goes through a test parameter instead of a `# type: ignore`.
 - Backwards compatibility: `from patchmatch import patch_match` and
   `patch_match.CShapeT`/`CMatT` keep working (tested).
