@@ -4,14 +4,20 @@
 # Distributed under terms of the MIT license.
 
 from pathlib import Path
+from typing import Any
 
+from numpy import dtype, ndarray
+from numpy._typing._shape import _AnyShape
 from PIL import Image
+from PIL.ImageFile import ImageFile
 
 import patchmatch
 
-IMAGES = Path(__file__).parent / "images"
+IMAGES: Path = Path(__file__).parent / "images"
 
 if __name__ == "__main__":
-    source = Image.open(IMAGES / "forest_pruned.bmp")
-    result = patchmatch.inpaint(source, patch_size=3)
-    Image.fromarray(result).save(IMAGES / "forest_recovered.bmp")
+    source: ImageFile = Image.open(fp=IMAGES / "forest_pruned.bmp")
+    result: ndarray[_AnyShape, dtype[Any]] = patchmatch.inpaint(
+        image=source, patch_size=3
+    )
+    Image.fromarray(obj=result).save(fp=IMAGES / "forest_recovered.bmp")
