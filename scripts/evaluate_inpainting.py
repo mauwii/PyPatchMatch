@@ -109,12 +109,12 @@ def load(path: Path) -> np.ndarray:
 
 
 def white(image: np.ndarray) -> np.ndarray:
-    return (image == 255).all(axis=2)
+    return np.all(image == 255, axis=2)
 
 
 def ellipse(shape: tuple[int, ...], cy: int, cx: int, ry: int, rx: int) -> np.ndarray:
     yy, xx = np.mgrid[: shape[0], : shape[1]]
-    return ((yy - cy) / ry) ** 2 + ((xx - cx) / rx) ** 2 < 1
+    return np.asarray(((yy - cy) / ry) ** 2 + ((xx - cx) / rx) ** 2 < 1)
 
 
 def cut(
@@ -472,7 +472,7 @@ def section(case: Case, results: list[Result], labels: list[str]) -> str:
     shown = case.image.copy()
     if case.global_mask is not None:
         shown[case.global_mask] //= 2
-    versions = [("holes", shown, None)]
+    versions: list[tuple[str, np.ndarray, Result | None]] = [("holes", shown, None)]
     versions += [(label, r.fill, r) for label, r in zip(labels, results, strict=True)]
     if case.truth is not None:
         versions.append(("original", case.truth, None))
