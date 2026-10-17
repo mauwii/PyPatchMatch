@@ -34,9 +34,9 @@ pip install PyPatchMatch
 ```
 
 Wheels for Linux (glibc, x86_64 and aarch64), macOS 11+ (arm64 and x86_64) and Windows
-(x64) ship the compiled library with a statically linked OpenCV, so no compiler or
-OpenCV installation is needed. On other platforms, e.g. Alpine Linux or Windows on ARM,
-pip builds from the source distribution, which requires a C++17 compiler, CMake and the
+(x64 and ARM64) ship the compiled library with a statically linked OpenCV, so no
+compiler or OpenCV installation is needed. On other platforms, e.g. Alpine Linux, pip
+builds from the source distribution, which requires a C++17 compiler, CMake and the
 OpenCV development files (e.g. `apt install libopencv-dev` or `brew install opencv`).
 
 If that build fails, PyPatchMatch is installed without the native library instead of
