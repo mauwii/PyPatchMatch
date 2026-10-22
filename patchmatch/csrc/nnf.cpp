@@ -178,6 +178,11 @@ void NearestNeighborField::seed_random(unsigned int seed)
     random_engine().seed(seed);
 }
 
+int NearestNeighborField::random_index(int n)
+{
+    return random_int(n);
+}
+
 void NearestNeighborField::_allocate_sums()
 {
     // Only the plain SSD adds up line by line; a subclass may measure differently.
@@ -322,7 +327,7 @@ void NearestNeighborField::_propagate(int y, int x, int dy, int dx)
     const std::int64_t neighbor_sum = m_sums.empty() ? -1 : m_sums[_index(y - dy, x - dx)];
     if (neighbor_sum < 0)
     {
-        _link_if_closer(y, x, y_target, x_target);
+        link_if_closer(y, x, y_target, x_target);
         return;
     }
     if (y_target == at(y, x, 0) && x_target == at(y, x, 1))
@@ -362,7 +367,7 @@ void NearestNeighborField::_random_search(int y, int x)
         const int yp = top + random_int(std::min(yc + radius, size.height - 1) - top + 1);
         const int xp = left + random_int(std::min(xc + radius, size.width - 1) - left + 1);
         if (!m_target.is_globally_masked(yp, xp))
-            _link_if_closer(y, x, yp, xp);
+            link_if_closer(y, x, yp, xp);
     }
 }
 

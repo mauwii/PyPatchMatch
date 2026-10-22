@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <optional>
 
 namespace
@@ -596,6 +598,387 @@ namespace
         }
         return texture;
     }
+
+    std::int64_t squared_difference(const cv::Vec3b &a, const cv::Vec3b &b)
+    {
+        std::int64_t sum = 0;
+        for (int c = 0; c < 3; ++c)
+            sum += (a[c] - b[c]) * (a[c] - b[c]);
+        return sum;
+    }
+
+    // Fills the holes of a level from their border inwards, pixel by pixel in the order of Criminisi et al. 2004,
+    // each from the center of a source patch that fits the known and filled pixels around it. A line that enters
+    // a hole fades on the coarser levels, and the search only refines the fill it starts from.
+    class Peel
+    {
+    public:
+        // guide: the field of this level that the search would start from, nullptr on the coarsest level.
+        Peel(const MaskedImage &source, const MaskedImage &target, const NearestNeighborField *guide, int patch_size)
+            : m_source(source), m_target(target), m_guide(guide), m_patch_size(patch_size), m_size(source.size()),
+              m_colors(source.image().clone()), m_filled(m_size, CV_8U, cv::Scalar(0)),
+              m_front_mask(m_size, CV_8U, cv::Scalar(0)), m_confidence(m_size, CV_64F, cv::Scalar(0)),
+              m_matches(m_size, CV_32SC2, cv::Scalar::all(-1))
+        {
+            for (int y = 0; y < m_size.height; ++y)
+            {
+                for (int x = 0; x < m_size.width; ++x)
+                {
+                    if (is_hole(source, y, x))
+                        m_colors.at<cv::Vec3b>(y, x) = target.image().at<cv::Vec3b>(y, x);
+                    if (is_known(source, y, x))
+                    {
+                        m_filled.at<unsigned char>(y, x) = 1;
+                        m_confidence.at<double>(y, x) = 1;
+                    }
+                }
+            }
+            for (int y = 0; y < m_size.height; ++y)
+                for (int x = 0; x < m_size.width; ++x)
+                    _enter_front(y, x);
+        }
+
+        // The target with the peeled holes, and per peeled pixel the center of its source patch, -1 elsewhere.
+        MaskedImage run(cv::Mat &matches)
+        {
+            while (!m_front.empty())
+            {
+                std::size_t next = 0;
+                double top = -1;
+                for (std::size_t i = 0; i < m_front.size(); ++i)
+                {
+                    const double priority = _priority(m_front[i]);
+                    if (priority > top)
+                    {
+                        top = priority;
+                        next = i;
+                    }
+                }
+                const cv::Point p = m_front[next];
+                m_front[next] = m_front.back();
+                m_front.pop_back();
+                _fill(p, _choose(p));
+            }
+
+            MaskedImage peeled = m_target.clone();
+            for (int y = 0; y < m_size.height; ++y)
+                for (int x = 0; x < m_size.width; ++x)
+                    if (m_matches.at<cv::Vec2i>(y, x)[0] >= 0)
+                        std::copy_n(m_colors.ptr<unsigned char>(y, x), 3, peeled.get_mutable_image(y, x));
+            matches = m_matches;
+            return peeled;
+        }
+
+    private:
+        struct Candidate
+        {
+            int y;
+            int x;
+            std::int64_t fit;   // to the known and filled pixels around the pixel
+            std::int64_t guide; // to the coarser fill of the other hole pixels around it
+        };
+
+        // Near ties of the fit go to the patch closest to the coarser fill, which lays out repeating structures.
+        static constexpr double kNearTie = 0.3;
+        // The guide's own link wins unless the known pixels clearly contradict it, as at the end of a line.
+        static constexpr double kGuideTolerance = 2;
+        // A fit this much worse than the mean of the pixels before calls for a search of all sources: the random
+        // search does not find the few sources of a line. The first pixels search all, the mean forgets slowly.
+        static constexpr double kPoorFit = 3;
+        static constexpr int kWarmUp = 8;
+        static constexpr double kFitMemory = 0.9;
+        // Without an isophote, the confidence orders the pixels.
+        static constexpr double kFlatData = 0.001;
+
+        bool _filled(int y, int x) const
+        {
+            return y >= 0 && y < m_size.height && x >= 0 && x < m_size.width && m_filled.at<unsigned char>(y, x);
+        }
+
+        void _enter_front(int y, int x)
+        {
+            if (!is_hole(m_source, y, x) || m_filled.at<unsigned char>(y, x) || m_front_mask.at<unsigned char>(y, x))
+                return;
+            bool next_to_filled = false;
+            for_window(m_size, y, x, 1, [this, &next_to_filled](int yy, int xx) {
+                next_to_filled = next_to_filled || m_filled.at<unsigned char>(yy, xx);
+            });
+            if (!next_to_filled)
+                return;
+            m_front_mask.at<unsigned char>(y, x) = 1;
+            m_front.emplace_back(x, y);
+        }
+
+        double _luminance(int y, int x) const
+        {
+            const auto &color = m_colors.at<cv::Vec3b>(y, x);
+            return (color[0] + color[1] + color[2]) / 3.0;
+        }
+
+        // The confidence of the window times the strongest isophote that hits the front at p.
+        double _priority(cv::Point p) const
+        {
+            double confidence = 0;
+            for_window(m_size, p.y, p.x, m_patch_size, [this, &confidence](int y, int x) {
+                confidence += m_confidence.at<double>(y, x);
+            });
+            const double side = 2.0 * m_patch_size + 1;
+            confidence /= side * side;
+
+            double ny = 0;
+            double nx = 0;
+            for (int dy = -1; dy <= 1; ++dy)
+            {
+                for (int dx = -1; dx <= 1; ++dx)
+                {
+                    if (!_filled(p.y + dy, p.x + dx))
+                        continue;
+                    ny += dy * (dx == 0 ? 2 : 1);
+                    nx += dx * (dy == 0 ? 2 : 1);
+                }
+            }
+            const double norm = std::hypot(ny, nx);
+            if (norm > 0)
+            {
+                ny /= norm;
+                nx /= norm;
+            }
+
+            double isophote = 0;
+            for (int dy = -1; dy <= 1; ++dy)
+            {
+                for (int dx = -1; dx <= 1; ++dx)
+                {
+                    const int y = p.y + dy;
+                    const int x = p.x + dx;
+                    if (!_filled(y, x) || !_filled(y - 1, x) || !_filled(y + 1, x) || !_filled(y, x - 1) ||
+                        !_filled(y, x + 1))
+                        continue;
+                    const double gy = (_luminance(y + 1, x) - _luminance(y - 1, x)) / 2;
+                    const double gx = (_luminance(y, x + 1) - _luminance(y, x - 1)) / 2;
+                    isophote = std::max(isophote, std::fabs(gx * ny - gy * nx));
+                }
+            }
+            return confidence * (isophote / 255 + kFlatData);
+        }
+
+        // Adds the source patch around (qy, qx) as a candidate for p unless it overlaps a hole or the global mask,
+        // or its fit is beyond the near ties of the best one so far.
+        void _evaluate(cv::Point p, int qy, int qx)
+        {
+            if (qy < m_patch_size || qy >= m_size.height - m_patch_size || qx < m_patch_size ||
+                qx >= m_size.width - m_patch_size || m_source.contains_mask(qy, qx, m_patch_size))
+                return;
+            const double bound =
+                m_best == kNone ? std::numeric_limits<double>::max() : (1 + kNearTie) * static_cast<double>(m_best) + 1;
+            std::int64_t fit = 0;
+            std::int64_t guide = 0;
+            for (int dy = -m_patch_size; dy <= m_patch_size; ++dy)
+            {
+                if (static_cast<double>(fit) > bound)
+                    return;
+                for (int dx = -m_patch_size; dx <= m_patch_size; ++dx)
+                {
+                    if (m_source.is_globally_masked(qy + dy, qx + dx))
+                        return;
+                    const Role role = _role(p.y + dy, p.x + dx);
+                    if (role == Role::kIgnored)
+                        continue;
+                    const std::int64_t difference = squared_difference(
+                        m_colors.at<cv::Vec3b>(p.y + dy, p.x + dx), m_source.image().at<cv::Vec3b>(qy + dy, qx + dx));
+                    (role == Role::kFit ? fit : guide) += difference;
+                }
+            }
+            if (static_cast<double>(fit) > bound)
+                return;
+            m_best = std::min(m_best, fit);
+            m_candidates.push_back({qy, qx, fit, guide});
+        }
+
+        enum class Role
+        {
+            kIgnored,
+            kFit,   // a known or filled pixel
+            kGuide, // a hole pixel with the coarser fill
+        };
+
+        Role _role(int y, int x) const
+        {
+            if (y < 0 || y >= m_size.height || x < 0 || x >= m_size.width)
+                return Role::kIgnored;
+            if (m_filled.at<unsigned char>(y, x))
+                return Role::kFit;
+            return m_guide && is_hole(m_source, y, x) ? Role::kGuide : Role::kIgnored;
+        }
+
+        // The center of the source patch for p, or (-1, -1) if no patch fits.
+        cv::Vec2i _choose(cv::Point p)
+        {
+            m_candidates.clear();
+            m_best = kNone;
+            // first, so that the bound of the near ties never drops it
+            if (m_guide)
+                _evaluate(p, m_guide->at(p.y, p.x, 0), m_guide->at(p.y, p.x, 1));
+            const bool guided = !m_candidates.empty();
+            _evaluate_neighbors(p);
+            _search_randomly(p);
+
+            int filled = 0;
+            for_window(m_size, p.y, p.x, m_patch_size, [this, &filled](int y, int x) {
+                filled += m_filled.at<unsigned char>(y, x);
+            });
+            filled = std::max(filled, 1);
+            if (m_candidates.empty() || m_fitted < kWarmUp ||
+                static_cast<double>(m_best) / filled > kPoorFit * m_mean_fit)
+                _search_everywhere(p);
+            if (m_candidates.empty())
+                return {-1, -1};
+
+            const Candidate &chosen = _pick(guided);
+            const double fit = static_cast<double>(chosen.fit) / filled;
+            m_mean_fit = m_fitted == 0 ? fit : kFitMemory * m_mean_fit + (1 - kFitMemory) * fit;
+            ++m_fitted;
+            return {chosen.y, chosen.x};
+        }
+
+        // The matches of the peeled neighbors, shifted to p, which continue the regions they copy.
+        void _evaluate_neighbors(cv::Point p)
+        {
+            for_window(m_size, p.y, p.x, 1, [this, p](int y, int x) {
+                const auto match = m_matches.at<cv::Vec2i>(y, x);
+                if (match[0] >= 0)
+                    _evaluate(p, match[0] + p.y - y, match[1] + p.x - x);
+            });
+        }
+
+        // Twice around the best fit so far, in windows of decreasing size.
+        void _search_randomly(cv::Point p)
+        {
+            for (int round = 0; round < 2; ++round)
+            {
+                const Candidate *best = _best_fit();
+                const int cy = best ? best->y : m_size.height / 2;
+                const int cx = best ? best->x : m_size.width / 2;
+                for (int radius = std::max(m_size.height, m_size.width) / 2; radius >= 1; radius /= 2)
+                {
+                    const int top = std::max(cy - radius, 0);
+                    const int left = std::max(cx - radius, 0);
+                    const int bottom = std::min(cy + radius, m_size.height - 1);
+                    const int right = std::min(cx + radius, m_size.width - 1);
+                    // Two statements: the order of evaluation of arguments differs between compilers.
+                    const int qy = top + NearestNeighborField::random_index(bottom - top + 1);
+                    const int qx = left + NearestNeighborField::random_index(right - left + 1);
+                    _evaluate(p, qy, qx);
+                }
+            }
+        }
+
+        void _search_everywhere(cv::Point p)
+        {
+            for (int qy = m_patch_size; qy < m_size.height - m_patch_size; ++qy)
+                for (int qx = m_patch_size; qx < m_size.width - m_patch_size; ++qx)
+                    _evaluate(p, qy, qx);
+        }
+
+        // The guide's link, otherwise among the near ties of the best fit the patch closest to the coarser fill.
+        const Candidate &_pick(bool guided) const
+        {
+            const auto best = static_cast<double>(m_best);
+            if (guided && static_cast<double>(m_candidates[0].fit) <= (1 + kGuideTolerance) * best + 1)
+                return m_candidates[0];
+            const double near = (1 + kNearTie) * best + 1;
+            // the first best fit, which is a near tie itself
+            auto chosen =
+                std::min_element(m_candidates.begin(), m_candidates.end(), [](const Candidate &a, const Candidate &b) {
+                    return a.fit < b.fit;
+                });
+            for (auto candidate = m_candidates.begin(); candidate != m_candidates.end(); ++candidate)
+            {
+                if (static_cast<double>(candidate->fit) <= near &&
+                    (candidate->guide < chosen->guide ||
+                     (candidate->guide == chosen->guide && candidate->fit < chosen->fit)))
+                    chosen = candidate;
+            }
+            return *chosen;
+        }
+
+        const Candidate *_best_fit() const
+        {
+            const Candidate *best = nullptr;
+            for (const auto &candidate : m_candidates)
+                if (!best || candidate.fit < best->fit)
+                    best = &candidate;
+            return best;
+        }
+
+        // Copies the source pixel, shifted by the mean color difference of the filled pixels to their sources:
+        // raw colors from elsewhere lost the tone that the coarser levels laid out, as in a vignetted photo.
+        void _fill(cv::Point p, cv::Vec2i match)
+        {
+            if (match[0] >= 0)
+            {
+                const ColorDifferences differences = _differences(p, match);
+                const auto &color = m_source.image().at<cv::Vec3b>(match[0], match[1]);
+                auto &value = m_colors.at<cv::Vec3b>(p.y, p.x);
+                for (int c = 0; c < 3; ++c)
+                    value[c] = cv::saturate_cast<unsigned char>(
+                        color[c] + differences.sum[c] / std::max(differences.count, 1));
+                m_matches.at<cv::Vec2i>(p.y, p.x) = match;
+            }
+
+            double confidence = 0;
+            for_window(m_size, p.y, p.x, m_patch_size, [this, &confidence](int y, int x) {
+                confidence += m_confidence.at<double>(y, x);
+            });
+            const double side = 2.0 * m_patch_size + 1;
+            m_confidence.at<double>(p.y, p.x) = confidence / (side * side);
+            m_filled.at<unsigned char>(p.y, p.x) = 1;
+            for_window(m_size, p.y, p.x, 1, [this](int y, int x) { _enter_front(y, x); });
+        }
+
+        struct ColorDifferences
+        {
+            cv::Vec3d sum;
+            int count = 0;
+        };
+
+        // The color differences of the filled pixels around p to those around the match.
+        ColorDifferences _differences(cv::Point p, cv::Vec2i match) const
+        {
+            ColorDifferences differences;
+            for (int dy = -m_patch_size; dy <= m_patch_size; ++dy)
+            {
+                for (int dx = -m_patch_size; dx <= m_patch_size; ++dx)
+                {
+                    if (!_filled(p.y + dy, p.x + dx))
+                        continue;
+                    const auto &a = m_colors.at<cv::Vec3b>(p.y + dy, p.x + dx);
+                    const auto &b = m_source.image().at<cv::Vec3b>(match[0] + dy, match[1] + dx);
+                    differences.sum += cv::Vec3d(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+                    ++differences.count;
+                }
+            }
+            return differences;
+        }
+
+        static constexpr std::int64_t kNone = std::numeric_limits<std::int64_t>::max();
+
+        const MaskedImage &m_source;
+        const MaskedImage &m_target;
+        const NearestNeighborField *m_guide;
+        int m_patch_size;
+        cv::Size m_size;
+        cv::Mat m_colors;
+        cv::Mat m_filled;
+        cv::Mat m_front_mask;
+        cv::Mat m_confidence;
+        cv::Mat m_matches;
+        std::vector<cv::Point> m_front;
+        std::vector<Candidate> m_candidates;
+        std::int64_t m_best = kNone;
+        double m_mean_fit = 0;
+        int m_fitted = 0;
+    };
 } // namespace
 
 /**
@@ -714,6 +1097,9 @@ MaskedImage Inpainting::_run_levels(
             target = source.clone();
             target.clear_mask();
         }
+        cv::Mat peeled;
+        if (_peels(level))
+            target = _peel(level, target, peeled);
         // The votes of the completeness field keep the known pixels near their input on the
         // coarse levels; on levels 0 and 1, which keep the known pixels, they change nothing.
         if (level < 2)
@@ -723,6 +1109,7 @@ MaskedImage Inpainting::_run_levels(
                                        : NearestNeighborField(source, target, m_level_metric, *m_source2target);
         m_target2source = coarsest ? NearestNeighborField(target, source, m_level_metric)
                                    : NearestNeighborField(target, source, m_level_metric, m_target2source);
+        _link_peeled(peeled);
 
         trace(verbose, "Initialization done.");
 
@@ -757,6 +1144,40 @@ MaskedImage Inpainting::_fill_coarse_levels(const MaskedImage &target, bool verb
     m_source2target = plain_source2target;
     m_target2source = plain_target2source;
     return plain;
+}
+
+// The coarsest level with a hole and the one below, where the fill is laid out. With patch sizes from
+// kCoarsePatchSize on, the searches of the finer levels wiped the peeled lines out again.
+bool Inpainting::_peels(int level) const
+{
+    return m_distance_metric->patch_size() < kCoarsePatchSize && level <= m_coarsest_hole_level &&
+           level >= m_coarsest_hole_level - 1;
+}
+
+MaskedImage Inpainting::_peel(int level, const MaskedImage &target, cv::Mat &matches) const
+{
+    const MaskedImage &source = m_pyramid[level];
+    const int patch_size = m_distance_metric->patch_size();
+    if (level == static_cast<int>(m_pyramid.size()) - 1)
+        return Peel(source, target, nullptr, patch_size).run(matches);
+    // The field that the search of this level starts from: the links of the coarser one are off by a pixel here,
+    // so the peel deviated from patterns that the coarser levels had locked onto.
+    NearestNeighborField guide(target, source, m_level_metric, m_target2source);
+    guide.minimize(nnf_iterations(level));
+    return Peel(source, target, &guide, patch_size).run(matches);
+}
+
+// The search does not find the few sources of a line that the coarser levels lost.
+void Inpainting::_link_peeled(const cv::Mat &matches)
+{
+    for (int y = 0; y < matches.rows; ++y)
+    {
+        for (int x = 0; x < matches.cols; ++x)
+        {
+            if (const auto match = matches.at<cv::Vec2i>(y, x); match[0] >= 0)
+                m_target2source.link_if_closer(y, x, match[0], match[1]);
+        }
+    }
 }
 
 // The mean distance of the patches with holes after a search with patch_size on the level,
