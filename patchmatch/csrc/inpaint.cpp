@@ -1049,17 +1049,7 @@ void Inpainting::_initialize_pyramid()
 cv::Mat Inpainting::run(bool verbose, unsigned int random_seed)
 {
     NearestNeighborField::seed_random(random_seed);
-
-    int level = static_cast<int>(m_pyramid.size()) - 1;
-    MaskedImage target;
-    // Below level 2 no level is left to compare the fills on.
-    if (m_coarse_metric && m_coarsest_hole_level >= 2)
-    {
-        target = _run_levels(level, m_coarsest_hole_level + 1, target, m_distance_metric, verbose);
-        target = _fill_coarse_levels(target, verbose);
-        level = m_coarsest_hole_level - 2;
-    }
-    target = _run_levels(level, 0, target, m_distance_metric, verbose);
+    MaskedImage target = _run_levels(verbose);
 
     // Only the holes are filled. The maximization step of level 0 keeps the known pixels,
     // but the pyramid leaves globally masked pixels black, which are neither filled nor
@@ -1081,15 +1071,19 @@ cv::Mat Inpainting::run(bool verbose, unsigned int random_seed)
     return result;
 }
 
-// Runs the levels from `from` down to `to`; target is empty on the coarsest level.
-MaskedImage Inpainting::_run_levels(
-    int from, int to, MaskedImage target, const PatchDistanceMetric *metric, bool verbose)
+// Fills the holes level by level, from the coarsest one down, and returns level 0.
+MaskedImage Inpainting::_run_levels(bool verbose)
 {
-    for (int level = from; level >= to; --level)
+    MaskedImage target;
+    for (int level = static_cast<int>(m_pyramid.size()) - 1; level >= 0; --level)
     {
         trace(verbose, "Inpainting level: ", level);
 
         const MaskedImage &source = m_pyramid[level];
+        // The larger patches on the coarsest level with a hole only: below, the holes are wider than them, and they
+        // took flat sources in foliage.
+        const PatchDistanceMetric *metric =
+            m_coarse_metric && level == m_coarsest_hole_level ? m_coarse_metric.get() : m_distance_metric;
         m_level_metric = m_fitting_metrics[level] ? m_fitting_metrics[level].get() : metric;
         const bool coarsest = level == static_cast<int>(m_pyramid.size()) - 1;
         if (coarsest)
@@ -1116,34 +1110,6 @@ MaskedImage Inpainting::_run_levels(
         target = _expectation_maximization(source, target, level, verbose);
     }
     return target;
-}
-
-// Fills the coarsest level with a hole and the next one with patch_size and with the
-// larger patches, and keeps the fill with the lower energy on the following level. The
-// larger patches lock onto repeating structures but pick flat sources elsewhere, which
-// made fills of foliage gray.
-MaskedImage Inpainting::_fill_coarse_levels(const MaskedImage &target, bool verbose)
-{
-    const int level = m_coarsest_hole_level;
-    const auto source2target = m_source2target;
-    const auto target2source = m_target2source;
-
-    const MaskedImage plain = _run_levels(level, level - 1, target, m_distance_metric, verbose);
-    const double plain_energy = _hole_energy(level - 2, plain);
-    const auto plain_source2target = m_source2target;
-    const auto plain_target2source = m_target2source;
-
-    m_source2target = source2target;
-    m_target2source = target2source;
-    MaskedImage coarse = _run_levels(level, level - 1, target, m_coarse_metric.get(), verbose);
-    const double coarse_energy = _hole_energy(level - 2, coarse);
-    trace(verbose, "Energy with patch_size: ", plain_energy, ", with larger patches: ", coarse_energy);
-    m_level_metric = m_distance_metric;
-    if (coarse_energy < plain_energy)
-        return coarse;
-    m_source2target = plain_source2target;
-    m_target2source = plain_target2source;
-    return plain;
 }
 
 // The coarsest level with a hole and the one below, where the fill is laid out. With patch sizes from
@@ -1178,32 +1144,6 @@ void Inpainting::_link_peeled(const cv::Mat &matches)
                 m_target2source.link_if_closer(y, x, match[0], match[1]);
         }
     }
-}
-
-// The mean distance of the patches with holes after a search with patch_size on the level,
-// started from the field of the level above, like the first iteration of that level.
-double Inpainting::_hole_energy(int level, const MaskedImage &target) const
-{
-    const MaskedImage &source = m_pyramid[level];
-    NearestNeighborField field(target, source, m_distance_metric, m_target2source);
-    field.minimize(nnf_iterations(level));
-
-    const int patch_size = m_distance_metric->patch_size();
-    const auto size = source.size();
-    double sum = 0;
-    int count = 0;
-    for (int i = 0; i < size.height; ++i)
-    {
-        for (int j = 0; j < size.width; ++j)
-        {
-            if (source.contains_mask(i, j, patch_size) && !source.is_globally_masked(i, j))
-            {
-                sum += field.at(i, j, 2);
-                ++count;
-            }
-        }
-    }
-    return count > 0 ? sum / count : 0;
 }
 
 // EM-Like algorithm (see "PatchMatch" - page 6).
