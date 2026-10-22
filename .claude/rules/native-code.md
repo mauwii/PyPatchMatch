@@ -176,10 +176,10 @@ again.
   `edges` with 7: 5.10 → 3.42, grass-large error 19.5 → 17.0), but small holes have to
   reuse their few fitting sources (coffee with 7 and 15: 18 → 23.5), and the fills got
   blurrier (detail −2 to −6 %). On the coarse levels alone as well.
-- Not tried: starting the holes of the coarsest level smoothly instead of black. No case
-  of the evaluation keeps a hole there, as the downsampling shrinks them; only
-  outpainting of a third to half of the image with 7 or 15, or a hole over 75 % of the
-  image with 15, does.
+- Not tried: starting the holes of the coarsest level smoothly instead of black. As the
+  downsampling shrinks the holes, only coffee-corner with 15 keeps one there (51 of 216
+  pixels); outpainting of a third of the image does with 15, of half with 7, and a hole
+  over 75 % of the image with 15.
 - More, with measurements, in the issues closed as not planned: #115 (start radius of
   the new-hole search, merging random fields), #120 (several cores), #124 (confidence
   weighting for large holes) and #157 (stripes in brick-large: rotation, locality).
