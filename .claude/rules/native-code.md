@@ -71,15 +71,31 @@ again.
   for the gradients: up to `patch_size` 4 every patch over it is above the 10 %, so that
   line of a hole at the image border never got a vote and stayed flat
   (`test_inpaint_textures_the_image_border`).
-- The larger patches of `_fill_coarse_levels` without the energy comparison: they lock
-  onto repeating patterns but take flat sources in foliage, which filled holes in
-  `forest.bmp` gray (11 of 20 positions worse, `test_reconstructs_known_background`
-  5.9 → 8.4). Also rejected: voting with them (coffee detail 0.34 → 0.29), a radius of
-  7 (coffee error 17.5 → 20.0, up to 3× the time) or 4 (a fifth faster, but the
-  pattern with a hole of radius 50 stayed broken), the energy on the level right below
-  them (border patches dominate it), a margin in their favor (from 1.05 on, forest
-  fills got worse), and choosing by the depth of the hole (the same for the failing
-  pattern and the forest holes).
+- The larger patches of `m_coarse_metric` on the level below the coarsest with a hole
+  as well: the holes there are wider than them, and they take flat sources in foliage,
+  which filled holes in `forest.bmp` gray (11 of 20 positions worse,
+  `test_reconstructs_known_background` 5.9 → 8.4). Until 2.2 both levels were filled
+  with patch_size and with the larger patches, and the fill with the lower mean
+  distance with patch_size on the next level was kept. That distance does not see
+  whether structures line up: right in 173 of 280 seeds (10 seeds of 19 cases and 20
+  holes in `forest.bmp` where the errors differ by 5 %), brick and pattern were better
+  with the larger patches in 10 of 10 seeds but got them in 5 and 1. On the coarsest
+  level alone and without a choice (patch size 3, 10 seeds): error −5.9 %, edges
+  −1.9 %, 10 to 50 % faster; on other holes and seeds −6.9 % on the cases, −8.2 % on 20
+  holes in `forest.bmp` and −5.1 % on 12 in coffee, chelsea and camera, but their detail
+  −3.6 % and variety −6.3 %: chelsea copies one region of fur (variety 0.81 → 0.45).
+  With 30 seeds brick 10.3 → 7.5 and pattern 5.3 → 3.6, pattern-wide 5.2 → 5.9. Holes
+  that leave level 1 or 0 changed within 1 %. Other choices between the two fills: the
+  distance with patch sizes 2 to 7, of the patches inside the holes only, with twice
+  the passes, and their sums gained at most 2 % on the cases; vetoes by the detail or
+  the tone of a fill against its surroundings did worse; the plain fill against the
+  new one by the distance with patch size 4 (−2.7 % on other holes and seeds) or a
+  choice among all three (−3.5 %) cost the second path. Also rejected, measured with
+  the comparison: voting with the larger patches (coffee detail 0.34 → 0.29), a
+  radius of 7 (coffee error 17.5 → 20.0, up to 3× the time) or 4 (a fifth faster, but
+  the pattern with a hole of radius 50 stayed broken), a margin in their favor (from
+  1.05 on, forest fills got worse), and choosing by the depth of the hole (the same for
+  the failing pattern and the forest holes).
 - Split votes (mean of the low frequencies plus the detail of the best vote) on coarser
   levels than the two finest: from level 2 on they helped coffee with `patch_size` 3,
   but raised the error of brick with 7 from 6.96 to 8.99 and of brick-global from 6.30
@@ -196,9 +212,8 @@ again.
   8.2 → 9.3. Without the tone shift: camera 3.30 → 3.89. With patch sizes 7 and 15
   the searches of the finer levels wipe the peeled lines out again (15: tripod and
   pole unchanged; 7: pole 32 → 20, but forest-frame, meadow and brick-global worse).
-  Kept: pattern +16 % with 30 seeds; on main its fill depends on which path wins a
-  near tie of the energies (4 of 10 seeds error 2.4, the others 4.7 to 6.2), and the
-  peel tips the energies towards the plain path.
+  While two fills of the coarse levels were compared, the peel tipped the near tie of
+  their distances towards patch_size: pattern +16 % with 30 seeds.
 - Not tried: starting the holes of the coarsest level smoothly instead of black. As the
   downsampling shrinks the holes, only coffee-corner with 15 keeps one there (51 of 216
   pixels); outpainting of a third of the image does with 15, of half with 7, and a hole

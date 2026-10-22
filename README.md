@@ -76,9 +76,9 @@ The previous import path `from patchmatch import patch_match` keeps working.
 
 `patch_size` is the radius of the compared patches, which span `2 * patch_size + 1`
 pixels in each direction. Larger patches follow larger structures but are much slower;
-the default of 15 compares 31x31 patches, the examples use 3. Below 5, the coarse levels
-that lay out the fill are also tried with a radius of 5, which is kept where it fits
-the surroundings better, so that repeating patterns continue across larger holes. Above
+the default of 15 compares 31x31 patches, the examples use 3. Below 5, the coarsest level
+with a hole searches with a radius of 5, so that repeating patterns and lines continue
+across larger holes. Above
 7, coarse levels narrower than six patches use the largest radius that fits, but at
 least 7: larger patches found no sources there and left the fill flat.
 
