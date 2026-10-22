@@ -245,11 +245,15 @@ def test_line_goes_on_through_the_hole(name, column, limit):
     """The coarser levels lost the leg of the tripod and the pole of the birdhouses,
     and the fills broke them off: edges 4.2 to 4.8 and error 27 to 33 with ten seeds.
     """
-    case = next(case for case in evaluation.cases() if case.name == name)
+    filename, hole = evaluation.LINES[name]
+    truth = evaluation.load(IMAGES / filename)
+    holes = evaluation.ellipse(truth.shape, *hole)
+    source = truth.copy()
+    source[holes] = 255
 
-    result = patchmatch.inpaint(case.image, case.holes.astype(np.uint8), patch_size=3)
+    result = patchmatch.inpaint(source, holes.astype(np.uint8), patch_size=3)
 
-    assert evaluation.measure(result, case.holes, case.truth)[column] < limit
+    assert evaluation.measure(result, holes, truth)[column] < limit
 
 
 def test_explicit_mask_matches_implicit_white_mask(pruned_image):

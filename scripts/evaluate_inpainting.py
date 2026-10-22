@@ -94,6 +94,11 @@ HOLES = {
     "chelsea": (52, 215, 24, 40),
     "pattern": (320, 320, 40, 40),
 }
+# image and hole of the cases across a thin line, shared with the e2e tests
+LINES = {
+    "tripod": ("camera_aged.png", (410, 352, 28, 28)),
+    "pole": ("forest.bmp", (290, 284, 22, 22)),
+}
 # pattern.png repeats along both diagonals, every half of these pixels in y and x
 # (autocorrelation)
 PERIOD = (255.5, 253.5)
@@ -169,9 +174,9 @@ def cases() -> Iterator[Case]:
     y, x = y / PERIOD[0], x / PERIOD[1]
     ijmap = np.dstack([(y + x) % 1, (y - x) % 1, np.zeros(y.shape)]).astype(np.float32)
     yield cut("pattern-guided", pattern, wide, ijmap=ijmap)
-    aged = load(IMAGES / "camera_aged.png")
-    yield cut("tripod", aged, ellipse(aged.shape, 410, 352, 28, 28))
-    yield cut("pole", forest, ellipse(forest.shape, 290, 284, 22, 22))
+    for name, (filename, hole) in LINES.items():
+        truth = load(IMAGES / filename)
+        yield cut(name, truth, ellipse(truth.shape, *hole))
     coffee = load(IMAGES / "coffee.png")
     corner = np.zeros(coffee.shape[:2], dtype=bool)
     corner[-133:] = corner[:, -200:] = True
