@@ -113,6 +113,13 @@ environment = { OpenCV_ROOT = "/tmp/opencv" }
 before-all = "/opt/python/cp312-cp312/bin/python {project}/scripts/build_opencv.py"
 environment-pass = ["UV_EXCLUDE_NEWER"]
 
+# The hardening of distribution compilers, which the gcc-toolset of manylinux lacks;
+# before-all builds OpenCV with it too.
+[tool.cibuildwheel.linux.environment]
+OpenCV_ROOT = "/tmp/opencv"
+CXXFLAGS = "-fstack-protector-strong -fstack-clash-protection -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3"
+LDFLAGS = "-Wl,-z,relro,-z,now"
+
 [tool.cibuildwheel.macos]
 environment = { OpenCV_ROOT = "/tmp/opencv", MACOSX_DEPLOYMENT_TARGET = "11.0" }
 

@@ -111,6 +111,11 @@ jobs:
             zlib=" _?(adler32|crc32|deflate|inflate|gz[a-z]+)"
             if nm wheel/patchmatch/libpatchmatch.* | grep -E "$zlib"; then exit 1; fi
           fi
+      - name: Check the hardening flags of pyproject.toml
+        if: runner.os == 'Linux'
+        run: |
+          readelf -d wheel/patchmatch/libpatchmatch.so | grep BIND_NOW
+          nm -D wheel/patchmatch/libpatchmatch.so | grep __stack_chk_fail
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist-wheel-${{ matrix.os }}
