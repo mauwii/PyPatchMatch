@@ -10,9 +10,17 @@ cells it compares. grass-edge cuts a band at the right border, as in outpainting
 brick-large and grass-large cut a circle of radius 242 into the center, 70 % of the
 image. pattern repeats almost exactly, so its error tells a fill that continues it (2 to
 6) from a broken one; pattern-wide widens the hole to a radius of 60, where patch size 3
-mixed the rings before 2.2 (error 37). forest-global and brick-global add a global mask,
-darkened in the report: the plant of examples/py_example_global_mask.py and the left
-third of brick.png.
+mixed the rings before 2.2 (error 37). pattern-guided fills the same hole with
+inpaint_regularity, guided by the lattice of the pattern; the plain fill continues it
+already, so the guide changes little. tripod cuts a hole across a leg of the tripod in
+camera_aged.png, a thin diagonal line that the fill has to continue; 2.2 breaks it off
+(edges 4.6 with patch size 3). pole cuts one across the pole of the birdhouses in
+forest.bmp, which stands in front of the forest above the hole and of the meadow below
+it; 2.2 breaks it off as well (error 30). coffee-corner and forest-frame outpaint the
+right and bottom third of coffee.png and a frame of an eighth around forest.bmp; with
+patch size 15, coffee-corner keeps a hole on the coarsest level. forest-global and
+brick-global add a global mask, darkened in the report: the plant of
+examples/py_example_global_mask.py and the left third of brick.png.
 
 Usage:
     uv run python scripts/evaluate_inpainting.py
@@ -86,6 +94,9 @@ HOLES = {
     "chelsea": (52, 215, 24, 40),
     "pattern": (320, 320, 40, 40),
 }
+# pattern.png repeats along both diagonals, every half of these pixels in y and x
+# (autocorrelation)
+PERIOD = (255.5, 253.5)
 COLUMNS = ("seam", "detail", "error", "edges", "variety")
 
 
@@ -95,6 +106,7 @@ class Case(NamedTuple):
     holes: np.ndarray
     truth: np.ndarray | None
     global_mask: np.ndarray | None = None
+    ijmap: np.ndarray | None = None  # fills with inpaint_regularity
 
 
 class Result(NamedTuple):
@@ -122,10 +134,11 @@ def cut(
     truth: np.ndarray,
     holes: np.ndarray,
     global_mask: np.ndarray | None = None,
+    ijmap: np.ndarray | None = None,
 ) -> Case:
     image = truth.copy()
     image[holes] = 255
-    return Case(name, image, holes, truth, global_mask)
+    return Case(name, image, holes, truth, global_mask, ijmap)
 
 
 def cases() -> Iterator[Case]:
@@ -150,7 +163,22 @@ def cases() -> Iterator[Case]:
         truth = load(IMAGES / f"{name}.png")
         yield cut(f"{name}-large", truth, ellipse(truth.shape, 256, 256, 242, 242))
     pattern = load(IMAGES / "pattern.png")
-    yield cut("pattern-wide", pattern, ellipse(pattern.shape, 320, 320, 60, 60))
+    wide = ellipse(pattern.shape, 320, 320, 60, 60)
+    yield cut("pattern-wide", pattern, wide)
+    y, x = np.mgrid[: pattern.shape[0], : pattern.shape[1]]
+    y, x = y / PERIOD[0], x / PERIOD[1]
+    ijmap = np.dstack([(y + x) % 1, (y - x) % 1, np.zeros(y.shape)]).astype(np.float32)
+    yield cut("pattern-guided", pattern, wide, ijmap=ijmap)
+    aged = load(IMAGES / "camera_aged.png")
+    yield cut("tripod", aged, ellipse(aged.shape, 410, 352, 28, 28))
+    yield cut("pole", forest, ellipse(forest.shape, 290, 284, 22, 22))
+    coffee = load(IMAGES / "coffee.png")
+    corner = np.zeros(coffee.shape[:2], dtype=bool)
+    corner[-133:] = corner[:, -200:] = True
+    yield cut("coffee-corner", coffee, corner)
+    frame = np.ones(forest.shape[:2], dtype=bool)
+    frame[45:-45, 80:-80] = False
+    yield cut("forest-frame", forest, frame)
     plant = np.zeros(pruned.shape[:2], dtype=bool)
     plant[290:, 100:180] = True
     yield Case("forest-global", pruned, white(pruned), None, plant)
@@ -281,13 +309,20 @@ def fill_seed(path: str, case: Case, patch_size: int, seed: int) -> Seed:
     # processes, not threads: the seed and patch_match._lib are global
     patch_match._lib = library(Path(path))
     patchmatch.set_random_seed(seed)
+    mask = case.holes.astype(np.uint8)
     start = time.perf_counter()
-    fill = patchmatch.inpaint(
-        case.image,
-        case.holes.astype(np.uint8),
-        global_mask=case.global_mask,
-        patch_size=patch_size,
-    )
+    if case.ijmap is None:
+        fill = patchmatch.inpaint(
+            case.image, mask, global_mask=case.global_mask, patch_size=patch_size
+        )
+    else:
+        fill = patchmatch.inpaint_regularity(
+            case.image,
+            mask,
+            case.ijmap,
+            global_mask=case.global_mask,
+            patch_size=patch_size,
+        )
     seconds = time.perf_counter() - start
     return fill, measure(fill, case.holes, case.truth), seconds
 
