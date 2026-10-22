@@ -737,8 +737,7 @@ namespace
                     nx += dx * (dy == 0 ? 2 : 1);
                 }
             }
-            const double norm = std::hypot(ny, nx);
-            if (norm > 0)
+            if (const double norm = std::hypot(ny, nx); norm > 0)
             {
                 ny /= norm;
                 nx /= norm;
@@ -938,7 +937,7 @@ namespace
 
         struct ColorDifferences
         {
-            cv::Vec3d sum;
+            std::array<double, 3> sum{}; // not cv::Vec3d, whose move is not noexcept
             int count = 0;
         };
 
@@ -954,7 +953,8 @@ namespace
                         continue;
                     const auto &a = m_colors.at<cv::Vec3b>(p.y + dy, p.x + dx);
                     const auto &b = m_source.image().at<cv::Vec3b>(match[0] + dy, match[1] + dx);
-                    differences.sum += cv::Vec3d(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+                    for (int c = 0; c < 3; ++c)
+                        differences.sum[c] += a[c] - b[c];
                     ++differences.count;
                 }
             }
