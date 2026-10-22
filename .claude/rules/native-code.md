@@ -176,6 +176,29 @@ again.
   `edges` with 7: 5.10 → 3.42, grass-large error 19.5 → 17.0), but small holes have to
   reuse their few fitting sources (coffee with 7 and 15: 18 → 23.5), and the fills got
   blurrier (detail −2 to −6 %). On the coarse levels alone as well.
+- Other forms of the peel (`Peel`, patch size 3, 10 seeds, 30 for the patterns and
+  bricks). Peeling only the coarsest level with a hole left the pole broken (error 26
+  to 30): its sources in front of the forest exist one level below. Peeling only that
+  level, or choosing the path before the peel and peeling the chosen one, kept the
+  fills of tripod and pole, but the bricks got worse (brick-global +10 to +20 %), and
+  peeling only the level below also tilted every selection of pattern to the plain
+  path (4.37 → 5.70). Onion-peel order without the isophotes: the sides filled the
+  middle of the hole before the leg grew more than 3 rows. A full search for every
+  pixel: 10 to 50 times slower, and the pole was worse (17.5 against 11.7), as the
+  matches of the peeled neighbors continue a line coherently. Without the seeded links
+  the search lost what the peel laid out (brick 9.8 → 11.8). Windows of 11x11 or two
+  windows of 7x7 and 11x11: the line is a minor term in them (pattern-wide 46). Partly
+  unknown windows: chelsea repeated the border of the hole (variety 0.45). An absolute
+  tolerance for the near ties lost the low-contrast leg, the guide as a weighted term
+  of the distance kept the pole broken, and a regularized or additive priority gained
+  little (pole 21 → 16). The guide's link with a tolerance of 0.3 instead of 2:
+  pattern-wide +44 %; of 1: brick-global and pattern-wide +8 to +9 %; of 3: meadow
+  8.2 → 9.3. Without the tone shift: camera 3.30 → 3.89. With patch sizes 7 and 15
+  the searches of the finer levels wipe the peeled lines out again (15: tripod and
+  pole unchanged; 7: pole 32 → 20, but forest-frame, meadow and brick-global worse).
+  Kept: pattern +16 % with 30 seeds; on main its fill depends on which path wins a
+  near tie of the energies (4 of 10 seeds error 2.4, the others 4.7 to 6.2), and the
+  peel tips the energies towards the plain path.
 - Not tried: starting the holes of the coarsest level smoothly instead of black. As the
   downsampling shrinks the holes, only coffee-corner with 15 keeps one there (51 of 216
   pixels); outpainting of a third of the image does with 15, of half with 7, and a hole

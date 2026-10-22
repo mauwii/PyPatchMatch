@@ -110,8 +110,21 @@ public:
 
     void minimize(int nr_pass);
 
+    void link_if_closer(int y, int x, int y_target, int x_target)
+    {
+        // In coherent regions most propagated candidates are the link itself, measured in full otherwise.
+        if (y_target == at(y, x, 0) && x_target == at(y, x, 1))
+            return;
+        const int current = at(y, x, 2);
+        const Measured measured = _measure(y, x, y_target, x_target, current);
+        if (measured.distance < current)
+            _set(y, x, y_target, x_target, measured);
+    }
+
     // Seeds the random search of the calling thread.
     static void seed_random(unsigned int seed);
+    // A number in [0, n) from the generator of the calling thread.
+    static int random_index(int n);
 
 private:
     // A distance and the sum of the pixel costs behind it, -1 if unknown.
@@ -123,16 +136,6 @@ private:
 
     // The distance if it is below bound, otherwise any value >= bound.
     Measured _measure(int y, int x, int y_target, int x_target, int bound) const;
-    void _link_if_closer(int y, int x, int y_target, int x_target)
-    {
-        // In coherent regions most propagated candidates are the link itself, measured in full otherwise.
-        if (y_target == at(y, x, 0) && x_target == at(y, x, 1))
-            return;
-        const int current = at(y, x, 2);
-        const Measured measured = _measure(y, x, y_target, x_target, current);
-        if (measured.distance < current)
-            _set(y, x, y_target, x_target, measured);
-    }
     void _set(int y, int x, int y_target, int x_target, Measured measured)
     {
         auto ptr = m_field.ptr<int>(y, x);

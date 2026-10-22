@@ -64,6 +64,7 @@ sdist.include = [
     "examples/images/camera_damaged.png",
     "examples/images/camera_damaged_mask.png",
     "examples/images/chelsea.png",
+    "examples/images/forest.bmp",
     "examples/images/forest_pruned.bmp",
     "patchmatch/_version.py",
 ]
