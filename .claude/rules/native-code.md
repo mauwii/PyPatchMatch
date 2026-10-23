@@ -84,6 +84,11 @@ again.
   −1.9 %, 10 to 50 % faster; on other holes and seeds −6.9 % on the cases, −8.2 % on 20
   holes in `forest.bmp` and −5.1 % on 12 in coffee, chelsea and camera, but their detail
   −3.6 % and variety −6.3 %: chelsea copies one region of fur (variety 0.81 → 0.45).
+  Two parts of its hole copy the same source 12 by 24 to 28 pixels apart (28 to 46 % of
+  the 8x8 patches have a twin), laid out on the coarsest level and grown by the EM of the
+  next two; every variant without the repetition raised its error by 8 to 12 %:
+  patch_size there, patch size 4 or 5 on the level below (holes in `forest.bmp` +2.5
+  and +5 %), a radius capped by the side of the level (brick 6.76 → 9.60).
   With 30 seeds brick 10.3 → 7.5 and pattern 5.3 → 3.6, pattern-wide 5.2 → 5.9. Holes
   that leave level 1 or 0 changed within 1 %. Other choices between the two fills: the
   distance with patch sizes 2 to 7, of the patches inside the holes only, with twice
@@ -214,6 +219,15 @@ again.
   pole unchanged; 7: pole 32 → 20, but forest-frame, meadow and brick-global worse).
   While two fills of the coarse levels were compared, the peel tipped the near tie of
   their distances towards patch_size: pattern +16 % with 30 seeds.
+  Against the pieces of the wrong phase that the peel of the level below the coarsest
+  hole level put into the rings of pattern-wide (4 of 30 seeds after #188): no peel
+  there (error +9.6 % over the cases, pole 33), its guide searched with the larger
+  patches (5.87), a tolerance of 4 or 6 everywhere (meadow +17 %, pole 22.6 with 6), of
+  3 or 4 on that level alone (with 4: coffee +5.7 %, tripod `edges` 1.55 → 1.97), the
+  best fit within 1 or 2 pixels of the guide's link instead of the link (its phase
+  drifts: pattern-wide 14.0 and 11.0), and the coherence of the guide's links without
+  the variance (the tripod leg broke where the background around it is copied
+  coherently).
 - Not tried: starting the holes of the coarsest level smoothly instead of black. As the
   downsampling shrinks the holes, only coffee-corner with 15 keeps one there (51 of 216
   pixels); outpainting of a third of the image does with 15, of half with 7, and a hole
