@@ -682,6 +682,11 @@ namespace
         static constexpr double kNearTie = 0.3;
         // The guide's own link wins unless the known pixels clearly contradict it, as at the end of a line.
         static constexpr double kGuideTolerance = 2;
+        // More where the coarser levels locked onto a structure, which the peel broke into pieces of the wrong phase:
+        // the guide's links around the pixel share one offset, and its source is about as varied as the best fit's,
+        // unlike a coherent background across which a line continues.
+        static constexpr double kLockedGuideTolerance = 4;
+        static constexpr double kLockedVariance = 0.75;
         // A fit this much worse than the mean of the pixels before calls for a search of all sources: the random
         // search does not find the few sources of a line. The first pixels search all, the mean forgets slowly.
         static constexpr double kPoorFit = 3;
@@ -833,7 +838,7 @@ namespace
             if (m_candidates.empty())
                 return {-1, -1};
 
-            const Candidate &chosen = _pick(guided);
+            const Candidate &chosen = _pick(p, guided);
             const double fit = static_cast<double>(chosen.fit) / filled;
             m_mean_fit = m_fitted == 0 ? fit : kFitMemory * m_mean_fit + (1 - kFitMemory) * fit;
             ++m_fitted;
@@ -880,11 +885,17 @@ namespace
         }
 
         // The guide's link, otherwise among the near ties of the best fit the patch closest to the coarser fill.
-        const Candidate &_pick(bool guided) const
+        const Candidate &_pick(cv::Point p, bool guided) const
         {
             const auto best = static_cast<double>(m_best);
-            if (guided && static_cast<double>(m_candidates[0].fit) <= (1 + kGuideTolerance) * best + 1)
-                return m_candidates[0];
+            if (guided)
+            {
+                const auto fit = static_cast<double>(m_candidates[0].fit);
+                if (fit <= (1 + kGuideTolerance) * best + 1 ||
+                    (fit <= (1 + kLockedGuideTolerance) * best + 1 && _locked(p) &&
+                     _variance(m_candidates[0]) >= kLockedVariance * _variance(*_best_fit())))
+                    return m_candidates[0];
+            }
             const double near = (1 + kNearTie) * best + 1;
             // the first best fit, which is a near tie itself
             auto chosen =
@@ -899,6 +910,36 @@ namespace
                     chosen = candidate;
             }
             return *chosen;
+        }
+
+        // Whether the guide's links of p and its eight neighbors share one offset.
+        bool _locked(cv::Point p) const
+        {
+            const int dy = m_guide->at(p.y, p.x, 0) - p.y;
+            const int dx = m_guide->at(p.y, p.x, 1) - p.x;
+            int shared = 0;
+            for_window(m_size, p.y, p.x, 1, [this, dy, dx, &shared](int y, int x) {
+                if (m_guide->at(y, x, 0) - y == dy && m_guide->at(y, x, 1) - x == dx)
+                    ++shared;
+            });
+            return shared == 9;
+        }
+
+        // The variance of the colors of a candidate's source patch.
+        double _variance(const Candidate &candidate) const
+        {
+            cv::Vec3d sum;
+            double squares = 0;
+            for_window(m_size, candidate.y, candidate.x, m_patch_size, [this, &sum, &squares](int y, int x) {
+                const auto &color = m_source.image().at<cv::Vec3b>(y, x);
+                for (int c = 0; c < 3; ++c)
+                {
+                    sum[c] += color[c];
+                    squares += static_cast<double>(color[c]) * color[c];
+                }
+            });
+            const double count = (2.0 * m_patch_size + 1) * (2.0 * m_patch_size + 1);
+            return (squares - sum.dot(sum) / count) / count;
         }
 
         const Candidate *_best_fit() const
