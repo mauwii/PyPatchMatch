@@ -41,9 +41,11 @@ The e2e tests use measure() to check the seam and the detail of forest_pruned.bm
 
 Columns, means over the seeds:
     seam    color difference of neighbors across the border of the holes, relative to
-            neighbors on either side of it; about 1.0 in the original images
+            neighbors on either side of it; about 1.0 in textures, 0.47 (pattern) to
+            1.43 (pattern-wide) in the original images
     detail  color difference of neighbors inside the holes, relative to their
-            surroundings; 0.85 to 1.1 in the original images, lower is blurrier
+            surroundings, lower is blurrier; 0.85 to 1.1 in textures, 1.60 in pole,
+            whose hole the pole crosses
     error   mean color error against the original on images reduced to 1/8, which
             compares the structure of the fill rather than its pixels; it rates a flat
             fill better than a texture whose structures are shifted
@@ -56,6 +58,9 @@ Columns, means over the seeds:
             grass-large: about 0.25), higher for fragments
     fills   with --baseline: whether the fills of all seeds are byte-identical to the
             baseline's, as they have to be after a change that only makes it faster
+
+With --baseline, the report marks seam and detail as better or worse by their distance
+to the values of the original, 1.0 without one.
 """
 
 from __future__ import annotations
@@ -304,6 +309,11 @@ def measure(
     return values
 
 
+def targets(case: Case) -> dict[str, float]:
+    """seam and detail of the original, which a fill should match."""
+    return measure(case.truth, case.holes) if case.truth is not None else {}
+
+
 Seed = tuple[np.ndarray, dict[str, float], float]  # fill, measures, seconds
 
 library = functools.cache(_lib.load_library)
@@ -470,12 +480,12 @@ def crop_box(holes: np.ndarray) -> tuple[int, int, int, int]:
     return int(x0), int(y0), int(x1 - x0), int(y1 - y0)
 
 
-def verdict(key: str, old: float, new: float) -> str:
+def verdict(key: str, old: float, new: float, target: float = 1.0) -> str:
     """CSS class of ``new`` compared with ``old``: better, worse or none."""
     if abs(new - old) <= (0.1 if key == "time" else 0.02) * abs(old):
         return ""
-    if key in ("seam", "detail", "variety"):  # best at 1.0, as in the original images
-        old, new = abs(old - 1), abs(new - 1)
+    if key in ("seam", "detail", "variety"):  # best at the value of the original
+        old, new = abs(old - target), abs(new - target)
     return "better" if new < old else "worse"
 
 
@@ -488,7 +498,7 @@ def column(key: str, results: list[Result]) -> tuple[list[float], list[str]]:
     return values, [f"{value:.2f}" for value in values]
 
 
-def cell(key: str, results: list[Result]) -> str:
+def cell(key: str, results: list[Result], goals: dict[str, float]) -> str:
     if key == "fills":
         return f"<td>{identical(results)}</td>"
     values, text = column(key, results)
@@ -496,14 +506,13 @@ def cell(key: str, results: list[Result]) -> str:
         return "<td></td>"
     if len(values) == 1:
         return f"<td>{text[0]}</td>"
-    css = verdict(key, values[0], values[1])
+    css = verdict(key, values[0], values[1], goals.get(key, 1.0))
     return f'<td>{text[0]} &rarr; <span class="{css}">{text[1]}</span></td>'
 
 
-def caption(label: str, result: Result | None) -> str:
+def caption(label: str, values: dict[str, float]) -> str:
     parts = [f"<b>{label}</b>"]
-    if result is not None:
-        parts += [f"{key} {value:.2f}" for key, value in result.values.items()]
+    parts += [f"{key} {value:.2f}" for key, value in values.items()]
     return " ".join(parts)
 
 
@@ -512,15 +521,17 @@ def section(case: Case, results: list[Result], labels: list[str]) -> str:
     shown = case.image.copy()
     if case.global_mask is not None:
         shown[case.global_mask] //= 2
-    versions: list[tuple[str, np.ndarray, Result | None]] = [("holes", shown, None)]
-    versions += [(label, r.fill, r) for label, r in zip(labels, results, strict=True)]
+    versions: list[tuple[str, np.ndarray, dict[str, float]]] = [("holes", shown, {})]
+    versions += [
+        (label, r.fill, r.values) for label, r in zip(labels, results, strict=True)
+    ]
     if case.truth is not None:
-        versions.append(("original", case.truth, None))
+        versions.append(("original", case.truth, targets(case)))
     figures = "".join(
         f'<figure data-title="{html.escape(case.name)}: {label}">'
         f'<img alt="" src="data:image/png;base64,{png(image[y : y + h, x : x + w])}">'
-        f"<figcaption>{caption(label, result)}</figcaption></figure>"
-        for label, image, result in versions
+        f"<figcaption>{caption(label, values)}</figcaption></figure>"
+        for label, image, values in versions
     )
     height, width = case.holes.shape
     meta = f"{width}&times;{height}, holes {case.holes.mean():.1%}"
@@ -540,7 +551,7 @@ def write_report(
     head = "".join(f"<th>{key}</th>" for key in ["case", *columns])
     body = "".join(
         f'<tr><td><a href="#{html.escape(case.name)}">{html.escape(case.name)}</a></td>'
-        + "".join(cell(key, results) for key in columns)
+        + "".join(cell(key, results, targets(case)) for key in columns)
         + "</tr>"
         for case, results in rows
     )
@@ -565,13 +576,14 @@ def write_report(
 MARKS = {"better": " 🟢", "worse": " 🔴", "": ""}
 
 
-def markdown_cell(key: str, results: list[Result]) -> str:
+def markdown_cell(key: str, results: list[Result], goals: dict[str, float]) -> str:
     if key == "fills":
         return identical(results)
     values, text = column(key, results)
     if len(values) < 2:
         return "".join(text)
-    return f"{text[0]} → {text[1]}{MARKS[verdict(key, values[0], values[1])]}"
+    mark = MARKS[verdict(key, values[0], values[1], goals.get(key, 1.0))]
+    return f"{text[0]} → {text[1]}{mark}"
 
 
 def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
@@ -583,7 +595,8 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
         f"| --- |{' ---: |' * len(columns)}",
     ]
     for case, results in rows:
-        cells = [markdown_cell(key, results) for key in columns]
+        goals = targets(case)
+        cells = [markdown_cell(key, results, goals) for key in columns]
         lines.append(f"| {case.name} | {' | '.join(cells)} |")
     if "fills" in columns:
         same = sum(identical(results) == "identical" for _, results in rows)
@@ -594,9 +607,10 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
         ]
     lines += [
         "",
-        "Means over the seeds. seam, detail and variety are best at 1.0, as in the "
-        "original images, error and edges at 0. With a baseline: baseline → current, "
-        "🟢 better and 🔴 worse by more than 2 % (time: 10 %).",
+        "Means over the seeds. seam and detail are best at the values of the "
+        "original (1.0 without one, see the report), variety at 1.0, error and edges "
+        "at 0. With a baseline: baseline → current, 🟢 better and 🔴 worse by more "
+        "than 2 % (time: 10 %).",
     ]
     return "\n".join(lines)
 
