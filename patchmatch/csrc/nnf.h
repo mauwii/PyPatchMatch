@@ -161,6 +161,7 @@ private:
     void _randomize_field(bool reset);
     void _randomize_link(int y, int x);
     void _initialize_field_from(const NearestNeighborField &other);
+    bool _initialize_link_from(const NearestNeighborField &other, int i, int j, double fi, double fj);
     void _allocate_sums();
     void _minimize_link(int y, int x, int direction);
     void _propagate(int y, int x, int dy, int dx);

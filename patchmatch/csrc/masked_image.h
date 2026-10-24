@@ -142,6 +142,8 @@ public:
     void compute_hole_sums() const;
 
 private:
+    void _compute_features_at(int y, int x) const;
+
     cv::Mat m_image;
     cv::Mat m_mask;
     cv::Mat m_global_mask;

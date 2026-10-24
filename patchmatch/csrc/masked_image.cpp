@@ -168,36 +168,38 @@ void MaskedImage::compute_features() const
 
     const auto size = m_image.size();
     m_features = cv::Mat(size, CV_8UC(kFeatureChannels));
-
-    // The border replicates its pixels, so that patches over the outermost line compare it as well.
     parallel_for(size.height, [this, &size](int y) {
-        const int up = std::max(y - 1, 0);
-        const int down = std::min(y + 1, size.height - 1);
         for (int x = 0; x < size.width; ++x)
-        {
-            const int left = std::max(x - 1, 0);
-            const int right = std::min(x + 1, size.width - 1);
-            // A neutral gradient next to a globally masked pixel keeps its color out of the distances.
-            const bool skip_y = is_globally_masked(down, x) || is_globally_masked(up, x);
-            const bool skip_x = is_globally_masked(y, right) || is_globally_masked(y, left);
-            const unsigned char *below = get_image(down, x);
-            const unsigned char *above = get_image(up, x);
-            const unsigned char *next = get_image(y, right);
-            const unsigned char *previous = get_image(y, left);
-            auto *features = m_features.ptr<unsigned char>(y, x);
-            std::fill_n(features, kFeatureChannels, 0);
-            const unsigned char *color = get_image(y, x);
-            for (int c = 0; c < 3; ++c)
-            {
-                features[c] = color[c];
-                features[3 + c] = static_cast<unsigned char>(skip_x ? 128 : next[c] / 2 - previous[c] / 2 + 128);
-                features[6 + c] = static_cast<unsigned char>(skip_y ? 128 : below[c] / 2 - above[c] / 2 + 128);
-            }
-            if (m_has_texture)
-                features[kTextureFeature] = m_texture.at<unsigned char>(y, x);
-            features[kMaskedFeature] = static_cast<unsigned char>(is_masked(y, x) || is_globally_masked(y, x));
-        }
+            _compute_features_at(y, x);
     });
 
     m_features_computed = true;
+}
+
+// The border replicates its pixels, so that patches over the outermost line compare it as well.
+void MaskedImage::_compute_features_at(int y, int x) const
+{
+    const int up = std::max(y - 1, 0);
+    const int down = std::min(y + 1, m_image.rows - 1);
+    const int left = std::max(x - 1, 0);
+    const int right = std::min(x + 1, m_image.cols - 1);
+    // A neutral gradient next to a globally masked pixel keeps its color out of the distances.
+    const bool skip_y = is_globally_masked(down, x) || is_globally_masked(up, x);
+    const bool skip_x = is_globally_masked(y, right) || is_globally_masked(y, left);
+    const unsigned char *below = get_image(down, x);
+    const unsigned char *above = get_image(up, x);
+    const unsigned char *next = get_image(y, right);
+    const unsigned char *previous = get_image(y, left);
+    auto *features = m_features.ptr<unsigned char>(y, x);
+    std::fill_n(features, kFeatureChannels, 0);
+    const unsigned char *color = get_image(y, x);
+    for (int c = 0; c < 3; ++c)
+    {
+        features[c] = color[c];
+        features[3 + c] = static_cast<unsigned char>(skip_x ? 128 : next[c] / 2 - previous[c] / 2 + 128);
+        features[6 + c] = static_cast<unsigned char>(skip_y ? 128 : below[c] / 2 - above[c] / 2 + 128);
+    }
+    if (m_has_texture)
+        features[kTextureFeature] = m_texture.at<unsigned char>(y, x);
+    features[kMaskedFeature] = static_cast<unsigned char>(is_masked(y, x) || is_globally_masked(y, x));
 }

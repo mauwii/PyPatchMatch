@@ -28,7 +28,7 @@ void parallel_for(int n, const Body &body)
     if (n <= 0)
         return;
     const int stripes = std::min(n, thread_count());
-    std::atomic<int> next{0};
+    std::atomic next{0};
     cv::parallel_for_(
         cv::Range(0, stripes),
         [&next, n, &body](const cv::Range &) {
