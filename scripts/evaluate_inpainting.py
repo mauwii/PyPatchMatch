@@ -11,15 +11,17 @@ brick-large and grass-large cut a circle of radius 242 into the center, 70 % of 
 image. pattern repeats almost exactly, so its error tells a fill that continues it (2 to
 6) from a broken one; pattern-wide widens the hole to a radius of 60, where patch size 3
 mixed the rings before 2.2 (error 37). pattern-guided fills the same hole with
-inpaint_regularity, guided by the lattice of the pattern; the plain fill continues it
-already, so the guide changes little. tripod cuts a hole across a leg of the tripod in
-camera_aged.png, a thin diagonal line that the fill has to continue; 2.2 breaks it off
-(edges 4.6 with patch size 3). pole cuts one across the pole of the birdhouses in
-forest.bmp, which stands in front of the forest above the hole and of the meadow below
-it; 2.2 breaks it off as well (error 30). coffee-corner and forest-frame outpaint the
-right and bottom third of coffee.png and a frame of an eighth around forest.bmp; with
-patch size 15, coffee-corner keeps a hole on the coarsest level. forest-global and
-brick-global add a global mask, darkened in the report: the plant of
+inpaint_regularity, guided by the lattice of the pattern, which lowers the error of the
+plain fill a little with patch sizes 3 and 7. tripod cuts a hole across a leg of the
+tripod in camera_aged.png, a thin diagonal line that the fill has to continue; 2.2
+breaks it off (edges 4.6 with patch size 3). pole cuts one across the pole of the
+birdhouses in forest.bmp, which stands in front of the forest above the hole and of the
+meadow below it; 2.2 breaks it off as well (error 30). coffee-corner outpaints the right
+and bottom third of coffee.png, where error and edges come close to those of a flat fill
+(43 and 8.3), so seam, detail and variety rate it; with patch size 15, it keeps a hole
+on the coarsest level. pattern-frame outpaints a frame of an eighth around pattern.png,
+which unlike a photo continues in only one way (error 5 to 7, flat fill 33).
+forest-global and brick-global add a global mask, darkened in the report: the plant of
 examples/py_example_global_mask.py and the left third of brick.png.
 
 Usage:
@@ -60,7 +62,9 @@ Columns, means over the seeds:
             baseline's, as they have to be after a change that only makes it faster
 
 With --baseline, the report marks seam and detail as better or worse by their distance
-to the values of the original, 1.0 without one.
+to the values of the original, 1.0 without one. A mark needs a change of more than 2 %
+and of more than twice the standard error over the seeds: between disjoint sets of 3
+seeds of the same library, half of the cells changed by more than 2 %.
 """
 
 from __future__ import annotations
@@ -71,6 +75,7 @@ import functools
 import hashlib
 import html
 import io
+import math
 import sys
 import time
 from collections.abc import Iterator
@@ -104,9 +109,9 @@ LINES = {
     "tripod": ("camera_aged.png", (410, 352, 28, 28)),
     "pole": ("forest.bmp", (290, 284, 22, 22)),
 }
-# pattern.png repeats along both diagonals, every half of these pixels in y and x
-# (autocorrelation)
-PERIOD = (255.5, 253.5)
+# the two vectors (y, x) along which pattern.png repeats, fitted to 24 peaks of its
+# autocorrelation; the lattice is slightly sheared
+LATTICE = np.array([[127.68, 127.33], [127.67, -126.27]])
 COLUMNS = ("seam", "detail", "error", "edges", "variety")
 
 
@@ -121,6 +126,7 @@ class Case(NamedTuple):
 
 class Result(NamedTuple):
     values: dict[str, float]  # means over the seeds
+    errors: dict[str, float]  # standard errors of the means, 0 for one seed
     seconds: float  # per seed
     fill: np.ndarray  # of seed 0
     digest: str  # of the fills of all seeds
@@ -176,8 +182,9 @@ def cases() -> Iterator[Case]:
     wide = ellipse(pattern.shape, 320, 320, 60, 60)
     yield cut("pattern-wide", pattern, wide)
     y, x = np.mgrid[: pattern.shape[0], : pattern.shape[1]]
-    y, x = y / PERIOD[0], x / PERIOD[1]
-    ijmap = np.dstack([(y + x) % 1, (y - x) % 1, np.zeros(y.shape)]).astype(np.float32)
+    # the coordinates in the basis of the lattice, whose fractions repeat with it
+    phase = np.dstack([y, x]) @ np.linalg.inv(LATTICE) % 1
+    ijmap = np.dstack([phase, np.zeros(y.shape)]).astype(np.float32)
     yield cut("pattern-guided", pattern, wide, ijmap=ijmap)
     for name, (filename, hole) in LINES.items():
         truth = load(IMAGES / filename)
@@ -186,9 +193,9 @@ def cases() -> Iterator[Case]:
     corner = np.zeros(coffee.shape[:2], dtype=bool)
     corner[-133:] = corner[:, -200:] = True
     yield cut("coffee-corner", coffee, corner)
-    frame = np.ones(forest.shape[:2], dtype=bool)
-    frame[45:-45, 80:-80] = False
-    yield cut("forest-frame", forest, frame)
+    frame = np.ones(pattern.shape[:2], dtype=bool)
+    frame[80:-80, 80:-80] = False
+    yield cut("pattern-frame", pattern, frame)
     plant = np.zeros(pruned.shape[:2], dtype=bool)
     plant[290:, 100:180] = True
     yield Case("forest-global", pruned, white(pruned), None, plant)
@@ -345,9 +352,14 @@ def fill_seed(path: str, case: Case, patch_size: int, seed: int) -> Seed:
 def evaluate(jobs: list[Future[Seed]]) -> Result:
     """The result of one case and library from the jobs of all seeds, in order."""
     fills, rows, seconds = zip(*(job.result() for job in jobs), strict=True)
-    values = {key: float(np.mean([row[key] for row in rows])) for key in rows[0]}
+    samples = {key: np.array([row[key] for row in rows]) for key in rows[0]}
+    values = {key: float(x.mean()) for key, x in samples.items()}
+    errors = {
+        key: float(x.std(ddof=1) / math.sqrt(len(x))) if len(x) > 1 else 0.0
+        for key, x in samples.items()
+    }
     digest = hashlib.sha256(b"".join(fill.tobytes() for fill in fills)).hexdigest()
-    return Result(values, float(np.mean(seconds)), fills[0], digest)
+    return Result(values, errors, float(np.mean(seconds)), fills[0], digest)
 
 
 def identical(results: list[Result]) -> str:
@@ -480,9 +492,14 @@ def crop_box(holes: np.ndarray) -> tuple[int, int, int, int]:
     return int(x0), int(y0), int(x1 - x0), int(y1 - y0)
 
 
-def verdict(key: str, old: float, new: float, target: float = 1.0) -> str:
-    """CSS class of ``new`` compared with ``old``: better, worse or none."""
-    if abs(new - old) <= (0.1 if key == "time" else 0.02) * abs(old):
+def verdict(
+    key: str, old: float, new: float, target: float = 1.0, noise: float = 0.0
+) -> str:
+    """CSS class of ``new`` compared with ``old``: better, worse or none.
+
+    ``noise`` is the standard error of the difference over the seeds.
+    """
+    if abs(new - old) <= max((0.1 if key == "time" else 0.02) * abs(old), 2 * noise):
         return ""
     if key in ("seam", "detail", "variety"):  # best at the value of the original
         old, new = abs(old - target), abs(new - target)
@@ -498,6 +515,11 @@ def column(key: str, results: list[Result]) -> tuple[list[float], list[str]]:
     return values, [f"{value:.2f}" for value in values]
 
 
+def noise(key: str, results: list[Result]) -> float:
+    """Standard error of the difference of the means, 0 for the time."""
+    return math.hypot(*(result.errors.get(key, 0.0) for result in results))
+
+
 def cell(key: str, results: list[Result], goals: dict[str, float]) -> str:
     if key == "fills":
         return f"<td>{identical(results)}</td>"
@@ -506,7 +528,7 @@ def cell(key: str, results: list[Result], goals: dict[str, float]) -> str:
         return "<td></td>"
     if len(values) == 1:
         return f"<td>{text[0]}</td>"
-    css = verdict(key, values[0], values[1], goals.get(key, 1.0))
+    css = verdict(key, values[0], values[1], goals.get(key, 1.0), noise(key, results))
     return f'<td>{text[0]} &rarr; <span class="{css}">{text[1]}</span></td>'
 
 
@@ -582,7 +604,8 @@ def markdown_cell(key: str, results: list[Result], goals: dict[str, float]) -> s
     values, text = column(key, results)
     if len(values) < 2:
         return "".join(text)
-    mark = MARKS[verdict(key, values[0], values[1], goals.get(key, 1.0))]
+    goal = goals.get(key, 1.0)
+    mark = MARKS[verdict(key, values[0], values[1], goal, noise(key, results))]
     return f"{text[0]} → {text[1]}{mark}"
 
 
@@ -610,7 +633,8 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
         "Means over the seeds. seam and detail are best at the values of the "
         "original (1.0 without one, see the report), variety at 1.0, error and edges "
         "at 0. With a baseline: baseline → current, 🟢 better and 🔴 worse by more "
-        "than 2 % (time: 10 %).",
+        "than 2 % (time: 10 %) and by more than twice the standard error of the "
+        "difference over the seeds.",
     ]
     return "\n".join(lines)
 
