@@ -11,17 +11,17 @@ brick-large and grass-large cut a circle of radius 242 into the center, 70 % of 
 image. pattern repeats almost exactly, so its error tells a fill that continues it (2 to
 6) from a broken one; pattern-wide widens the hole to a radius of 60, where patch size 3
 mixed the rings before 2.2 (error 37). pattern-guided fills the same hole with
-inpaint_regularity, guided by the lattice of the pattern; the plain fill continues it
-already, so the guide changes little. tripod cuts a hole across a leg of the tripod in
-camera_aged.png, a thin diagonal line that the fill has to continue; 2.2 breaks it off
-(edges 4.6 with patch size 3). pole cuts one across the pole of the birdhouses in
-forest.bmp, which stands in front of the forest above the hole and of the meadow below
-it; 2.2 breaks it off as well (error 30). coffee-corner outpaints the right and bottom
-third of coffee.png, where error and edges come close to those of a flat fill (43 and
-8.3), so seam, detail and variety rate it; with patch size 15, it keeps a hole on the
-coarsest level. pattern-frame outpaints a frame of an eighth around pattern.png, which
-unlike a photo continues in only one way (error 5 to 7, flat fill 33). forest-global and
-brick-global add a global mask, darkened in the report: the plant of
+inpaint_regularity, guided by the lattice of the pattern, which lowers the error of the
+plain fill a little with patch sizes 3 and 7. tripod cuts a hole across a leg of the
+tripod in camera_aged.png, a thin diagonal line that the fill has to continue; 2.2
+breaks it off (edges 4.6 with patch size 3). pole cuts one across the pole of the
+birdhouses in forest.bmp, which stands in front of the forest above the hole and of the
+meadow below it; 2.2 breaks it off as well (error 30). coffee-corner outpaints the right
+and bottom third of coffee.png, where error and edges come close to those of a flat fill
+(43 and 8.3), so seam, detail and variety rate it; with patch size 15, it keeps a hole
+on the coarsest level. pattern-frame outpaints a frame of an eighth around pattern.png,
+which unlike a photo continues in only one way (error 5 to 7, flat fill 33).
+forest-global and brick-global add a global mask, darkened in the report: the plant of
 examples/py_example_global_mask.py and the left third of brick.png.
 
 Usage:
@@ -109,9 +109,9 @@ LINES = {
     "tripod": ("camera_aged.png", (410, 352, 28, 28)),
     "pole": ("forest.bmp", (290, 284, 22, 22)),
 }
-# pattern.png repeats along both diagonals, every half of these pixels in y and x
-# (autocorrelation)
-PERIOD = (255.5, 253.5)
+# the two vectors (y, x) along which pattern.png repeats, fitted to 24 peaks of its
+# autocorrelation; the lattice is slightly sheared
+LATTICE = np.array([[127.68, 127.33], [127.67, -126.27]])
 COLUMNS = ("seam", "detail", "error", "edges", "variety")
 
 
@@ -182,8 +182,9 @@ def cases() -> Iterator[Case]:
     wide = ellipse(pattern.shape, 320, 320, 60, 60)
     yield cut("pattern-wide", pattern, wide)
     y, x = np.mgrid[: pattern.shape[0], : pattern.shape[1]]
-    y, x = y / PERIOD[0], x / PERIOD[1]
-    ijmap = np.dstack([(y + x) % 1, (y - x) % 1, np.zeros(y.shape)]).astype(np.float32)
+    # the coordinates in the basis of the lattice, whose fractions repeat with it
+    phase = np.dstack([y, x]) @ np.linalg.inv(LATTICE) % 1
+    ijmap = np.dstack([phase, np.zeros(y.shape)]).astype(np.float32)
     yield cut("pattern-guided", pattern, wide, ijmap=ijmap)
     for name, (filename, hole) in LINES.items():
         truth = load(IMAGES / filename)
