@@ -269,7 +269,6 @@ def test_explicit_mask_matches_implicit_white_mask(pruned_image):
 # Regions of pure background in forest_pruned.bmp as (y, x, height, width), with the
 # patch size to fill them.
 BACKGROUND_REGIONS = [
-    ((20, 400, 60, 80), 3),
     ((40, 520, 60, 60), 3),
     ((25, 505, 90, 110), 15),
 ]

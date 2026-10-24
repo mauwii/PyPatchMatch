@@ -253,10 +253,12 @@ def test_inpaint_very_large_image(tall, regularity):
 
 
 def test_inpaint_does_not_modify_inputs(image, hole_mask):
-    image_before, mask_before = image.copy(), hole_mask.copy()
-    patchmatch.inpaint(image, hole_mask, global_mask=hole_mask, patch_size=3)
-    np.testing.assert_array_equal(image, image_before)
-    np.testing.assert_array_equal(hole_mask, mask_before)
+    global_mask = np.zeros_like(hole_mask)
+    global_mask[:8] = 1  # beside the hole: one over it skips the native code
+    before = [array.copy() for array in (image, hole_mask, global_mask)]
+    patchmatch.inpaint(image, hole_mask, global_mask=global_mask, patch_size=3)
+    for array, copy in zip((image, hole_mask, global_mask), before, strict=True):
+        np.testing.assert_array_equal(array, copy)
 
 
 def test_concurrent_inpaint_is_deterministic(image):
@@ -308,6 +310,16 @@ def test_inpaint_regularity(
         guide_weight=guide_weight,
     )
     assert_filled(result, regular_image)
+
+
+def test_inpaint_regularity_without_weight_equals_inpaint(regular_image, ijmap):
+    """With a weight of 0, the regularity term drops out of the distance."""
+    np.testing.assert_array_equal(
+        patchmatch.inpaint_regularity(
+            regular_image, None, ijmap, patch_size=3, guide_weight=0
+        ),
+        patchmatch.inpaint(regular_image, patch_size=3),
+    )
 
 
 def test_inpaint_regularity_scales_smaller_ijmap(image):
