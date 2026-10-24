@@ -33,6 +33,7 @@ __all__ = [
     "inpaint",
     "inpaint_regularity",
     "patchmatch_available",
+    "set_num_threads",
     "set_random_seed",
     "set_verbose",
 ]
@@ -54,6 +55,8 @@ patchmatch_available = _lib is not None
 
 # The native code computes 2 * patch_size + 1 as a C int.
 _MAX_PATCH_SIZE = (2**31 - 2) // 2
+
+_MAX_C_INT = 2**31 - 1
 
 # The native code takes a C float, which turns larger weights into infinity.
 _MAX_GUIDE_WEIGHT = float(np.finfo(np.float32).max)
@@ -78,6 +81,16 @@ def set_random_seed(seed: int) -> None:
 def set_verbose(verbose: bool) -> None:
     """Print the progress of all following inpaintings to stderr if ``verbose``."""
     _get_lib().PM_set_verbose(ctypes.c_int(verbose))
+
+
+def set_num_threads(threads: SupportsIndex) -> None:
+    """Run all following inpaintings on at most ``threads`` threads, 0 for one per core.
+
+    The fills do not depend on the number of threads.
+    """
+    lib = _get_lib()
+    threads = _check_int("threads", threads, 0, _MAX_C_INT)
+    lib.PM_set_num_threads(ctypes.c_int(threads))
 
 
 def inpaint(
@@ -169,19 +182,21 @@ def inpaint_regularity(
 
 
 def _check_patch_size(patch_size: SupportsIndex) -> int:
-    try:
-        patch_size = operator.index(patch_size)
-    except TypeError:
-        raise TypeError(
-            f"patch_size must be an integer, got {type(patch_size).__name__}"
-        ) from None
     # The native code crashes for 0 and never terminates for negative sizes. ctypes
     # silently wraps larger values into the C int range, e.g. 2**31 to a negative size.
-    if not 1 <= patch_size <= _MAX_PATCH_SIZE:
-        raise ValueError(
-            f"patch_size must be between 1 and {_MAX_PATCH_SIZE}, got {patch_size}"
-        )
-    return patch_size
+    return _check_int("patch_size", patch_size, 1, _MAX_PATCH_SIZE)
+
+
+def _check_int(name: str, value: SupportsIndex, minimum: int, maximum: int) -> int:
+    try:
+        value = operator.index(value)
+    except TypeError:
+        raise TypeError(
+            f"{name} must be an integer, got {type(value).__name__}"
+        ) from None
+    if not minimum <= value <= maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}, got {value}")
+    return value
 
 
 def _prepare_inputs(

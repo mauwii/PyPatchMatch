@@ -4,6 +4,8 @@
 #include <array>
 #include <cstdint>
 
+#include "parallel.h"
+
 namespace
 {
     constexpr std::array<int, 6> kDownsampleKernel = {1, 5, 10, 10, 5, 1};
@@ -50,23 +52,28 @@ namespace
     }
 } // namespace
 
+void MaskedImage::compute_hole_sums() const
+{
+    if (m_hole_sums_computed)
+        return;
+    const auto size = this->size();
+    m_hole_sums = cv::Mat(size.height + 1, size.width + 1, CV_32S, cv::Scalar(0));
+    for (int y = 0; y < size.height; ++y)
+    {
+        for (int x = 0; x < size.width; ++x)
+        {
+            const int hole = is_masked(y, x) && !is_globally_masked(y, x) ? 1 : 0;
+            m_hole_sums.at<int>(y + 1, x + 1) =
+                hole + m_hole_sums.at<int>(y, x + 1) + m_hole_sums.at<int>(y + 1, x) - m_hole_sums.at<int>(y, x);
+        }
+    }
+    m_hole_sums_computed = true;
+}
+
 bool MaskedImage::contains_mask(int y, int x, int patch_size) const
 {
+    compute_hole_sums();
     const auto size = this->size();
-    if (!m_hole_sums_computed)
-    {
-        m_hole_sums = cv::Mat(size.height + 1, size.width + 1, CV_32S, cv::Scalar(0));
-        for (int yy = 0; yy < size.height; ++yy)
-        {
-            for (int xx = 0; xx < size.width; ++xx)
-            {
-                const int hole = is_masked(yy, xx) && !is_globally_masked(yy, xx) ? 1 : 0;
-                m_hole_sums.at<int>(yy + 1, xx + 1) = hole + m_hole_sums.at<int>(yy, xx + 1) +
-                                                      m_hole_sums.at<int>(yy + 1, xx) - m_hole_sums.at<int>(yy, xx);
-            }
-        }
-        m_hole_sums_computed = true;
-    }
     // In 64 bits: patch_size may be close to the largest int.
     const auto clip = [](std::int64_t value, int limit) {
         return static_cast<int>(std::clamp<std::int64_t>(value, 0, limit));
@@ -163,8 +170,7 @@ void MaskedImage::compute_features() const
     m_features = cv::Mat(size, CV_8UC(kFeatureChannels));
 
     // The border replicates its pixels, so that patches over the outermost line compare it as well.
-    for (int y = 0; y < size.height; ++y)
-    {
+    parallel_for(size.height, [this, &size](int y) {
         const int up = std::max(y - 1, 0);
         const int down = std::min(y + 1, size.height - 1);
         for (int x = 0; x < size.width; ++x)
@@ -191,7 +197,7 @@ void MaskedImage::compute_features() const
                 features[kTextureFeature] = m_texture.at<unsigned char>(y, x);
             features[kMaskedFeature] = static_cast<unsigned char>(is_masked(y, x) || is_globally_masked(y, x));
         }
-    }
+    });
 
     m_features_computed = true;
 }

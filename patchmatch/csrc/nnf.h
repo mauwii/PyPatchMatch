@@ -100,6 +100,14 @@ public:
     {
         _set(y, x, y, x, {0, -1});
     }
+    // Computes the caches of both images, which the parallel loops read.
+    void prepare() const
+    {
+        m_source.compute_features();
+        m_target.compute_features();
+        m_source.compute_hole_sums();
+        m_target.compute_hole_sums();
+    }
     // Measures the link again after an image changed.
     void update_distance(int y, int x)
     {

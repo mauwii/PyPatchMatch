@@ -84,7 +84,9 @@ least 7: larger patches found no sources there and left the fill flat.
 
 `patchmatch.set_random_seed(seed)` sets the seed of the randomized search, modulo
 `2**32`, and `patchmatch.set_verbose(True)` prints the progress of the native code to
-stderr. `patchmatch.inpaint_regularity(image, mask, ijmap)` additionally guides the
+stderr. The inpainting runs on all cores; `patchmatch.set_num_threads(n)` limits it to
+`n` threads (0 restores the default), and the fills do not depend on it.
+`patchmatch.inpaint_regularity(image, mask, ijmap)` additionally guides the
 search with a regularity map, an HxWx3 float32 array with the regularity coordinates of
 each pixel in its first two channels. Its `guide_weight` must be between 0 and the
 largest float32, about 3.4e38.

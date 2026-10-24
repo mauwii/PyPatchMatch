@@ -9,6 +9,8 @@
 #include <limits>
 #include <optional>
 
+#include "parallel.h"
+
 namespace
 {
     std::vector<double> make_distance2similarity()
@@ -1282,10 +1284,11 @@ void Inpainting::_update_links(const MaskedImage &source, bool image_changed)
             update(*m_source2target);
         update(m_target2source);
     };
+    for_each_field([](const NearestNeighborField &field) { field.prepare(); });
+    source.compute_hole_sums();
     const int patch_size = m_level_metric->patch_size();
     const auto size = source.size();
-    for (int i = 0; i < size.height; ++i)
-    {
+    parallel_for(size.height, [&source, &for_each_field, image_changed, patch_size, &size](int i) {
         for (int j = 0; j < size.width; ++j)
         {
             if (!source.contains_mask(i, j, patch_size))
@@ -1293,7 +1296,7 @@ void Inpainting::_update_links(const MaskedImage &source, bool image_changed)
             else if (image_changed && !source.is_globally_masked(i, j))
                 for_each_field([i, j](NearestNeighborField &field) { field.update_distance(i, j); });
         }
-    }
+    });
 }
 
 // Expectation step: vote for best estimations of each pixel.

@@ -8,6 +8,7 @@
 #include <string>
 
 #include "inpaint.h"
+#include "parallel.h"
 
 namespace
 {
@@ -123,6 +124,11 @@ void PM_set_random_seed(unsigned int seed)
 void PM_set_verbose(int value)
 {
     verbose().store(value != 0);
+}
+
+void PM_set_num_threads(int threads)
+{
+    thread_limit().store(threads);
 }
 
 void PM_free_pymat(PM_mat_t pymat)
