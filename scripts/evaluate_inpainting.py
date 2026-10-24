@@ -16,10 +16,11 @@ already, so the guide changes little. tripod cuts a hole across a leg of the tri
 camera_aged.png, a thin diagonal line that the fill has to continue; 2.2 breaks it off
 (edges 4.6 with patch size 3). pole cuts one across the pole of the birdhouses in
 forest.bmp, which stands in front of the forest above the hole and of the meadow below
-it; 2.2 breaks it off as well (error 30). coffee-corner and forest-frame outpaint the
-right and bottom third of coffee.png and a frame of an eighth around forest.bmp; with
-patch size 15, coffee-corner keeps a hole on the coarsest level. forest-global and
-brick-global add a global mask, darkened in the report: the plant of
+it; 2.2 breaks it off as well (error 30). coffee-corner outpaints the right and bottom
+third of coffee.png; with patch size 15, it keeps a hole on the coarsest level.
+pattern-frame outpaints a frame of an eighth around pattern.png, which unlike a photo
+continues in only one way (error 5 to 7, flat fill 33). forest-global and brick-global
+add a global mask, darkened in the report: the plant of
 examples/py_example_global_mask.py and the left third of brick.png.
 
 Usage:
@@ -186,9 +187,9 @@ def cases() -> Iterator[Case]:
     corner = np.zeros(coffee.shape[:2], dtype=bool)
     corner[-133:] = corner[:, -200:] = True
     yield cut("coffee-corner", coffee, corner)
-    frame = np.ones(forest.shape[:2], dtype=bool)
-    frame[45:-45, 80:-80] = False
-    yield cut("forest-frame", forest, frame)
+    frame = np.ones(pattern.shape[:2], dtype=bool)
+    frame[80:-80, 80:-80] = False
+    yield cut("pattern-frame", pattern, frame)
     plant = np.zeros(pruned.shape[:2], dtype=bool)
     plant[290:, 100:180] = True
     yield Case("forest-global", pruned, white(pruned), None, plant)
