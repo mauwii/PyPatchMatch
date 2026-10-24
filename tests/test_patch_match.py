@@ -312,6 +312,16 @@ def test_inpaint_regularity(
     assert_filled(result, regular_image)
 
 
+def test_inpaint_regularity_without_weight_equals_inpaint(regular_image, ijmap):
+    """With a weight of 0, the regularity term drops out of the distance."""
+    np.testing.assert_array_equal(
+        patchmatch.inpaint_regularity(
+            regular_image, None, ijmap, patch_size=3, guide_weight=0
+        ),
+        patchmatch.inpaint(regular_image, patch_size=3),
+    )
+
+
 def test_inpaint_regularity_scales_smaller_ijmap(image):
     """The map is scaled to the image, see RegularityGuidedPatchDistanceMetricV2."""
     ijmap = np.zeros((HEIGHT // 2, WIDTH // 3, 3), dtype=np.float32)
