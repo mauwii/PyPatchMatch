@@ -7,8 +7,10 @@
 #include <cstdint>
 #include <random>
 #include <typeinfo>
+#include <vector>
 
 #include "masked_image.h"
+#include "parallel.h"
 
 /**
  * Nearest-Neighbor Field (see PatchMatch algorithm).
@@ -248,8 +250,11 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
     double fj = static_cast<double>(this_size.width) / other_size.width;
     const int patch_size = m_distance_metric->patch_size();
 
-    for (int i = 0; i < this_size.height; ++i)
-    {
+    prepare();
+    // The pixels next to a hole that is new on this level, which search before a neighbor's link replaces their own.
+    // Not std::vector<bool>, whose packed bits the threads would write concurrently.
+    std::vector<unsigned char> searches(static_cast<std::size_t>(this_size.height) * this_size.width, 0);
+    parallel_for(this_size.height, [this, &other, &this_size, &other_size, fi, fj, patch_size, &searches](int i) {
         for (int j = 0; j < this_size.width; ++j)
         {
             if (m_source.is_globally_masked(i, j))
@@ -275,12 +280,18 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
             const Measured measured = _measure(i, j, y_target, x_target, PatchDistanceMetric::kDistanceScale);
             _set(i, j, y_target, x_target, measured);
 
-            // A hole that is new on this level: search near the patch before a neighbor's link replaces its own.
             const bool linked_to_itself = other_value[0] == ilow && other_value[1] == jlow;
-            if (linked_to_itself && measured.distance > 0 && m_target.contains_mask(y_target, x_target, patch_size))
-                _random_search(i, j);
+            searches[_index(i, j)] = static_cast<unsigned char>(
+                linked_to_itself && measured.distance > 0 && m_target.contains_mask(y_target, x_target, patch_size));
         }
-    }
+    });
+
+    // In scan order on this thread, which draws the random numbers in the order of the seed. A search changes only
+    // the link of its own pixel, which the measurements above do not read.
+    for (int i = 0; i < this_size.height; ++i)
+        for (int j = 0; j < this_size.width; ++j)
+            if (searches[_index(i, j)])
+                _random_search(i, j);
 
     _randomize_field(false);
 }

@@ -137,7 +137,9 @@ public:
     MaskedImage downsample() const;
     MaskedImage upsample(int new_w, int new_h) const;
     MaskedImage upsample(int new_w, int new_h, const cv::Mat &new_global_mask) const;
+    // The caches that the distances and contains_mask compute on first use; a parallel loop needs them computed.
     void compute_features() const;
+    void compute_hole_sums() const;
 
 private:
     cv::Mat m_image;
@@ -150,7 +152,7 @@ private:
     // computed on first use by compute_features
     mutable cv::Mat m_features;
     mutable bool m_features_computed = false;
-    // computed on first use by contains_mask: the masked pixels outside the global mask
+    // computed on first use by compute_hole_sums: the masked pixels outside the global mask
     // above and left of each pixel. Copies share them with the masks, so change a mask only
     // through an image that nothing has copied yet, as downsample and upsample do.
     mutable cv::Mat m_hole_sums;

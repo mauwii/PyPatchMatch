@@ -29,6 +29,8 @@ extern "C"
 
     void PM_set_random_seed(unsigned int seed);
     void PM_set_verbose(int value);
+    // The most threads of the following inpaintings, 0 for one per core; their results do not depend on it.
+    void PM_set_num_threads(int threads);
 
     void PM_free_pymat(PM_mat_t pymat);
     PM_mat_t PM_inpaint(PM_mat_t image, PM_mat_t mask, int patch_size);

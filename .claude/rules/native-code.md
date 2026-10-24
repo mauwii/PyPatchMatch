@@ -18,6 +18,15 @@ again.
   thread, so that a fill depends only on its input and the seed. `random_int` stays
   `engine() % n` instead of `std::uniform_int_distribution`, which gives the same
   sequence on every platform.
+- The pixel loops run on OpenCV's thread pool through `parallel_for` (`parallel.h`,
+  #120), and a fill does not depend on the number of threads
+  (`test_fill_does_not_depend_on_threads` in the unit, e2e and property tests). A
+  parallel body never draws random numbers: the pool threads have unseeded engines, so
+  the searches that draw run on the calling thread in scan order. It writes only its own
+  pixels and reads nothing that the same loop writes. The caches that `compute_features`
+  and `compute_hole_sums` fill on first use are computed before the loop, on the copies
+  that it reads (`NearestNeighborField::prepare`). Every sum gets its terms in the
+  sequential order, because `-ffast-math` changes the result of another one.
 - Only the holes change, and the colors under the holes and under `global_mask` do not
   influence the fill (`assert_filled`, `assert_plausible_fill`,
   `test_colors_under_the_holes_do_not_matter`,
@@ -232,6 +241,8 @@ again.
   downsampling shrinks the holes, only coffee-corner with 15 keeps one there (51 of 216
   pixels); outpainting of a third of the image does with 15, of half with 7, and a hole
   over 75 % of the image with 15.
+- Row strips with an engine each for several cores (#120): they cut the propagation at
+  every strip border and change the fills.
 - More, with measurements, in the issues closed as not planned: #115 (start radius of
-  the new-hole search, merging random fields), #120 (several cores), #124 (confidence
-  weighting for large holes) and #157 (stripes in brick-large: rotation, locality).
+  the new-hole search, merging random fields), #124 (confidence weighting for large
+  holes) and #157 (stripes in brick-large: rotation, locality).

@@ -5,6 +5,7 @@ from .patch_match import (
     inpaint,
     inpaint_regularity,
     patchmatch_available,
+    set_num_threads,
     set_random_seed,
     set_verbose,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "inpaint",
     "inpaint_regularity",
     "patchmatch_available",
+    "set_num_threads",
     "set_random_seed",
     "set_verbose",
 ]

@@ -17,9 +17,9 @@ def masks(shape):
 
 
 @st.composite
-def images_and_masks(draw):
+def images_and_masks(draw, sides=sizes):
     """An image, a hole mask (None: the white pixels) and an optional global mask."""
-    shape = (draw(sizes), draw(sizes))
+    shape = (draw(sides), draw(sides))
     image = draw(hnp.arrays(np.uint8, (*shape, 3)))
     holes = draw(masks(shape))
     global_mask = draw(masks(shape)) if draw(st.booleans()) else None
@@ -71,6 +71,26 @@ def test_inpaint(inputs, patch_size):
     result = inpaint()
     assert_only_holes_changed(result, image, mask, global_mask)
     np.testing.assert_array_equal(inpaint(), result)
+
+
+# larger images, where the threads share several rows of work on each level, and
+# therefore fewer examples, in the deep profile as well
+@settings(deadline=None, max_examples=25)
+@given(images_and_masks(st.integers(1, 80)), patch_sizes)
+def test_fill_does_not_depend_on_threads(inputs, patch_size):
+    image, mask, global_mask = inputs
+
+    def inpaint(threads):
+        patchmatch.set_num_threads(threads)
+        patchmatch.set_random_seed(0)
+        return patchmatch.inpaint(
+            image, mask, global_mask=global_mask, patch_size=patch_size
+        )
+
+    try:
+        np.testing.assert_array_equal(inpaint(1), inpaint(0))
+    finally:
+        patchmatch.set_num_threads(0)
 
 
 @settings(deadline=None)

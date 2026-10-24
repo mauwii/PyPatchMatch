@@ -29,8 +29,9 @@ Usage:
     uv run python scripts/evaluate_inpainting.py --baseline main/libpatchmatch.dylib
     uv run python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1 --cases brick
 
-The inpaintings run in parallel processes, one per CPU unless --jobs says otherwise.
-They slow each other down, so time a speed-up with --jobs 1.
+The inpaintings run in parallel processes, one per CPU unless --jobs says otherwise,
+each on one thread. They slow each other down, so time a speed-up with --jobs 1, which
+runs each inpainting on all cores.
 
 --markdown prints the table as Markdown and moves the plain one to stderr; the CI
 workflow "Fill quality" redirects it to the job summary.
@@ -326,10 +327,12 @@ Seed = tuple[np.ndarray, dict[str, float], float]  # fill, measures, seconds
 library = functools.cache(_lib.load_library)
 
 
-def fill_seed(path: str, case: Case, patch_size: int, seed: int) -> Seed:
+def fill_seed(path: str, case: Case, patch_size: int, seed: int, threads: int) -> Seed:
     """One inpainting, in a worker process."""
     # processes, not threads: the seed and patch_match._lib are global
-    patch_match._lib = library(Path(path))
+    lib = patch_match._lib = library(Path(path))
+    if hasattr(lib, "PM_set_num_threads"):  # up to 2.3, the libraries use one thread
+        patchmatch.set_num_threads(threads)
     patchmatch.set_random_seed(seed)
     mask = case.holes.astype(np.uint8)
     start = time.perf_counter()
@@ -683,11 +686,15 @@ def main() -> None:
     print(header.rstrip(), file=out)
     rows = []
     pool = ProcessPoolExecutor(args.jobs)
+    # parallel processes on one thread each, a single one on all cores
+    threads = 0 if args.jobs == 1 else 1
     try:
         # all at once, the seeds outside, so that the libraries run under equal load
         jobs = [
             {
-                (index, seed): pool.submit(fill_seed, path, case, args.patch_size, seed)
+                (index, seed): pool.submit(
+                    fill_seed, path, case, args.patch_size, seed, threads
+                )
                 for seed in range(args.seeds)
                 for index, path in enumerate(paths)
             }

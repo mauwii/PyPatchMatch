@@ -17,13 +17,18 @@ HOLE = (slice(20, 28), slice(24, 36))
 AROUND_HOLE = (slice(14, 34), slice(18, 42))
 
 
+def gradient(height: int, width: int) -> np.ndarray:
+    """Smooth color gradient with a little noise, below white."""
+    y, x = np.mgrid[0:height, 0:width]
+    rgb = np.stack([4 * x, 5 * y, 2 * (x + y)], axis=-1) * 64 // max(height, width)
+    noise = np.random.default_rng(0).integers(0, 8, rgb.shape)
+    return np.clip(rgb + noise, 0, 200).astype(np.uint8)
+
+
 @pytest.fixture
 def image() -> np.ndarray:
     """Smooth color gradient with a little noise and a white rectangular hole."""
-    y, x = np.mgrid[0:HEIGHT, 0:WIDTH]
-    rgb = np.stack([4 * x, 5 * y, 2 * (x + y)], axis=-1)
-    noise = np.random.default_rng(0).integers(0, 8, rgb.shape)
-    img = np.clip(rgb + noise, 0, 200).astype(np.uint8)
+    img = gradient(HEIGHT, WIDTH)
     img[HOLE] = 255
     return img
 
@@ -270,6 +275,43 @@ def test_concurrent_inpaint_is_deterministic(image):
         )
     for result in results:
         np.testing.assert_array_equal(result, expected)
+
+
+@pytest.fixture
+def default_threads():
+    yield
+    patchmatch.set_num_threads(0)
+
+
+@pytest.mark.parametrize("patch_size", [3, 7])
+@pytest.mark.parametrize("variant", ["plain", "global_mask", "regularity"])
+def test_fill_does_not_depend_on_threads(ijmap, variant, patch_size, default_threads):
+    # larger than image, so that every level has several rows of work for the threads
+    img = gradient(128, 192)
+    mask = np.zeros(img.shape[:2], dtype=np.uint8)
+    mask[40:90, 60:150] = 1
+    kwargs = {"patch_size": patch_size}
+    if variant == "global_mask":
+        kwargs["global_mask"] = np.zeros_like(mask)
+        kwargs["global_mask"][:16] = 1
+
+    def fill(threads):
+        patchmatch.set_num_threads(threads)
+        patchmatch.set_random_seed(0)
+        if variant == "regularity":
+            return patchmatch.inpaint_regularity(img, mask, ijmap, **kwargs)
+        return patchmatch.inpaint(img, mask, **kwargs)
+
+    np.testing.assert_array_equal(fill(1), fill(0))
+
+
+@pytest.mark.parametrize(
+    ("threads", "error"),
+    [(-1, ValueError), (2**31, ValueError), (1.5, TypeError), ("2", TypeError)],
+)
+def test_set_num_threads_rejects_invalid_values(threads, error):
+    with pytest.raises(error, match="threads must be"):
+        patchmatch.set_num_threads(threads)
 
 
 @pytest.mark.parametrize("verbose", [True, False])
@@ -555,12 +597,19 @@ def test_native_rejects_unsupported_dtype(image, hole_mask):
     [
         lambda img: patchmatch.set_random_seed(0),
         lambda img: patchmatch.set_verbose(False),
+        lambda img: patchmatch.set_num_threads(0),
         lambda img: patchmatch.inpaint(img),
         lambda img: patchmatch.inpaint_regularity(
             img, None, np.zeros(img.shape, dtype=np.float32)
         ),
     ],
-    ids=["set_random_seed", "set_verbose", "inpaint", "inpaint_regularity"],
+    ids=[
+        "set_random_seed",
+        "set_verbose",
+        "set_num_threads",
+        "inpaint",
+        "inpaint_regularity",
+    ],
 )
 def test_unavailable_library_raises(monkeypatch, image, call):
     monkeypatch.setattr(patch_match, "_lib", None)

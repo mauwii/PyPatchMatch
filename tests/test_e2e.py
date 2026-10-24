@@ -102,6 +102,15 @@ def test_remove_white_regions(tmp_path):
     assert_plausible_fill(source, saved)
 
 
+def test_fill_does_not_depend_on_threads():
+    source, result = fill("forest_pruned.bmp", None, 3)
+    patchmatch.set_num_threads(1)
+    try:
+        np.testing.assert_array_equal(patchmatch.inpaint(source, patch_size=3), result)
+    finally:
+        patchmatch.set_num_threads(0)
+
+
 def test_global_mask(pruned_image):
     """examples/py_example_global_mask.py: the globally masked plant is kept."""
     source = np.array(pruned_image)

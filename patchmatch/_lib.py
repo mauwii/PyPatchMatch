@@ -90,6 +90,10 @@ def load_library(path: Path | None = None) -> ctypes.CDLL:
     lib.PM_set_random_seed.restype = None
     lib.PM_set_verbose.argtypes = [ctypes.c_int]
     lib.PM_set_verbose.restype = None
+    # missing up to 2.3, whose libraries scripts/evaluate_inpainting.py compares with
+    if hasattr(lib, "PM_set_num_threads"):
+        lib.PM_set_num_threads.argtypes = [ctypes.c_int]
+        lib.PM_set_num_threads.restype = None
     lib.PM_free_pymat.argtypes = [CMatT]
     lib.PM_free_pymat.restype = None
     lib.PM_last_error.argtypes = []
