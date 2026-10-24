@@ -181,6 +181,9 @@ jobs:
           prune-cache: true
       - run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends libopencv-dev
       - run: uv run --locked --no-build pytest --no-cov
+      # the headers are the C++ API as well; the example needs imgcodecs, which this
+      # OpenCV has
+      - run: examples/cpp_example_run.sh
 
   # Single required status check for branch protection, independent of the matrix.
   ci-ok:
