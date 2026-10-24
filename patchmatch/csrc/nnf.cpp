@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <random>
 #include <typeinfo>
 #include <vector>
@@ -32,12 +33,24 @@ namespace
         return engine;
     }
 
-    // The modulo instead of std::uniform_int_distribution keeps the sequence identical
-    // on all platforms.
+    // A number in [0, n) from the next number of a generator. The modulo instead of
+    // std::uniform_int_distribution keeps the sequence identical on all platforms.
+    template <typename Draw>
+    int random_int(Draw &draw, int n)
+    {
+        return static_cast<int>(draw() % static_cast<unsigned int>(n));
+    }
+
     inline int random_int(int n)
     {
-        return static_cast<int>(random_engine()() % static_cast<unsigned int>(n));
+        return random_int(random_engine(), n);
     }
+
+    // The tiles of a pass, which run in parallel along the anti-diagonals, and the rows whose random numbers are drawn
+    // at once: up to 84 MB for 2048 pixels per row and 20 numbers per pixel. Other sizes give the same fills.
+    constexpr int kTile = 16;
+    constexpr int kBandRows = 512;
+    constexpr std::size_t kNoSearch = std::numeric_limits<std::size_t>::max();
 
     inline int pow2(int i)
     {
@@ -49,6 +62,12 @@ namespace
         int y;
         int x;
     };
+
+    // The pixel in row u and column v of a pass, which scans rows and columns ascending for direction +1.
+    inline Position scan_pixel(cv::Size size, int direction, int u, int v)
+    {
+        return direction > 0 ? Position{u, v} : Position{size.height - 1 - u, size.width - 1 - v};
+    }
 
     // A source and a target image with their sizes, which are read once per patch.
     struct ImagePair
@@ -263,7 +282,7 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
     for (int i = 0; i < this_size.height; ++i)
         for (int j = 0; j < this_size.width; ++j)
             if (searches[_index(i, j)])
-                _random_search(i, j);
+                _random_search(i, j, random_engine());
 
     _randomize_field(false);
 }
@@ -302,24 +321,93 @@ bool NearestNeighborField::_initialize_link_from(const NearestNeighborField &oth
 
 void NearestNeighborField::minimize(int nr_pass)
 {
-    const auto &this_size = source_size();
+    prepare();
     while (nr_pass--)
     {
-        for (int i = 0; i < this_size.height; ++i)
-            for (int j = 0; j < this_size.width; ++j)
-                _minimize_link(i, j, +1);
-        for (int i = this_size.height - 1; i >= 0; --i)
-            for (int j = this_size.width - 1; j >= 0; --j)
-                _minimize_link(i, j, -1);
+        _pass(+1);
+        _pass(-1);
     }
 }
 
-void NearestNeighborField::_minimize_link(int y, int x, int direction)
+// A pass in scan order, rows and columns ascending for direction +1. A pixel reads only the links of its predecessors
+// in its row and column, so the tiles of an anti-diagonal run in parallel and give the result of the sequential pass.
+// Only a pixel changes its own distance, so whether it searches is known before the pass reaches it, and every search
+// draws two numbers per radius: they are drawn beforehand, in scan order, from the generator of the calling thread.
+void NearestNeighborField::_pass(int direction)
 {
-    // Globally masked pixels have no link, and a distance of 0 cannot improve.
-    if (m_source.is_globally_masked(y, x) || at(y, x, 2) <= 0)
-        return;
+    const auto size = source_size();
+    std::vector<std::size_t> first_draws;
+    std::vector<std::uint32_t> draws;
+    for (int top = 0; top < size.height; top += kBandRows)
+    {
+        const cv::Rect band(0, 0, size.width, std::min(kBandRows, size.height - top));
+        _draw(direction, top, band.height, first_draws, draws);
+        const int tile_rows = (band.height + kTile - 1) / kTile;
+        const int tile_columns = (band.width + kTile - 1) / kTile;
+        for (int diagonal = 0; diagonal < tile_rows + tile_columns - 1; ++diagonal)
+        {
+            const int first_row = std::max(0, diagonal - tile_columns + 1);
+            const int tiles = std::min(diagonal, tile_rows - 1) - first_row + 1;
+            parallel_for(tiles, [this, &first_draws, &draws, &band, direction, top, first_row, diagonal](int k) {
+                const int tile_row = first_row + k;
+                const cv::Rect tile((diagonal - tile_row) * kTile, tile_row * kTile, kTile, kTile);
+                _minimize_tile(direction, top, tile & band, first_draws.data(), draws.data());
+            });
+        }
+    }
+}
 
+// Draws the numbers of the searches in the rows [top, top + rows) of a pass, in scan order. The search of the pixel in
+// row u and column v of these rows takes its numbers from first_draws[u * width + v] on.
+void NearestNeighborField::_draw(
+    int direction, int top, int rows, std::vector<std::size_t> &first_draws, std::vector<std::uint32_t> &draws) const
+{
+    // ponytail: one thread draws, about 5 % of a pass; another one could draw the next band meanwhile
+    const auto size = source_size();
+    const auto target = target_size();
+    std::size_t radii = 0;
+    for (int radius = (std::min(target.height, target.width) - 1) / 2; radius > 0; radius /= 2)
+        ++radii;
+    first_draws.assign(static_cast<std::size_t>(rows) * size.width, kNoSearch);
+    std::size_t count = 0;
+    for (int u = 0; u < rows; ++u)
+    {
+        for (int v = 0; v < size.width; ++v)
+        {
+            if (const auto [y, x] = scan_pixel(size, direction, top + u, v); _searches(y, x))
+            {
+                first_draws[static_cast<std::size_t>(u) * size.width + v] = count;
+                count += 2 * radii;
+            }
+        }
+    }
+    draws.resize(count);
+    for (auto &value : draws)
+        value = static_cast<std::uint32_t>(random_engine()());
+}
+
+// The links of a tile of the rows that _draw drew for, in scan order.
+void NearestNeighborField::_minimize_tile(
+    int direction, int top, const cv::Rect &tile, const std::size_t *first_draws, const std::uint32_t *draws)
+{
+    const auto size = source_size();
+    for (int u = tile.y; u < tile.y + tile.height; ++u)
+    {
+        for (int v = tile.x; v < tile.x + tile.width; ++v)
+        {
+            const std::size_t first = first_draws[static_cast<std::size_t>(u) * size.width + v];
+            if (first == kNoSearch)
+                continue;
+            const auto [y, x] = scan_pixel(size, direction, top + u, v);
+            auto draw = [next = draws + first]() mutable { return *next++; };
+            _minimize_link(y, x, direction, draw);
+        }
+    }
+}
+
+template <typename Draw>
+void NearestNeighborField::_minimize_link(int y, int x, int direction, Draw &draw)
+{
     const auto &this_size = source_size();
 
     // propagation along the y direction.
@@ -330,7 +418,7 @@ void NearestNeighborField::_minimize_link(int y, int x, int direction)
     if (x - direction >= 0 && x - direction < this_size.width && !m_source.is_globally_masked(y, x - direction))
         _propagate(y, x, 0, direction);
 
-    _random_search(y, x);
+    _random_search(y, x, draw);
 }
 
 // Tries the link of the neighbor (y - dy, x - dx), shifted by (dy, dx). With the neighbor's sum,
@@ -368,7 +456,8 @@ void NearestNeighborField::_propagate(int y, int x, int dy, int dx)
 }
 
 // Random search around the link in windows of decreasing size, clamped to the image.
-void NearestNeighborField::_random_search(int y, int x)
+template <typename Draw>
+void NearestNeighborField::_random_search(int y, int x, Draw &draw)
 {
     const auto size = target_size();
     const int *link = ptr(y, x);
@@ -379,8 +468,8 @@ void NearestNeighborField::_random_search(int y, int x)
         const int xc = std::clamp(link[1], 0, size.width - 1);
         const int top = std::max(yc - radius, 0);
         const int left = std::max(xc - radius, 0);
-        const int yp = top + random_int(std::min(yc + radius, size.height - 1) - top + 1);
-        const int xp = left + random_int(std::min(xc + radius, size.width - 1) - left + 1);
+        const int yp = top + random_int(draw, std::min(yc + radius, size.height - 1) - top + 1);
+        const int xp = left + random_int(draw, std::min(xc + radius, size.width - 1) - left + 1);
         if (!m_target.is_globally_masked(yp, xp))
             link_if_closer(y, x, yp, xp);
     }
