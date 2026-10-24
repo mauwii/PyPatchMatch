@@ -1,14 +1,29 @@
 from __future__ import annotations
 
 import numpy as np
-from app import editor_mask
+import pytest
+from app import MAX_ZOOM, SHAPES, clamp, extent, stroke
+from PIL import Image, ImageDraw
 
 
-def test_editor_mask_unions_layers_by_alpha():
-    a = np.zeros((4, 4, 4), np.uint8)
-    b = np.zeros((4, 4, 4), np.uint8)
-    a[0, 0, 3] = 1  # faint anti-aliased pixel still counts
-    b[3, 3, 3] = 255
-    b[2, 2, :3] = 255  # colour without alpha is not a hole
-    mask = editor_mask({"background": np.zeros((4, 4, 4), np.uint8), "layers": [a, b]})
-    assert mask.sum() == 2 and mask[0, 0] and mask[3, 3]
+@pytest.mark.parametrize("shape", SHAPES)
+def test_stroke_leaves_no_gaps(shape):
+    mask = Image.new("L", (16, 16))
+    draw = ImageDraw.Draw(mask)
+    stroke(draw, (5, 6), (10, 6), 4, shape)  # one motion event over several pixels
+    stroke(draw, (8, 14), (8, 14), 0, shape)  # a click, zoomed in
+    holes = np.asarray(mask) > 0
+    assert holes[6, 5:11].all()
+    assert holes[14, 8]
+    assert holes[13:].sum() == 1
+    ys, xs = np.nonzero(holes[:13])
+    hx, hy = extent(shape, 4)
+    assert (xs.min(), xs.max(), ys.min(), ys.max()) == (5 - hx, 10 + hx, 6 - hy, 6 + hy)
+
+
+def test_clamp_keeps_the_view_inside_the_image():
+    image, view = (640, 360), (320, 180)  # fits at zoom 0.5
+    assert clamp(0.1, -5, -5, image, view) == (0.5, 0, 0)
+    assert clamp(2, 1e9, 1e9, image, view) == (2, 480, 270)
+    assert clamp(1e9, 0, 0, image, view)[0] == MAX_ZOOM
+    assert clamp(1, 0, 0, (4, 4), (640, 640))[0] == 160  # tiny images fill the view

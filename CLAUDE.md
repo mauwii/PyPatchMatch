@@ -62,9 +62,9 @@ Other entry points:
 - `uv run python scripts/render_readme_example.py` runs `py_example.py` and renders the
   picture at the top of the README, `examples/images/readme_example.jpg`; rerun it and
   commit the picture after changes that affect the fills.
-- `uv run --group gui gui/app.py` starts the Gradio GUI (paint holes, compare the fill).
-  No CI job installs gradio, so after API changes run its test with
-  `uv run --group gui pytest gui --no-cov` and try the GUI by hand.
+- `uv run gui/app.py` starts the Tkinter GUI (paint holes, compare the fill). No CI job
+  runs its test, so after API changes run it with `uv run pytest gui --no-cov` and try
+  the GUI by hand.
 - CMake options: the `option()` lines of `CMakeLists.txt`. `PATCHMATCH_SANITIZE` turns
   off fast math, which lets the compiler drop checks.
 
