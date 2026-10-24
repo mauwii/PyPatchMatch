@@ -163,9 +163,23 @@ private:
     void _initialize_field_from(const NearestNeighborField &other);
     bool _initialize_link_from(const NearestNeighborField &other, int i, int j, double fi, double fj);
     void _allocate_sums();
-    void _minimize_link(int y, int x, int direction);
+    void _pass(int direction);
+    void _draw(
+        int direction, int top, int rows, std::vector<std::size_t> &first_draws,
+        std::vector<std::uint32_t> &draws) const;
+    void _minimize_tile(
+        int direction, int top, const cv::Rect &tile, const std::size_t *first_draws, const std::uint32_t *draws);
+    // Globally masked pixels have no link, and a distance of 0 cannot improve.
+    bool _searches(int y, int x) const
+    {
+        return !m_source.is_globally_masked(y, x) && at(y, x, 2) > 0;
+    }
+    // draw() gives the next number of a generator.
+    template <typename Draw>
+    void _minimize_link(int y, int x, int direction, Draw &draw);
     void _propagate(int y, int x, int dy, int dx);
-    void _random_search(int y, int x);
+    template <typename Draw>
+    void _random_search(int y, int x, Draw &draw);
 
     MaskedImage m_source;
     MaskedImage m_target;

@@ -21,13 +21,19 @@ again.
 - The pixel loops run on OpenCV's thread pool through `parallel_for` (`parallel.h`,
   #120), and a fill does not depend on the number of threads
   (`test_fill_does_not_depend_on_threads` in the unit, e2e and property tests). A
-  parallel body never draws random numbers: the pool threads have unseeded engines, so
-  the searches that draw run on the calling thread in scan order. It writes only its own
+  parallel body never calls `random_engine()`: the pool threads have unseeded engines,
+  so the calling thread draws the numbers in scan order. It writes only its own
   pixels and reads nothing that the same loop writes. The caches that `compute_features`
   and `compute_hole_sums` fill on first use are computed before the loop, on the copies
   that it reads (`NearestNeighborField::prepare`). Every sum gets its terms in the
   sequential order, because `-ffast-math` changes the result of another one: the bands
   of `_expectation_step` cast the patches in the order of the pixels.
+- A pass of `minimize` runs its tiles along the anti-diagonals and gives the result of
+  the sequential pass only as long as a pixel reads no links but those of its two
+  predecessors, whether it searches is known before the pass reaches it (only the pixel
+  changes its own distance), and every search draws two numbers per radius: `_draw`
+  draws them beforehand, in scan order. A search that draws a varying count would need
+  another way to keep the fills.
 - Only the holes change, and the colors under the holes and under `global_mask` do not
   influence the fill (`assert_filled`, `assert_plausible_fill`,
   `test_colors_under_the_holes_do_not_matter`,
