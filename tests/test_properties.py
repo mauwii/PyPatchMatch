@@ -11,14 +11,23 @@ sizes = st.integers(1, 24)
 patch_sizes = st.integers(1, 4)
 
 
+def masks(shape):
+    # every pixel on its own: the default fill gives most pixels the same value
+    return hnp.arrays(np.bool_, shape, fill=st.nothing())
+
+
 @st.composite
 def images_and_masks(draw):
     """An image, a hole mask (None: the white pixels) and an optional global mask."""
     shape = (draw(sizes), draw(sizes))
     image = draw(hnp.arrays(np.uint8, (*shape, 3)))
-    mask = draw(st.none() | hnp.arrays(np.bool_, shape))
-    global_mask = draw(st.none() | hnp.arrays(np.bool_, shape))
-    return image, mask, global_mask
+    holes = draw(masks(shape))
+    global_mask = draw(masks(shape)) if draw(st.booleans()) else None
+    if draw(st.booleans()):
+        # random images have hardly any white pixels
+        image[holes] = 255
+        return image, None, global_mask
+    return image, holes, global_mask
 
 
 def white_pixels(image):
