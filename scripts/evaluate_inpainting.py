@@ -62,7 +62,9 @@ Columns, means over the seeds:
             baseline's, as they have to be after a change that only makes it faster
 
 With --baseline, the report marks seam and detail as better or worse by their distance
-to the values of the original, 1.0 without one.
+to the values of the original, 1.0 without one. A mark needs a change of more than 2 %
+and of more than twice the standard error over the seeds: between disjoint sets of 3
+seeds of the same library, half of the cells changed by more than 2 %.
 """
 
 from __future__ import annotations
@@ -73,6 +75,7 @@ import functools
 import hashlib
 import html
 import io
+import math
 import sys
 import time
 from collections.abc import Iterator
@@ -123,6 +126,7 @@ class Case(NamedTuple):
 
 class Result(NamedTuple):
     values: dict[str, float]  # means over the seeds
+    errors: dict[str, float]  # standard errors of the means, 0 for one seed
     seconds: float  # per seed
     fill: np.ndarray  # of seed 0
     digest: str  # of the fills of all seeds
@@ -347,9 +351,14 @@ def fill_seed(path: str, case: Case, patch_size: int, seed: int) -> Seed:
 def evaluate(jobs: list[Future[Seed]]) -> Result:
     """The result of one case and library from the jobs of all seeds, in order."""
     fills, rows, seconds = zip(*(job.result() for job in jobs), strict=True)
-    values = {key: float(np.mean([row[key] for row in rows])) for key in rows[0]}
+    samples = {key: np.array([row[key] for row in rows]) for key in rows[0]}
+    values = {key: float(x.mean()) for key, x in samples.items()}
+    errors = {
+        key: float(x.std(ddof=1) / math.sqrt(len(x))) if len(x) > 1 else 0.0
+        for key, x in samples.items()
+    }
     digest = hashlib.sha256(b"".join(fill.tobytes() for fill in fills)).hexdigest()
-    return Result(values, float(np.mean(seconds)), fills[0], digest)
+    return Result(values, errors, float(np.mean(seconds)), fills[0], digest)
 
 
 def identical(results: list[Result]) -> str:
@@ -482,9 +491,14 @@ def crop_box(holes: np.ndarray) -> tuple[int, int, int, int]:
     return int(x0), int(y0), int(x1 - x0), int(y1 - y0)
 
 
-def verdict(key: str, old: float, new: float, target: float = 1.0) -> str:
-    """CSS class of ``new`` compared with ``old``: better, worse or none."""
-    if abs(new - old) <= (0.1 if key == "time" else 0.02) * abs(old):
+def verdict(
+    key: str, old: float, new: float, target: float = 1.0, noise: float = 0.0
+) -> str:
+    """CSS class of ``new`` compared with ``old``: better, worse or none.
+
+    ``noise`` is the standard error of the difference over the seeds.
+    """
+    if abs(new - old) <= max((0.1 if key == "time" else 0.02) * abs(old), 2 * noise):
         return ""
     if key in ("seam", "detail", "variety"):  # best at the value of the original
         old, new = abs(old - target), abs(new - target)
@@ -500,6 +514,11 @@ def column(key: str, results: list[Result]) -> tuple[list[float], list[str]]:
     return values, [f"{value:.2f}" for value in values]
 
 
+def noise(key: str, results: list[Result]) -> float:
+    """Standard error of the difference of the means, 0 for the time."""
+    return math.hypot(*(result.errors.get(key, 0.0) for result in results))
+
+
 def cell(key: str, results: list[Result], goals: dict[str, float]) -> str:
     if key == "fills":
         return f"<td>{identical(results)}</td>"
@@ -508,7 +527,7 @@ def cell(key: str, results: list[Result], goals: dict[str, float]) -> str:
         return "<td></td>"
     if len(values) == 1:
         return f"<td>{text[0]}</td>"
-    css = verdict(key, values[0], values[1], goals.get(key, 1.0))
+    css = verdict(key, values[0], values[1], goals.get(key, 1.0), noise(key, results))
     return f'<td>{text[0]} &rarr; <span class="{css}">{text[1]}</span></td>'
 
 
@@ -584,7 +603,8 @@ def markdown_cell(key: str, results: list[Result], goals: dict[str, float]) -> s
     values, text = column(key, results)
     if len(values) < 2:
         return "".join(text)
-    mark = MARKS[verdict(key, values[0], values[1], goals.get(key, 1.0))]
+    goal = goals.get(key, 1.0)
+    mark = MARKS[verdict(key, values[0], values[1], goal, noise(key, results))]
     return f"{text[0]} → {text[1]}{mark}"
 
 
@@ -612,7 +632,8 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
         "Means over the seeds. seam and detail are best at the values of the "
         "original (1.0 without one, see the report), variety at 1.0, error and edges "
         "at 0. With a baseline: baseline → current, 🟢 better and 🔴 worse by more "
-        "than 2 % (time: 10 %).",
+        "than 2 % (time: 10 %) and by more than twice the standard error of the "
+        "difference over the seeds.",
     ]
     return "\n".join(lines)
 
