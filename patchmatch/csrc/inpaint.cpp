@@ -358,8 +358,7 @@ namespace
             return cv::Vec3d(pixel[0], pixel[1], pixel[2]);
         };
         cv::Mat low(size, CV_8UC3);
-        for (int y = 0; y < size.height; ++y)
-        {
+        parallel_for(size.height, [&low, &size, &known, &color](int y) {
             for (int x = 0; x < size.width; ++x)
             {
                 const cv::Vec3d mean = window_mean(size, y, x, 1, known, color);
@@ -367,7 +366,7 @@ namespace
                 for (int c = 0; c < 3; ++c)
                     pixel[c] = cv::saturate_cast<unsigned char>(mean[c]);
             }
-        }
+        });
         return low;
     }
 
@@ -445,15 +444,23 @@ namespace
         }
 
         // Every pixel of the patch around (i, j) votes for the pixel at the same offset
-        // in the patch around its nearest neighbor.
-        void cast_patch(int i, int j, int patch_size, double weight) const
+        // in the patch around its nearest neighbor; only the votes for rows of the vote image
+        // are cast, which start at a multiple of the scale.
+        void cast_patch(int i, int j, int patch_size, double weight, const cv::Range &rows) const
         {
             const int yp = m_nnf->at(i, j, 0);
             const int xp = m_nnf->at(i, j, 1);
-            if (m_holes && !votes_for_hole(m_source2target ? yp : i, m_source2target ? xp : j, patch_size))
+            // The voted image is the source of the coherence field and the target of the completeness field.
+            const int y = m_source2target ? yp : i;
+            const int scale = m_upscaled ? 2 : 1;
+            const int first = std::max(-patch_size, rows.start / scale - y);
+            const int last = std::min(patch_size, (rows.end - 1) / scale - y);
+            if (first > last)
+                return;
+            if (m_holes && !votes_for_hole(y, m_source2target ? xp : j, patch_size))
                 return;
             const cv::Vec3d shift = m_holes ? color_shift(i, j, yp, xp, patch_size) : cv::Vec3d();
-            for (int di = -patch_size; di <= patch_size; ++di)
+            for (int di = first; di <= last; ++di)
             {
                 for (int dj = -patch_size; dj <= patch_size; ++dj)
                 {
@@ -1314,14 +1321,32 @@ void Inpainting::_expectation_step(
     const int patch_size = std::min(m_distance_metric->patch_size(), m_level_metric->patch_size());
     const auto &kDistance2Similarity = distance2similarity();
     const auto source_size = nnf.source_size();
-    for (int i = 0; i < source_size.height; ++i)
-    {
-        for (int j = 0; j < source_size.width; ++j)
-        {
-            if (!nnf.source().is_globally_masked(i, j))
-                caster.cast_patch(i, j, patch_size, kDistance2Similarity[nnf.at(i, j, 2)]);
-        }
-    }
+
+    // Bands of vote rows, each cast by one thread in the order of the pixels, so that every vote gets its terms in
+    // the sequential order. Four per thread balance holes that some bands lack, and the patches across a border,
+    // which both bands visit, stay a minority. A band starts at a multiple of the scale, so that both rows of an
+    // upscaled vote fall into it.
+    const int scale = upscaled ? 2 : 1;
+    const int threads = thread_count();
+    const int band =
+        threads > 1 ? scale * std::max(2 * (2 * patch_size + 1), vote.rows / scale / (4 * threads)) : vote.rows;
+    parallel_for(
+        (vote.rows + band - 1) / band,
+        [&caster, &nnf, &kDistance2Similarity, &source_size, &vote, band, scale, patch_size, source2target](int b) {
+            const cv::Range rows(b * band, std::min(vote.rows, (b + 1) * band));
+            // The coherence field votes around its pixels, the completeness field around their links.
+            const int first = source2target ? 0 : std::max(0, rows.start / scale - patch_size);
+            const int last = source2target ? source_size.height
+                                           : std::min(source_size.height, (rows.end - 1) / scale + patch_size + 1);
+            for (int i = first; i < last; ++i)
+            {
+                for (int j = 0; j < source_size.width; ++j)
+                {
+                    if (!nnf.source().is_globally_masked(i, j))
+                        caster.cast_patch(i, j, patch_size, kDistance2Similarity[nnf.at(i, j, 2)], rows);
+                }
+            }
+        });
 }
 
 // Maximization Step: maximum likelihood of target pixel.

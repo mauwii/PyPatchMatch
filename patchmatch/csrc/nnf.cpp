@@ -248,42 +248,14 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
     const auto &other_size = other.source_size();
     double fi = static_cast<double>(this_size.height) / other_size.height;
     double fj = static_cast<double>(this_size.width) / other_size.width;
-    const int patch_size = m_distance_metric->patch_size();
 
     prepare();
     // The pixels next to a hole that is new on this level, which search before a neighbor's link replaces their own.
     // Not std::vector<bool>, whose packed bits the threads would write concurrently.
     std::vector<unsigned char> searches(static_cast<std::size_t>(this_size.height) * this_size.width, 0);
-    parallel_for(this_size.height, [this, &other, &this_size, &other_size, fi, fj, patch_size, &searches](int i) {
+    parallel_for(this_size.height, [this, &other, &this_size, fi, fj, &searches](int i) {
         for (int j = 0; j < this_size.width; ++j)
-        {
-            if (m_source.is_globally_masked(i, j))
-                continue;
-            // The inpainting links them to themselves (_update_links); measuring them first took half its time.
-            if (!m_source.contains_mask(i, j, patch_size) && !m_target.contains_mask(i, j, patch_size))
-            {
-                set_identity(i, j);
-                continue;
-            }
-
-            auto ilow = static_cast<int>(std::min(i / fi, static_cast<double>(other_size.height - 1)));
-            auto jlow = static_cast<int>(std::min(j / fj, static_cast<double>(other_size.width - 1)));
-            auto other_value = other.ptr(ilow, jlow);
-
-            // Keep the offset within the coarse pixel, so that neighbors still point to
-            // neighbors. Without it, both pixels of a pair point to the same target pixel,
-            // which makes the upscaled fill blocky.
-            const int y_target =
-                std::clamp(static_cast<int>(other_value[0] * fi + (i - ilow * fi)), 0, target_size().height - 1);
-            const int x_target =
-                std::clamp(static_cast<int>(other_value[1] * fj + (j - jlow * fj)), 0, target_size().width - 1);
-            const Measured measured = _measure(i, j, y_target, x_target, PatchDistanceMetric::kDistanceScale);
-            _set(i, j, y_target, x_target, measured);
-
-            const bool linked_to_itself = other_value[0] == ilow && other_value[1] == jlow;
-            searches[_index(i, j)] = static_cast<unsigned char>(
-                linked_to_itself && measured.distance > 0 && m_target.contains_mask(y_target, x_target, patch_size));
-        }
+            searches[_index(i, j)] = static_cast<unsigned char>(_initialize_link_from(other, i, j, fi, fj));
     });
 
     // In scan order on this thread, which draws the random numbers in the order of the seed. A search changes only
@@ -294,6 +266,38 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
                 _random_search(i, j);
 
     _randomize_field(false);
+}
+
+// Links (i, j) like other links the coarse pixel, and tells whether a search has to follow.
+bool NearestNeighborField::_initialize_link_from(const NearestNeighborField &other, int i, int j, double fi, double fj)
+{
+    const int patch_size = m_distance_metric->patch_size();
+    if (m_source.is_globally_masked(i, j))
+        return false;
+    // The inpainting links them to themselves (_update_links); measuring them first took half its time.
+    if (!m_source.contains_mask(i, j, patch_size) && !m_target.contains_mask(i, j, patch_size))
+    {
+        set_identity(i, j);
+        return false;
+    }
+
+    const auto &other_size = other.source_size();
+    auto ilow = static_cast<int>(std::min(i / fi, static_cast<double>(other_size.height - 1)));
+    auto jlow = static_cast<int>(std::min(j / fj, static_cast<double>(other_size.width - 1)));
+    auto other_value = other.ptr(ilow, jlow);
+
+    // Keep the offset within the coarse pixel, so that neighbors still point to
+    // neighbors. Without it, both pixels of a pair point to the same target pixel,
+    // which makes the upscaled fill blocky.
+    const int y_target =
+        std::clamp(static_cast<int>(other_value[0] * fi + (i - ilow * fi)), 0, target_size().height - 1);
+    const int x_target =
+        std::clamp(static_cast<int>(other_value[1] * fj + (j - jlow * fj)), 0, target_size().width - 1);
+    const Measured measured = _measure(i, j, y_target, x_target, PatchDistanceMetric::kDistanceScale);
+    _set(i, j, y_target, x_target, measured);
+
+    const bool linked_to_itself = other_value[0] == ilow && other_value[1] == jlow;
+    return linked_to_itself && measured.distance > 0 && m_target.contains_mask(y_target, x_target, patch_size);
 }
 
 void NearestNeighborField::minimize(int nr_pass)

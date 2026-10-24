@@ -26,7 +26,8 @@ again.
   pixels and reads nothing that the same loop writes. The caches that `compute_features`
   and `compute_hole_sums` fill on first use are computed before the loop, on the copies
   that it reads (`NearestNeighborField::prepare`). Every sum gets its terms in the
-  sequential order, because `-ffast-math` changes the result of another one.
+  sequential order, because `-ffast-math` changes the result of another one: the bands
+  of `_expectation_step` cast the patches in the order of the pixels.
 - Only the holes change, and the colors under the holes and under `global_mask` do not
   influence the fill (`assert_filled`, `assert_plausible_fill`,
   `test_colors_under_the_holes_do_not_matter`,
