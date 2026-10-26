@@ -1508,8 +1508,8 @@ void Inpainting::_expectation_step(
     // upscaled vote fall into it.
     const int scale = upscaled ? 2 : 1;
     const int threads = thread_count();
-    const int band =
-        threads > 1 ? scale * std::max(2 * (2 * patch_size + 1), vote.rows / scale / (4 * threads)) : vote.rows;
+    const int band = threads > 1 ? scale * std::max(2 * (2 * patch_size + 1), vote.rows / scale / (4 * threads))
+                                 : std::max(1, vote.rows);
     parallel_for(
         (vote.rows + band - 1) / band,
         [&caster, &nnf, &kDistance2Similarity, &source_size, &vote, band, scale, patch_size, source2target](int b) {
