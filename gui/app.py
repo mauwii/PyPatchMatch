@@ -98,7 +98,7 @@ def enable(item: Item, on: bool = True) -> None:
 
 def pane(parent: ttk.Frame, column: int, title: str, hint: str = "") -> tk.Canvas:
     frame = ttk.Frame(parent, padding=8)
-    frame.grid(row=2, column=column, sticky="nsew")
+    frame.grid(row=3, column=column, sticky="nsew")
     frame.columnconfigure(1, weight=1)
     frame.rowconfigure(1, weight=1)
     ttk.Label(frame, text=title, font="TkHeadingFont").grid(row=0, column=0)
@@ -125,11 +125,31 @@ class App:
         root.report_callback_exception = show_error
         main = ttk.Frame(root)
         main.pack(fill="both", expand=True)
-        main.rowconfigure(2, weight=1)
+        main.rowconfigure(3, weight=1)
         main.columnconfigure((0, 2), weight=1, uniform="pane")
-        bar = ttk.Frame(main, padding=(8, 6))
-        bar.grid(row=0, column=0, columnspan=3, sticky="ew")
-        ttk.Separator(main).grid(row=1, column=0, columnspan=3, sticky="ew")
+        # the canvas scrolls the toolbar in a window narrower than it
+        strip = tk.Canvas(main, highlightthickness=0)
+        strip.grid(row=0, column=0, columnspan=3, sticky="ew")
+        scroll = ttk.Scrollbar(main, orient="horizontal", command=strip.xview)
+        scroll.grid(row=1, column=0, columnspan=3, sticky="ew")
+
+        def autoscroll(first: str, last: str) -> None:
+            scroll.set(first, last)
+            if float(first) <= 0 and float(last) >= 1:
+                scroll.grid_remove()
+            else:
+                scroll.grid()
+
+        strip.config(xscrollcommand=autoscroll)
+        bar = ttk.Frame(strip, padding=(8, 6))
+        strip.create_window(0, 0, window=bar, anchor="nw")
+        bar.bind(
+            "<Configure>",
+            lambda e: strip.config(
+                width=e.width, height=e.height, scrollregion=(0, 0, e.width, e.height)
+            ),
+        )
+        ttk.Separator(main).grid(row=2, column=0, columnspan=3, sticky="ew")
 
         def button(
             text: str,
@@ -202,9 +222,16 @@ class App:
         ).pack(side="left", padx=(0, 4))
         label("seed")
         self.seed = tk.IntVar(value=1212)  # the default of the native library
-        seed = ttk.Spinbox(bar, from_=0, to=2**32 - 1, width=10, textvariable=self.seed)
+        seed = ttk.Spinbox(
+            bar,
+            from_=0,
+            to=2**32 - 1,
+            width=10,
+            textvariable=self.seed,
+            state=tk.DISABLED,  # while random_seed is set
+        )
         seed.pack(side="left", padx=(0, 4))
-        self.random_seed = tk.BooleanVar(value=False)
+        self.random_seed = tk.BooleanVar(value=True)
         ttk.Checkbutton(
             bar,
             text="random",
@@ -221,7 +248,7 @@ class App:
         self.needs_image += [clear, inpaint, zoom_out, zoom_in]
 
         self.left = pane(main, 0, "Source", "paint: drag · move: right or Shift drag")
-        ttk.Separator(main, orient="vertical").grid(row=2, column=1, sticky="ns")
+        ttk.Separator(main, orient="vertical").grid(row=3, column=1, sticky="ns")
         self.right = pane(main, 2, "Result", "move: drag · zoom: scroll")
         self.left.master.bind("<Configure>", self.resize)  # both areas are equal
         self.left.bind("<ButtonPress-1>", self.press)
@@ -257,8 +284,6 @@ class App:
         self.last: Pixel | None = None
         self.pointer: tk.Event[tk.Canvas] | None = None  # over the source view
         self.area = (VIEW, VIEW)
-        root.update_idletasks()
-        root.minsize(bar.winfo_reqwidth(), 0)
 
     def file_menus(self, root: tk.Tk) -> None:
         """Fill the File menu and bind its shortcuts."""
