@@ -153,6 +153,19 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
+      # Sonar way rates new code smells only by their debt ratio, so it passes even
+      # critical ones; accepted and false-positive issues do not count
+      - name: Fail on open SonarCloud issues
+        if: env.HAS_SONAR_TOKEN == 'true'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SCOPE: ${{ github.event_name == 'pull_request' && format('pullRequest={0}', github.event.number) || format('branch={0}', github.ref_name) }}
+        run: |
+          curl --fail --silent --show-error --header "Authorization: Bearer $SONAR_TOKEN" \
+            "https://sonarcloud.io/api/issues/search?componentKeys=mauwii_PyPatchMatch&$SCOPE&resolved=false&ps=100" > issues.json
+          jq -r '.issues[] | "::error file=\(.component | sub("^[^:]*:"; "")),line=\(.line // 1),title=\(.rule)::\(.message)"' issues.json
+          jq -e '.total == 0' issues.json
+
   lowest:
     runs-on: ubuntu-latest
     timeout-minutes: 30
