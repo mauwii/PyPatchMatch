@@ -127,9 +127,10 @@ The GUI tries new images quickly, without writing a script for each one, e.g. to
 new examples or to verify edge cases: load an image, paint the holes (every painted
 pixel is one) and compare the original with the fill. Scrolling and the zoom buttons
 zoom both views together; dragging the result, or the original with the right mouse
-button or with Shift, moves them. File > Save Mask… writes the holes like
-`examples/images/camera_damaged_mask.png` (255 = hole), File > Open Mask… loads such a
-mask again. It needs a Python with Tk, such
+button or with Shift, moves them. The toggle `global_mask` paints the global mask
+instead, drawn half transparent; a pixel belongs to the mask painted last. Clear,
+File > Save Mask… and File > Open Mask… act on the selected mask; the files look like
+`examples/images/camera_damaged_mask.png` (255 = set). It needs a Python with Tk, such
 as the Pythons that uv installs. Its test runs with `uv run pytest gui --no-cov`.
 
 The evaluation cuts holes into the images of `examples/images`, compares the fills with

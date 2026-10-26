@@ -20,6 +20,8 @@ TITLE = "PyPatchMatch GUI"
 VIEW = 640  # initial width and height of both view areas, in screen pixels
 MAX_ZOOM = 32  # screen pixels per image pixel
 HOLE = (255, 0, 255)
+GLOBAL = (0, 255, 255)
+MASKS = ("mask", "global_mask")  # keywords of patchmatch.inpaint
 Pixel = tuple[int, int]
 
 
@@ -54,7 +56,12 @@ def oval(shape: str, radius: int) -> bool:
 
 
 def stroke(
-    draw: ImageDraw.ImageDraw, a: Pixel, b: Pixel, radius: int, shape: str
+    draw: ImageDraw.ImageDraw,
+    a: Pixel,
+    b: Pixel,
+    radius: int,
+    shape: str,
+    fill: int = 255,
 ) -> None:
     """Stamp the brush on every pixel from a to b; fast drags skip pixels."""
     hx, hy = extent(shape, radius)
@@ -64,9 +71,9 @@ def stroke(
         y = round(a[1] + (b[1] - a[1]) * i / n)
         box = [x - hx, y - hy, x + hx, y + hy]
         if oval(shape, radius):
-            draw.ellipse(box, fill=255)
+            draw.ellipse(box, fill=fill)
         else:
-            draw.polygon(corners(shape, box), fill=255)
+            draw.polygon(corners(shape, box), fill=fill)
 
 
 def clamp(
@@ -213,7 +220,13 @@ class App:
                 style="Toolbutton",
                 width=2,
             ).pack(side="left")
-        clear = button("Clear mask", self.clear)
+        separator()
+        self.layer = tk.StringVar(value="mask")
+        for name in MASKS:
+            ttk.Radiobutton(
+                bar, text=name, value=name, variable=self.layer, style="Toolbutton"
+            ).pack(side="left")
+        clear = button("Clear", self.clear)
         separator()
         label("patch_size")
         self.patch_size = tk.IntVar(value=3)
@@ -340,13 +353,11 @@ class App:
         path = filedialog.askopenfilename()
         if not path:
             return
-        stem, folder = Path(path).stem, Path(path).parent
-        self.mask_file = {"initialdir": folder, "initialfile": f"{stem}_mask.png"}
+        self.path = Path(path)
         self.image = Image.open(path).convert("RGB")
         self.result = None
         self.layout()
-        self.mask = Image.new("L", self.image.size)
-        self.draw = ImageDraw.Draw(self.mask)
+        self.masks = {name: Image.new("L", self.image.size) for name in MASKS}
         self.set_view(0, 0, 0)
         for item in self.needs_image:
             enable(item)
@@ -378,7 +389,10 @@ class App:
 
     def show_mask(self) -> None:
         view = self.base.copy()
-        view.paste(HOLE, mask=self.view_of(self.mask))
+        view.paste(HOLE, mask=self.view_of(self.masks["mask"]))
+        # half opaque, as these pixels keep their values
+        keep = self.view_of(self.masks["global_mask"]).point(lambda v: v // 2)
+        view.paste(GLOBAL, mask=keep)
         self.put(self.left, view)
         self.show_brush()
 
@@ -408,7 +422,8 @@ class App:
         canvas.create_image(0, 0, anchor="nw", image=self.photos[canvas])
 
     def clear(self) -> None:
-        self.mask.paste(0, (0, 0, *self.mask.size))
+        mask = self.masks[self.layer.get()]
+        mask.paste(0, (0, 0, *mask.size))
         self.show_mask()
 
     def pixel(self, event: tk.Event[tk.Canvas]) -> Pixel:
@@ -436,7 +451,11 @@ class App:
             return
         a, self.last = self.last, self.pixel(event)
         self.pointer = event
-        stroke(self.draw, a, self.last, self.radius(), self.shape.get())
+        r, shape, layer = self.radius(), self.shape.get(), self.layer.get()
+        # a pixel is in the mask painted last only, so the view shows one color
+        for name, mask in self.masks.items():
+            fill = 255 if name == layer else 0
+            stroke(ImageDraw.Draw(mask), a, self.last, r, shape, fill)
         self.show_mask()
 
     def grab(self, event: tk.Event[tk.Canvas]) -> None:
@@ -463,7 +482,7 @@ class App:
         self.set_view(zoom, self.x + x * s, self.y + y * s)
 
     def inpaint(self) -> None:
-        if self.mask.getbbox() is None:
+        if self.masks["mask"].getbbox() is None:
             messagebox.showwarning(TITLE, "The mask is empty.")
         if self.random_seed.get():
             # shown in the field, to repeat a good fill; secrets avoids Sonar's S2245
@@ -471,31 +490,48 @@ class App:
         patchmatch.set_random_seed(self.seed.get())
         # ponytail: blocks the window during the fill, use a thread if fills get slow
         filled = patchmatch.inpaint(
-            self.image, self.mask, patch_size=self.patch_size.get()
+            self.image,
+            self.masks["mask"],
+            global_mask=self.masks["global_mask"],
+            patch_size=self.patch_size.get(),
         )
         self.result = Image.fromarray(filled)
         self.put(self.right, self.view_of(self.result))
         for item in self.needs_result:
             enable(item)
 
+    def mask_file(self) -> str:
+        """The default file of the selected mask, next to the image."""
+        return f"{self.path.stem}_{self.layer.get()}.png"
+
     def open_mask(self) -> None:
-        path = filedialog.askopenfilename(**self.mask_file)
+        """Load the selected mask; like paint, it clears its pixels in the other."""
+        path = filedialog.askopenfilename(
+            initialdir=self.path.parent, initialfile=self.mask_file()
+        )
         if not path:
             return
         mask = Image.open(path).convert("L")
         if mask.size != self.image.size:
             (w, h), (iw, ih) = mask.size, self.image.size
             raise ValueError(f"The mask is {w}x{h} pixels, the image {iw}x{ih}.")
-        # every non-zero pixel is a hole, as for patchmatch.inpaint
-        self.mask = mask.point(lambda v: 255 if v else 0)
-        self.draw = ImageDraw.Draw(self.mask)
+        # every non-zero pixel is set, as for patchmatch.inpaint
+        layer = self.layer.get()
+        self.masks[layer] = mask.point(lambda v: 255 if v else 0)
+        for name, other in self.masks.items():
+            if name != layer:
+                other.paste(0, mask=self.masks[layer])
         self.show_mask()
 
     def save_mask(self) -> None:
-        """Save the holes like examples/images/camera_damaged_mask.png: L, 255 = hole."""
-        path = filedialog.asksaveasfilename(defaultextension=".png", **self.mask_file)
+        """Save the selected mask like examples/images/camera_damaged_mask.png."""
+        path = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            initialdir=self.path.parent,
+            initialfile=self.mask_file(),
+        )
         if path:
-            self.mask.save(path, optimize=True)
+            self.masks[self.layer.get()].save(path, optimize=True)
 
     def save(self) -> None:
         path = filedialog.asksaveasfilename(defaultextension=".png")
