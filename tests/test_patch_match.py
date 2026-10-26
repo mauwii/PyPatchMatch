@@ -571,9 +571,11 @@ def test_native_rejects_invalid_inputs(image, hole_mask, ijmap, argument, value)
         patch_match._call(func, *values)
 
 
-def test_native_accepts_empty_image():
+@pytest.mark.parametrize("threads", [0, 1])
+def test_native_accepts_empty_image(threads, default_threads):
     # Python returns empty images before the native call; C callers still get an
     # empty result instead of a failure. OpenCV 4.6 returns it with shape (0, 0, 1).
+    patchmatch.set_num_threads(threads)
     lib = patch_match._get_lib()
     empty = np.zeros((0, 10, 3), dtype=np.uint8)
     mask = np.zeros((0, 10, 1), dtype=np.uint8)
