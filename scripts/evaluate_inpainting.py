@@ -16,7 +16,11 @@ plain fill a little with patch sizes 3 and 7. tripod cuts a hole across a leg of
 tripod in camera_aged.png, a thin diagonal line that the fill has to continue; 2.2
 breaks it off (edges 4.6 with patch size 3). pole cuts one across the pole of the
 birdhouses in forest.bmp, which stands in front of the forest above the hole and of the
-meadow below it; 2.2 breaks it off as well (error 30). coffee-corner outpaints the right
+meadow below it; 2.2 breaks it off as well (error 30). tripod-holes cuts 13 smaller
+holes of different sizes across the legs, the column and the handles of the tripod and
+a cable, all in one mask; up to 2.3.0rc2 the peel continued the line of the largest
+only, which left the edges at those of 2.2 (9.6 and 9.8, now 7.1). The column at the
+edge of the coat breaks off with every version. coffee-corner outpaints the right
 and bottom third of coffee.png, where error and edges come close to those of a flat fill
 (43 and 8.3), so seam, detail and variety rate it; with patch size 15, it keeps a hole
 on the coarsest level. pattern-frame outpaints a frame of an eighth around pattern.png,
@@ -110,6 +114,17 @@ LINES = {
     "tripod": ("camera_aged.png", (410, 352, 28, 28)),
     "pole": ("forest.bmp", (290, 284, 22, 22)),
 }
+# (center y, center x, radius) of the circles of tripod-holes in camera_aged.png
+TRIPOD_HOLES = [
+    *[(362, 325, 8), (398, 344, 11), (442, 367, 15)],  # right leg
+    *[(376, 294, 8), (412, 294, 11), (452, 294, 15)],  # column
+    *[(352, 282, 8), (425, 261, 14)],  # left leg
+    (299, 293, 8),  # column at the edge of the coat
+    (461, 251, 11),  # left leg where a strut joins it
+    (208, 235, 11),  # handle in front of the coat
+    (312, 321, 7),  # pan handle
+    (207, 305, 7),  # cable
+]
 # the two vectors (y, x) along which pattern.png repeats, fitted to 24 peaks of its
 # autocorrelation; the lattice is slightly sheared
 LATTICE = np.array([[127.68, 127.33], [127.67, -126.27]])
@@ -164,7 +179,8 @@ def cases() -> Iterator[Case]:
     yield Case("forest", pruned, white(pruned), None)
     damaged = load(IMAGES / "camera_damaged.png")
     damage = np.array(Image.open(IMAGES / "camera_damaged_mask.png")) > 0
-    yield Case("camera", damaged, damage, load(IMAGES / "camera_aged.png"))
+    camera = load(IMAGES / "camera_aged.png")
+    yield Case("camera", damaged, damage, camera)
     yield cut("trees", forest, ellipse(forest.shape, 70, 560, 45, 55))
     meadow = np.zeros(forest.shape[:2], dtype=bool)
     meadow[318:350, 380:470] = True
@@ -190,6 +206,8 @@ def cases() -> Iterator[Case]:
     for name, (filename, hole) in LINES.items():
         truth = load(IMAGES / filename)
         yield cut(name, truth, ellipse(truth.shape, *hole))
+    circles = [ellipse(camera.shape, y, x, r, r) for y, x, r in TRIPOD_HOLES]
+    yield cut("tripod-holes", camera, np.logical_or.reduce(circles))
     coffee = load(IMAGES / "coffee.png")
     corner = np.zeros(coffee.shape[:2], dtype=bool)
     corner[-133:] = corner[:, -200:] = True

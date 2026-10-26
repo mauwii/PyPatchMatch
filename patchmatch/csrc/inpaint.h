@@ -39,6 +39,8 @@ private:
     // Per level: smaller patches where patch_size does not fit, otherwise nullptr.
     std::vector<std::unique_ptr<PatchDistanceMetric>> m_fitting_metrics;
     int m_coarsest_hole_level = -1;
+    // Per level the labels of the holes that the peel fills, or an empty matrix; none from kCoarsePatchSize on.
+    std::vector<cv::Mat> m_peel_labels;
     // Searches on the current level; the votes use the smaller of its patch size and patch_size.
     const PatchDistanceMetric *m_level_metric = nullptr;
 };

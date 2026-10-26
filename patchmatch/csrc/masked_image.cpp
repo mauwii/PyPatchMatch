@@ -86,6 +86,12 @@ bool MaskedImage::contains_mask(int y, int x, int patch_size) const
     return sum(bottom, right) - sum(top, right) - sum(bottom, left) + sum(top, left) > 0;
 }
 
+cv::Rect downsample_window(int y, int x)
+{
+    constexpr auto side = static_cast<int>(kDownsampleKernel.size());
+    return {2 * x - side / 2 + 1, 2 * y - side / 2 + 1, side, side};
+}
+
 MaskedImage MaskedImage::downsample() const
 {
     const auto size = this->size();

@@ -244,6 +244,12 @@ again.
   drifts: pattern-wide 14.0 and 11.0), and the coherence of the guide's links without
   the variance (the tripod leg broke where the background around it is copied
   coherently).
+  Against the lines broken in holes smaller than the largest (#199): no peel for the
+  holes that reach level 0 only, which saved most of the time of the 59 scratches and
+  specks of camera, but broke the line in a strip 4 pixels wide across the tripod leg
+  (edges 3.93 → 5.29); one search of all sources per hole instead of two (tripod-holes
+  edges 7.77 against 7.21; 4 and 8 gained no more), and the warm-up and the mean fit
+  shared by all holes, as before (8.28).
 - Not tried: starting the holes of the coarsest level smoothly instead of black. As the
   downsampling shrinks the holes, only coffee-corner with 15 keeps one there (51 of 216
   pixels); outpainting of a third of the image does with 15, of half with 7, and a hole
