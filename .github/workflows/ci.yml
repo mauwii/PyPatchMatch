@@ -127,6 +127,8 @@ jobs:
       SKBUILD_CMAKE_DEFINE: PATCHMATCH_COVERAGE=ON;CMAKE_EXPORT_COMPILE_COMMANDS=ON
       # a fixed path for sonar.cfamily.compile-commands
       SKBUILD_BUILD_DIR: build
+      # one thread: the pool threads would contend for the atomic gcov counters
+      OPENCV_FOR_THREADS_NUM: 1
       # fork and Dependabot PRs get no secrets
       HAS_SONAR_TOKEN: ${{ secrets.SONAR_TOKEN != '' }}
     steps:
