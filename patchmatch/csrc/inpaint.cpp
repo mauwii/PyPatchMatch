@@ -733,11 +733,11 @@ namespace
         // would start from, nullptr on the coarsest level.
         Peel(
             const MaskedImage &source, const MaskedImage &target, const cv::Mat &holes,
-            const NearestNeighborField *guide, int patch_size)
+            const NearestNeighborField *guide, int patch_size, int level)
             : m_source(source), m_target(target), m_holes(holes), m_guide(guide), m_patch_size(patch_size),
-              m_size(source.size()), m_colors(source.image().clone()), m_filled(m_size, CV_8U, cv::Scalar(0)),
-              m_front_mask(m_size, CV_8U, cv::Scalar(0)), m_confidence(m_size, CV_64F, cv::Scalar(0)),
-              m_matches(m_size, CV_32SC2, cv::Scalar::all(-1))
+              m_level(level), m_size(source.size()), m_colors(source.image().clone()),
+              m_filled(m_size, CV_8U, cv::Scalar(0)), m_front_mask(m_size, CV_8U, cv::Scalar(0)),
+              m_confidence(m_size, CV_64F, cv::Scalar(0)), m_matches(m_size, CV_32SC2, cv::Scalar::all(-1))
         {
             double holes_count = 0;
             cv::minMaxLoc(holes, nullptr, &holes_count);
@@ -797,13 +797,15 @@ namespace
 
         // Near ties of the fit go to the patch closest to the coarser fill, which lays out repeating structures.
         static constexpr double kNearTie = 0.3;
-        // The guide's own link wins unless the known pixels clearly contradict it, as at the end of a line.
+        // The guide's own link wins unless the known pixels clearly contradict it, as at the end of a line. On the two
+        // finest levels only if its source is about as varied as the best fit's: the coarser fill lost the lines a few
+        // pixels wide there, and the link copied the background across them.
         static constexpr double kGuideTolerance = 2;
+        static constexpr double kGuideVariance = 0.75;
         // More where the coarser levels locked onto a structure, which the peel broke into pieces of the wrong phase:
         // the guide's links around the pixel share one offset, and its source is about as varied as the best fit's,
         // unlike a coherent background across which a line continues.
         static constexpr double kLockedGuideTolerance = 4;
-        static constexpr double kLockedVariance = 0.75;
         // A fit this much worse than the mean of the pixels of its hole before calls for a search of all sources: the
         // random search does not find the few sources of a line. The first pixels of the level search all, and the
         // first of each hole: shared by all holes, the warm-up left the lines of the later ones broken. The mean
@@ -1061,9 +1063,8 @@ namespace
             if (guided)
             {
                 const auto fit = static_cast<double>(m_candidates[0].fit);
-                if (fit <= (1 + kGuideTolerance) * best + 1 ||
-                    (fit <= (1 + kLockedGuideTolerance) * best + 1 && _locked(p) &&
-                     _variance(m_candidates[0]) >= kLockedVariance * _variance(*_best_fit())))
+                if ((fit <= (1 + kGuideTolerance) * best + 1 && (m_level > 1 || _varied())) ||
+                    (fit <= (1 + kLockedGuideTolerance) * best + 1 && _locked(p) && _varied()))
                     return m_candidates[0];
             }
             const double near = (1 + kNearTie) * best + 1;
@@ -1093,6 +1094,12 @@ namespace
                     ++shared;
             });
             return shared == 9;
+        }
+
+        // Whether the source of the guide's link is about as varied as that of the best fit.
+        bool _varied() const
+        {
+            return _variance(m_candidates[0]) >= kGuideVariance * _variance(*_best_fit());
         }
 
         // The variance of the colors of a candidate's source patch.
@@ -1179,6 +1186,7 @@ namespace
         const cv::Mat &m_holes;
         const NearestNeighborField *m_guide;
         int m_patch_size;
+        int m_level;
         cv::Size m_size;
         cv::Mat m_colors;
         cv::Mat m_filled;
@@ -1347,12 +1355,12 @@ MaskedImage Inpainting::_peel(int level, const MaskedImage &target, cv::Mat &mat
     const cv::Mat &holes = m_peel_labels[level];
     const int patch_size = m_distance_metric->patch_size();
     if (level == static_cast<int>(m_pyramid.size()) - 1)
-        return Peel(source, target, holes, nullptr, patch_size).run(matches);
+        return Peel(source, target, holes, nullptr, patch_size, level).run(matches);
     // The field that the search of this level starts from: the links of the coarser one are off by a pixel here,
     // so the peel deviated from patterns that the coarser levels had locked onto.
     NearestNeighborField guide(target, source, m_level_metric, m_target2source);
     guide.minimize(nnf_iterations(level));
-    return Peel(source, target, holes, &guide, patch_size).run(matches);
+    return Peel(source, target, holes, &guide, patch_size, level).run(matches);
 }
 
 // The search does not find the few sources of a line that the coarser levels lost.

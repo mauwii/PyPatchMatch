@@ -280,6 +280,21 @@ def test_line_goes_on_beside_a_larger_hole():
     assert evaluation.edge_error(result, truth, leg) < 5.0
 
 
+def test_line_goes_on_through_a_small_hole():
+    """The coarser fill lost the leg of the tripod, and the guide's link copied the
+    background across it: edges 3.0 to 10.3 with ten seeds, above 8 in nine of them
+    (2.5 to 3.6 when the link needs a source as varied as the best fit's).
+    """
+    truth = evaluation.load(IMAGES / "camera_aged.png")
+    leg = evaluation.ellipse(truth.shape, 425, 261, 14, 14)
+    source = truth.copy()
+    source[leg] = 255
+
+    result = patchmatch.inpaint(source, leg.astype(np.uint8), patch_size=3)
+
+    assert evaluation.edge_error(result, truth, leg) < 5.0
+
+
 def test_explicit_mask_matches_implicit_white_mask(pruned_image):
     """README: an explicit mask behaves like the default mask of white pixels."""
     holes = evaluation.white(np.array(pruned_image))
