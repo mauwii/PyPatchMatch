@@ -39,7 +39,8 @@ jobs:
 
   test:
     name: test (${{ matrix.os }}, py${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
+    # vars.MACOS_RUNNER, a runner label, takes macOS arm64 off a starved hosted pool
+    runs-on: ${{ matrix.os == 'macos-latest' && vars.MACOS_RUNNER || matrix.os }}
     timeout-minutes: 30
     env:
       # only here, so that builds from the sdist survive new compiler warnings
