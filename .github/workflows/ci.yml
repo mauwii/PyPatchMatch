@@ -193,7 +193,26 @@ jobs:
         with:
           version: latest-known
           prune-cache: true
-      - run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends libopencv-dev
+
+      # the Azure mirror sometimes throttles the 170 MB of packages to 20 minutes; a new
+      # image renews the cache from the last one, so only updated packages download
+      - name: Set ImageVersion
+        run: echo "ImageVersion=$ImageVersion" >> "$GITHUB_ENV"
+      - name: Cache the OpenCV packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          # without lock and partial/, which only root and _apt can read
+          path: ~/apt-archives/*.deb
+          key: apt-libopencv-dev-${{ env.ImageVersion }}
+          restore-keys: apt-libopencv-dev-
+      - name: Install OpenCV
+        run: |
+          mkdir -p ~/apt-archives/partial
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" libopencv-dev
+          # drops superseded versions, which the restored cache would carry on
+          sudo apt-get autoclean -o Dir::Cache::Archives="$HOME/apt-archives"
+
       - run: uv run --locked --no-build pytest --no-cov
       # the headers are the C++ API as well; the example needs imgcodecs, which this
       # OpenCV has
