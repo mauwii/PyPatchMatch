@@ -18,7 +18,11 @@ The workflow files explain their steps in comments; this lists what they do not 
 - SonarCloud: automatic analysis is disabled (it cannot import coverage and would
   conflict with the scan of the `coverage` job). `sonar.qualitygate.wait=true` makes a
   red gate fail `ci-ok`, so auto-merge waits for it; without `SONAR_TOKEN` (Dependabot,
-  forks) the scan is skipped and blocks nothing.
+  forks) the scan is skipped and blocks nothing. Sonar way passes code smells of any
+  severity below 5 % debt ratio, and a custom gate needs a paid plan, so a step after
+  the scan fails on every unresolved issue of the PR or branch; accept an issue in
+  SonarCloud when it cannot be fixed. A required check "SonarCloud Code Analysis"
+  would never report on Dependabot PRs and block them.
 - The `uv run` steps pass `--locked` and `--no-build` (SonarCloud S8544, S8541);
   `--no-build` only forbids building dependencies, uv still builds the project. The
   OpenCV step runs with `--only-group test`: the project cannot be built before OpenCV
