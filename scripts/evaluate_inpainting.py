@@ -179,7 +179,8 @@ def cases() -> Iterator[Case]:
     yield Case("forest", pruned, white(pruned), None)
     damaged = load(IMAGES / "camera_damaged.png")
     damage = np.array(Image.open(IMAGES / "camera_damaged_mask.png")) > 0
-    yield Case("camera", damaged, damage, load(IMAGES / "camera_aged.png"))
+    camera = load(IMAGES / "camera_aged.png")
+    yield Case("camera", damaged, damage, camera)
     yield cut("trees", forest, ellipse(forest.shape, 70, 560, 45, 55))
     meadow = np.zeros(forest.shape[:2], dtype=bool)
     meadow[318:350, 380:470] = True
@@ -205,7 +206,6 @@ def cases() -> Iterator[Case]:
     for name, (filename, hole) in LINES.items():
         truth = load(IMAGES / filename)
         yield cut(name, truth, ellipse(truth.shape, *hole))
-    camera = load(IMAGES / "camera_aged.png")
     circles = [ellipse(camera.shape, y, x, r, r) for y, x, r in TRIPOD_HOLES]
     yield cut("tripod-holes", camera, np.logical_or.reduce(circles))
     coffee = load(IMAGES / "coffee.png")
