@@ -765,21 +765,16 @@ namespace
         {
             while (!m_front.empty())
             {
-                std::size_t next = 0;
-                double top = -1;
-                for (std::size_t i = 0; i < m_front.size(); ++i)
-                {
-                    const double priority = _priority(m_front[i]);
-                    if (priority > top)
-                    {
-                        top = priority;
-                        next = i;
-                    }
-                }
+                // the first of the highest
+                const auto next = static_cast<std::size_t>(
+                    std::max_element(m_priorities.begin(), m_priorities.end()) - m_priorities.begin());
                 const cv::Point p = m_front[next];
                 m_front[next] = m_front.back();
                 m_front.pop_back();
+                m_priorities[next] = m_priorities.back();
+                m_priorities.pop_back();
                 _fill(p, _choose(p));
+                _update_priorities(p);
             }
 
             MaskedImage peeled = m_target.clone();
@@ -837,6 +832,18 @@ namespace
                 return;
             m_front_mask.at<unsigned char>(y, x) = 1;
             m_front.emplace_back(x, y);
+            m_priorities.push_back(_priority({x, y}));
+        }
+
+        // Filling p changes the priorities of the front only within its confidence window and the isophotes around it.
+        void _update_priorities(cv::Point p)
+        {
+            const int reach = std::max(m_patch_size, 2);
+            for (std::size_t i = 0; i < m_front.size(); ++i)
+            {
+                if (std::abs(m_front[i].y - p.y) <= reach && std::abs(m_front[i].x - p.x) <= reach)
+                    m_priorities[i] = _priority(m_front[i]);
+            }
         }
 
         double _luminance(int y, int x) const
@@ -895,21 +902,41 @@ namespace
         // or its fit is beyond the near ties of the best one so far.
         void _evaluate(cv::Point p, int qy, int qx)
         {
+            if (const auto candidate = _fit(p, qy, qx, m_best))
+                _add(*candidate);
+        }
+
+        void _add(const Candidate &candidate)
+        {
+            if (static_cast<double>(candidate.fit) > _near_ties(m_best))
+                return;
+            m_best = std::min(m_best, candidate.fit);
+            m_candidates.push_back(candidate);
+        }
+
+        static double _near_ties(std::int64_t best)
+        {
+            return best == kNone ? std::numeric_limits<double>::max() : (1 + kNearTie) * static_cast<double>(best) + 1;
+        }
+
+        // The source patch around (qy, qx) as a candidate for p, unless it overlaps a hole or the global mask, or its
+        // fit is beyond the near ties of best.
+        std::optional<Candidate> _fit(cv::Point p, int qy, int qx, std::int64_t best) const
+        {
             if (qy < m_patch_size || qy >= m_size.height - m_patch_size || qx < m_patch_size ||
                 qx >= m_size.width - m_patch_size || m_source.contains_mask(qy, qx, m_patch_size))
-                return;
-            const double bound =
-                m_best == kNone ? std::numeric_limits<double>::max() : (1 + kNearTie) * static_cast<double>(m_best) + 1;
+                return std::nullopt;
+            const double bound = _near_ties(best);
             std::int64_t fit = 0;
             std::int64_t guide = 0;
             for (int dy = -m_patch_size; dy <= m_patch_size; ++dy)
             {
                 if (static_cast<double>(fit) > bound)
-                    return;
+                    return std::nullopt;
                 for (int dx = -m_patch_size; dx <= m_patch_size; ++dx)
                 {
                     if (m_source.is_globally_masked(qy + dy, qx + dx))
-                        return;
+                        return std::nullopt;
                     const Role role = _role(p.y + dy, p.x + dx);
                     if (role == Role::kIgnored)
                         continue;
@@ -919,9 +946,8 @@ namespace
                 }
             }
             if (static_cast<double>(fit) > bound)
-                return;
-            m_best = std::min(m_best, fit);
-            m_candidates.push_back({qy, qx, fit, guide});
+                return std::nullopt;
+            return Candidate{qy, qx, fit, guide};
         }
 
         enum class Role
@@ -1004,11 +1030,28 @@ namespace
             }
         }
 
+        // A row of sources per task. Each keeps the near ties of its own best fit, among them all that the scan in
+        // order keeps, so that adding them in that order gives the same candidates and best fit.
         void _search_everywhere(cv::Point p)
         {
-            for (int qy = m_patch_size; qy < m_size.height - m_patch_size; ++qy)
+            const int rows = std::max(m_size.height - 2 * m_patch_size, 0);
+            std::vector<std::vector<Candidate>> found(static_cast<std::size_t>(rows));
+            m_source.compute_hole_sums(); // before the rows read it
+            parallel_for(rows, [this, p, &found](int row) {
+                std::int64_t best = m_best;
+                const int qy = m_patch_size + row;
                 for (int qx = m_patch_size; qx < m_size.width - m_patch_size; ++qx)
-                    _evaluate(p, qy, qx);
+                {
+                    if (const auto candidate = _fit(p, qy, qx, best))
+                    {
+                        best = std::min(best, candidate->fit);
+                        found[static_cast<std::size_t>(row)].push_back(*candidate);
+                    }
+                }
+            });
+            for (const auto &row : found)
+                for (const auto &candidate : row)
+                    _add(candidate);
         }
 
         // The guide's link, otherwise among the near ties of the best fit the patch closest to the coarser fill.
@@ -1143,6 +1186,7 @@ namespace
         cv::Mat m_confidence;
         cv::Mat m_matches;
         std::vector<cv::Point> m_front;
+        std::vector<double> m_priorities; // of the front, in its order
         std::vector<Candidate> m_candidates;
         std::int64_t m_best = kNone;
         // The fits chosen so far per hole, by its label.
