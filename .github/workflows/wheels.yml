@@ -45,7 +45,8 @@ jobs:
   wheels:
     name: wheel (${{ matrix.os }})
     needs: sdist
-    runs-on: ${{ matrix.os }}
+    # MACOS_RUNNER as in ci.yml; release wheels are built on hosted runners only
+    runs-on: ${{ matrix.os == 'macos-latest' && github.event_name != 'release' && vars.MACOS_RUNNER || matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false

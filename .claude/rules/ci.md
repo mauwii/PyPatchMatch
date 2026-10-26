@@ -38,4 +38,9 @@ The workflow files explain their steps in comments; this lists what they do not 
   with the same 7-day cooldown through `exclude-newer`): Dependabot's `uv lock` builds
   the project, which fails without OpenCV, because scikit-build-core hides the
   `prepare_metadata_for_build_*` hooks when an override uses `if.failed`.
+- The repository variable `MACOS_RUNNER` names a runner label that takes over the
+  `macos-latest` jobs of `test` and `wheels`, except for releases, while the hosted
+  macOS arm64 pool is starved: an ephemeral Tart VM per job on the maintainer's Mac.
+  Unset, they run hosted. `ImageOS` is empty in the VM, which keeps its OpenCV caches
+  apart. Fork PR workflows must keep needing approval for all external contributors.
 - The environment `pypi` deploys only from tags `v*`.
