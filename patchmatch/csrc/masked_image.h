@@ -160,3 +160,6 @@ private:
     mutable cv::Mat m_hole_sums;
     mutable bool m_hole_sums_computed = false;
 };
+
+// The pixels that MaskedImage::downsample averages into (y, x) of the coarser image; at the border partly outside it.
+cv::Rect downsample_window(int y, int x);

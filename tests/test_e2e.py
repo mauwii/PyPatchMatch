@@ -265,6 +265,21 @@ def test_line_goes_on_through_the_hole(name, column, limit):
     assert evaluation.measure(result, holes, truth)[column] < limit
 
 
+def test_line_goes_on_beside_a_larger_hole():
+    """The peel ran on the levels of the largest hole only: a hole in the sky broke the
+    leg of the tripod off (edges 8.7 to 11.9 with ten seeds, 1.4 to 2.6 without it).
+    """
+    truth = evaluation.load(IMAGES / "camera_aged.png")
+    leg = evaluation.ellipse(truth.shape, 398, 344, 11, 11)
+    holes = leg | evaluation.ellipse(truth.shape, 60, 420, 30, 30)
+    source = truth.copy()
+    source[holes] = 255
+
+    result = patchmatch.inpaint(source, holes.astype(np.uint8), patch_size=3)
+
+    assert evaluation.edge_error(result, truth, leg) < 5.0
+
+
 def test_explicit_mask_matches_implicit_white_mask(pruned_image):
     """README: an explicit mask behaves like the default mask of white pixels."""
     holes = evaluation.white(np.array(pruned_image))

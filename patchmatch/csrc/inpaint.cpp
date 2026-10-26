@@ -96,6 +96,113 @@ namespace
         return false;
     }
 
+    // Gives the hole pixels 8-connected to (y, x), the neighborhood of the peel's front, the label.
+    void label_hole(const MaskedImage &image, cv::Mat &labels, int y, int x, int label)
+    {
+        labels.at<int>(y, x) = label;
+        std::vector<cv::Point> stack{{x, y}};
+        while (!stack.empty())
+        {
+            const cv::Point p = stack.back();
+            stack.pop_back();
+            for_window(image.size(), p.y, p.x, 1, [&image, &labels, &stack, label](int yy, int xx) {
+                if (is_hole(image, yy, xx) && labels.at<int>(yy, xx) == 0)
+                {
+                    labels.at<int>(yy, xx) = label;
+                    stack.emplace_back(xx, yy);
+                }
+            });
+        }
+    }
+
+    // Per pixel the label of its hole from 1 on, 0 outside the holes.
+    cv::Mat label_holes(const MaskedImage &image, int &count)
+    {
+        cv::Mat labels(image.size(), CV_32S, cv::Scalar(0));
+        count = 0;
+        for (int y = 0; y < labels.rows; ++y)
+        {
+            for (int x = 0; x < labels.cols; ++x)
+            {
+                if (is_hole(image, y, x) && labels.at<int>(y, x) == 0)
+                    label_hole(image, labels, y, x, ++count);
+            }
+        }
+        return labels;
+    }
+
+    // Raises the reach of the labeled holes in the window to top.
+    void raise_reach(const cv::Mat &labels, const cv::Rect &window, int top, std::vector<int> &reach)
+    {
+        for (int y = window.y; y < window.y + window.height; ++y)
+        {
+            for (int x = window.x; x < window.x + window.width; ++x)
+            {
+                auto &hole = reach[static_cast<std::size_t>(labels.at<int>(y, x))];
+                hole = std::max(hole, top);
+            }
+        }
+    }
+
+    // Raises the reach of each labeled hole to that of the holes of the coarser level that it averages into.
+    void reach_coarser(const cv::Mat &coarser_reach, const cv::Mat &labels, std::vector<int> &reach)
+    {
+        const cv::Rect image({}, labels.size());
+        for (int y = 0; y < coarser_reach.rows; ++y)
+        {
+            for (int x = 0; x < coarser_reach.cols; ++x)
+            {
+                if (const int top = coarser_reach.at<int>(y, x); top >= 0)
+                    raise_reach(labels, downsample_window(y, x) & image, top, reach);
+            }
+        }
+    }
+
+    // The labels of the holes that reach at most one level coarser than level, 0 elsewhere, or an empty matrix; and
+    // per pixel the reach of its hole, -1 outside the holes.
+    cv::Mat peeled_holes(const cv::Mat &labels, const std::vector<int> &reach, int level, cv::Mat &pixel_reach)
+    {
+        pixel_reach = cv::Mat(labels.size(), CV_32S, cv::Scalar(-1));
+        cv::Mat peeled(labels.size(), CV_32S, cv::Scalar(0));
+        bool peels = false;
+        for (int y = 0; y < labels.rows; ++y)
+        {
+            for (int x = 0; x < labels.cols; ++x)
+            {
+                const int label = labels.at<int>(y, x);
+                if (label == 0)
+                    continue;
+                const int top = reach[static_cast<std::size_t>(label)];
+                pixel_reach.at<int>(y, x) = top;
+                if (top <= level + 1)
+                {
+                    peeled.at<int>(y, x) = label;
+                    peels = true;
+                }
+            }
+        }
+        return peels ? peeled : cv::Mat();
+    }
+
+    // Per level the labels of the holes that the peel fills there, 0 elsewhere, or an empty matrix: each hole on the
+    // coarsest level that it reaches and on the one below. On the levels of the largest hole only, smaller holes
+    // elsewhere broke their lines off.
+    std::vector<cv::Mat> peel_labels(const std::vector<MaskedImage> &pyramid)
+    {
+        std::vector<cv::Mat> peel(pyramid.size());
+        cv::Mat coarser_reach; // per pixel the coarsest level that its hole reaches, -1 outside the holes
+        for (int level = static_cast<int>(pyramid.size()) - 1; level >= 0; --level)
+        {
+            int count = 0;
+            const cv::Mat labels = label_holes(pyramid[level], count);
+            // reach[0] belongs to the globally masked pixels in the windows
+            std::vector reach(static_cast<std::size_t>(count) + 1, level);
+            reach_coarser(coarser_reach, labels, reach);
+            peel[static_cast<std::size_t>(level)] = peeled_holes(labels, reach, level, coarser_reach);
+        }
+        return peel;
+    }
+
     // The gradient magnitude at a known pixel, summed over the channels, or -1 if it or a neighbor is unknown.
     double gradient_magnitude(const MaskedImage &image, int y, int x)
     {
@@ -622,13 +729,19 @@ namespace
     class Peel
     {
     public:
-        // guide: the field of this level that the search would start from, nullptr on the coarsest level.
-        Peel(const MaskedImage &source, const MaskedImage &target, const NearestNeighborField *guide, int patch_size)
-            : m_source(source), m_target(target), m_guide(guide), m_patch_size(patch_size), m_size(source.size()),
-              m_colors(source.image().clone()), m_filled(m_size, CV_8U, cv::Scalar(0)),
+        // holes: the labels of the holes to fill (CV_32S), 0 elsewhere; guide: the field of this level that the search
+        // would start from, nullptr on the coarsest level.
+        Peel(
+            const MaskedImage &source, const MaskedImage &target, const cv::Mat &holes,
+            const NearestNeighborField *guide, int patch_size)
+            : m_source(source), m_target(target), m_holes(holes), m_guide(guide), m_patch_size(patch_size),
+              m_size(source.size()), m_colors(source.image().clone()), m_filled(m_size, CV_8U, cv::Scalar(0)),
               m_front_mask(m_size, CV_8U, cv::Scalar(0)), m_confidence(m_size, CV_64F, cv::Scalar(0)),
               m_matches(m_size, CV_32SC2, cv::Scalar::all(-1))
         {
+            double holes_count = 0;
+            cv::minMaxLoc(holes, nullptr, &holes_count);
+            m_fits.resize(static_cast<std::size_t>(holes_count) + 1);
             for (int y = 0; y < m_size.height; ++y)
             {
                 for (int x = 0; x < m_size.width; ++x)
@@ -696,10 +809,13 @@ namespace
         // unlike a coherent background across which a line continues.
         static constexpr double kLockedGuideTolerance = 4;
         static constexpr double kLockedVariance = 0.75;
-        // A fit this much worse than the mean of the pixels before calls for a search of all sources: the random
-        // search does not find the few sources of a line. The first pixels search all, the mean forgets slowly.
+        // A fit this much worse than the mean of the pixels of its hole before calls for a search of all sources: the
+        // random search does not find the few sources of a line. The first pixels of the level search all, and the
+        // first of each hole: shared by all holes, the warm-up left the lines of the later ones broken. The mean
+        // forgets slowly.
         static constexpr double kPoorFit = 3;
         static constexpr int kWarmUp = 8;
+        static constexpr int kHoleWarmUp = 2;
         static constexpr double kFitMemory = 0.9;
         // Without an isophote, the confidence orders the pixels.
         static constexpr double kFlatData = 0.001;
@@ -711,7 +827,7 @@ namespace
 
         void _enter_front(int y, int x)
         {
-            if (!is_hole(m_source, y, x) || m_filled.at<unsigned char>(y, x) || m_front_mask.at<unsigned char>(y, x))
+            if (m_holes.at<int>(y, x) == 0 || m_filled.at<unsigned char>(y, x) || m_front_mask.at<unsigned char>(y, x))
                 return;
             bool next_to_filled = false;
             for_window(m_size, y, x, 1, [this, &next_to_filled](int yy, int xx) {
@@ -841,15 +957,17 @@ namespace
                 filled += m_filled.at<unsigned char>(y, x);
             });
             filled = std::max(filled, 1);
-            if (m_candidates.empty() || m_fitted < kWarmUp ||
-                static_cast<double>(m_best) / filled > kPoorFit * m_mean_fit)
+            Fits &fits = m_fits[static_cast<std::size_t>(m_holes.at<int>(p.y, p.x))];
+            if (m_candidates.empty() || m_fitted < kWarmUp || fits.count < kHoleWarmUp ||
+                static_cast<double>(m_best) / filled > kPoorFit * fits.mean)
                 _search_everywhere(p);
             if (m_candidates.empty())
                 return {-1, -1};
 
             const Candidate &chosen = _pick(p, guided);
             const double fit = static_cast<double>(chosen.fit) / filled;
-            m_mean_fit = m_fitted == 0 ? fit : kFitMemory * m_mean_fit + (1 - kFitMemory) * fit;
+            fits.mean = fits.count == 0 ? fit : kFitMemory * fits.mean + (1 - kFitMemory) * fit;
+            ++fits.count;
             ++m_fitted;
             return {chosen.y, chosen.x};
         }
@@ -1015,6 +1133,7 @@ namespace
 
         const MaskedImage &m_source;
         const MaskedImage &m_target;
+        const cv::Mat &m_holes;
         const NearestNeighborField *m_guide;
         int m_patch_size;
         cv::Size m_size;
@@ -1026,7 +1145,13 @@ namespace
         std::vector<cv::Point> m_front;
         std::vector<Candidate> m_candidates;
         std::int64_t m_best = kNone;
-        double m_mean_fit = 0;
+        // The fits chosen so far per hole, by its label.
+        struct Fits
+        {
+            double mean = 0;
+            int count = 0;
+        };
+        std::vector<Fits> m_fits;
         int m_fitted = 0;
     };
 } // namespace
@@ -1092,8 +1217,12 @@ void Inpainting::_initialize_pyramid()
         m_fitting_metrics.push_back(
             fitting < m_distance_metric->patch_size() ? m_distance_metric->with_patch_size(fitting) : nullptr);
     }
+    // No peel either from kCoarsePatchSize on: the searches of the finer levels wiped the peeled lines out again.
     if (m_distance_metric->patch_size() < kCoarsePatchSize)
+    {
         m_coarse_metric = m_distance_metric->with_patch_size(kCoarsePatchSize);
+        m_peel_labels = peel_labels(m_pyramid);
+    }
 }
 
 cv::Mat Inpainting::run(bool verbose, unsigned int random_seed)
@@ -1162,25 +1291,24 @@ MaskedImage Inpainting::_run_levels(bool verbose)
     return target;
 }
 
-// The coarsest level with a hole and the one below, where the fill is laid out. With patch sizes from
-// kCoarsePatchSize on, the searches of the finer levels wiped the peeled lines out again.
+// The levels where a hole's fill is laid out: the coarsest that it reaches and the one below.
 bool Inpainting::_peels(int level) const
 {
-    return m_distance_metric->patch_size() < kCoarsePatchSize && level <= m_coarsest_hole_level &&
-           level >= m_coarsest_hole_level - 1;
+    return level < static_cast<int>(m_peel_labels.size()) && !m_peel_labels[level].empty();
 }
 
 MaskedImage Inpainting::_peel(int level, const MaskedImage &target, cv::Mat &matches) const
 {
     const MaskedImage &source = m_pyramid[level];
+    const cv::Mat &holes = m_peel_labels[level];
     const int patch_size = m_distance_metric->patch_size();
     if (level == static_cast<int>(m_pyramid.size()) - 1)
-        return Peel(source, target, nullptr, patch_size).run(matches);
+        return Peel(source, target, holes, nullptr, patch_size).run(matches);
     // The field that the search of this level starts from: the links of the coarser one are off by a pixel here,
     // so the peel deviated from patterns that the coarser levels had locked onto.
     NearestNeighborField guide(target, source, m_level_metric, m_target2source);
     guide.minimize(nnf_iterations(level));
-    return Peel(source, target, &guide, patch_size).run(matches);
+    return Peel(source, target, holes, &guide, patch_size).run(matches);
 }
 
 // The search does not find the few sources of a line that the coarser levels lost.
