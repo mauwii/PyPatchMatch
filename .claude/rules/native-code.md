@@ -250,6 +250,15 @@ again.
   (edges 3.93 → 5.29); one search of all sources per hole instead of two (tripod-holes
   edges 7.77 against 7.21; 4 and 8 gained no more), and the warm-up and the mean fit
   shared by all holes, as before (8.28).
+  Against the background that the guide's link copied across the lines of the smaller
+  holes of tripod-holes, other forms of `kGuideVariance`: on all levels (brick and
+  brick-global +14 to +15 %, meadow +10 %, coffee `edges` +17 %; on level 2 it changed
+  coffee, trees, forest and the bricks, and did not help holes of radius 40 to 55
+  across the leg either), on the level below the coarsest of a hole only (no better
+  than on both), a ratio of 0.3 or 0.5 (within the noise of 0.75), only where the
+  guide's fit is 1.5 or 2 times worse than the best (less gain, coffee `edges` still
+  +7 %), and the variance of the known pixels around the pixel instead of the best
+  fit's source (no better).
 - Not tried: starting the holes of the coarsest level smoothly instead of black. As the
   downsampling shrinks the holes, only coffee-corner with 15 keeps one there (51 of 216
   pixels); outpainting of a third of the image does with 15, of half with 7, and a hole
