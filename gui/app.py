@@ -12,6 +12,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from types import TracebackType
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageTk
 
 import patchmatch
@@ -227,6 +228,12 @@ class App:
                 bar, text=name, value=name, variable=self.layer, style="Toolbutton"
             ).pack(side="left")
         clear = button("Clear", self.clear)
+        detect = button("Detect", self.detect)
+        label("\N{GREATER-THAN OR EQUAL TO}")
+        self.threshold = tk.IntVar(value=255)  # the holes of inpaint without a mask
+        ttk.Spinbox(bar, from_=0, to=255, width=4, textvariable=self.threshold).pack(
+            side="left", padx=(0, 4)
+        )
         separator()
         label("patch_size")
         self.patch_size = tk.IntVar(value=3)
@@ -258,7 +265,7 @@ class App:
         zoom_in = icon("+", lambda: self.zoom_at(*self.center(), 1.25))
         self.zoom_label = ttk.Label(bar, width=6, anchor="e")
         self.zoom_label.pack(side="left")
-        self.needs_image += [clear, inpaint, zoom_out, zoom_in]
+        self.needs_image += [clear, detect, inpaint, zoom_out, zoom_in]
 
         self.left = pane(main, 0, "Source", "paint: drag · move: right or Shift drag")
         ttk.Separator(main, orient="vertical").grid(row=3, column=1, sticky="ns")
@@ -481,9 +488,25 @@ class App:
         s = 1 / self.zoom - 1 / zoom
         self.set_view(zoom, self.x + x * s, self.y + y * s)
 
+    def detect(self) -> None:
+        """Add the pixels whose channels all reach the threshold to the holes."""
+        # outside the global mask, as patchmatch.inpaint without a mask
+        t = self.threshold.get()
+        found = Image.fromarray((np.asarray(self.image) >= t).all(axis=2))
+        found.paste(0, mask=self.masks["global_mask"])
+        if found.getbbox() is None:
+            message = f"No pixel outside the global mask has all channels ≥ {t}."
+            messagebox.showwarning(TITLE, message)
+            return
+        self.masks["mask"].paste(255, mask=found)
+        self.show_mask()
+
     def inpaint(self) -> None:
         if self.masks["mask"].getbbox() is None:
-            messagebox.showwarning(TITLE, "The mask is empty.")
+            messagebox.showwarning(
+                TITLE, "The mask is empty. Paint or detect the holes."
+            )
+            return
         if self.random_seed.get():
             # shown in the field, to repeat a good fill; secrets avoids Sonar's S2245
             self.seed.set(secrets.randbelow(2**32))

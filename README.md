@@ -130,7 +130,10 @@ zoom both views together; dragging the result, or the original with the right mo
 button or with Shift, moves them. The toggle `global_mask` paints the global mask
 instead, drawn half transparent; a pixel belongs to the mask painted last. Clear,
 File > Save Mask… and File > Open Mask… act on the selected mask; the files look like
-`examples/images/camera_damaged_mask.png` (255 = set). It needs a Python with Tk, such
+`examples/images/camera_damaged_mask.png` (255 = set). Detect adds the pixels whose
+channels all reach the threshold next to it to the holes, outside the global mask: 255
+takes the pure white pixels, as `patchmatch.inpaint` without a mask, and 200 exactly
+the damage of `camera_damaged.png`. It needs a Python with Tk, such
 as the Pythons that uv installs. Its test runs with `uv run pytest gui --no-cov`.
 
 The evaluation cuts holes into the images of `examples/images`, compares the fills with
