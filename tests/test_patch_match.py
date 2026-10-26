@@ -302,7 +302,8 @@ def test_fill_does_not_depend_on_threads(ijmap, variant, patch_size, default_thr
             return patchmatch.inpaint_regularity(img, mask, ijmap, **kwargs)
         return patchmatch.inpaint(img, mask, **kwargs)
 
-    np.testing.assert_array_equal(fill(1), fill(0))
+    # not the default: on one core (OPENCV_FOR_THREADS_NUM=1) it is one thread as well
+    np.testing.assert_array_equal(fill(1), fill(4))
 
 
 @pytest.mark.parametrize(
