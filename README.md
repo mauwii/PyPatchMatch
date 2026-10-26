@@ -120,13 +120,21 @@ uv run pre-commit install      # enable ruff and the other hooks on commit
 uv run pytest                  # run the test suite
 uv run pytest -m "not e2e"     # only the fast unit tests
 uv run python scripts/evaluate_inpainting.py  # measure the fill quality
-uv run --group gui gui/app.py  # draw masks in the browser, http://127.0.0.1:7860
+uv run gui/app.py              # paint masks in a Tkinter window
 ```
 
 The GUI tries new images quickly, without writing a script for each one, e.g. to pick
 new examples or to verify edge cases: load an image, paint the holes (every painted
-pixel is one) and compare the original with the fill. Its test runs with
-`uv run --group gui pytest gui --no-cov`.
+pixel is one) and compare the original with the fill. Scrolling and the zoom buttons
+zoom both views together; dragging the result, or the original with the right mouse
+button or with Shift, moves them. The toggle `global_mask` paints the global mask
+instead, drawn half transparent; a pixel belongs to the mask painted last. Clear,
+File > Save Mask… and File > Open Mask… act on the selected mask; the files look like
+`examples/images/camera_damaged_mask.png` (255 = set). Detect adds the pixels whose
+channels all reach the threshold next to it to the holes, outside the global mask: 255
+takes the pure white pixels, as `patchmatch.inpaint` without a mask, and 200 exactly
+the damage of `camera_damaged.png`. It needs a Python with Tk, such
+as the Pythons that uv installs. Its test runs with `uv run pytest gui --no-cov`.
 
 The evaluation cuts holes into the images of `examples/images`, compares the fills with
 the original content and writes `examples/images/evaluation.html`, which shows them side
