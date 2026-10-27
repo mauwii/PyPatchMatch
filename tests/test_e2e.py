@@ -280,6 +280,23 @@ def test_line_goes_on_beside_a_larger_hole():
     assert evaluation.edge_error(result, truth, leg) < 5.0
 
 
+def test_line_goes_on_through_a_small_hole_beside_a_larger_one():
+    """Only the coarsest level of the largest hole searched with the larger patches: a
+    hole in the sky kinked the column of the tripod in a smaller hole (edges 3.7 to 7.4
+    with ten seeds, 3.0 to 4.4 when each hole searches with them on the coarsest level
+    that it reaches, as alone).
+    """
+    truth = evaluation.load(IMAGES / "camera_aged.png")
+    column = evaluation.ellipse(truth.shape, 412, 294, 11, 11)
+    holes = column | evaluation.ellipse(truth.shape, 60, 420, 30, 30)
+    source = truth.copy()
+    source[holes] = 255
+
+    result = patchmatch.inpaint(source, holes.astype(np.uint8), patch_size=3)
+
+    assert evaluation.edge_error(result, truth, column) < 5.0
+
+
 def test_line_goes_on_through_a_small_hole():
     """The coarser fill lost the leg of the tripod, and the guide's link copied the
     background across it: edges 3.0 to 10.3 with ten seeds, above 8 in nine of them

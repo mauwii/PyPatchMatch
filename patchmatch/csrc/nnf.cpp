@@ -213,9 +213,10 @@ void NearestNeighborField::_allocate_sums()
 
 NearestNeighborField::Measured NearestNeighborField::_measure(int y, int x, int y_target, int x_target, int bound) const
 {
+    const PatchDistanceMetric &metric = _metric(y, x);
     if (m_sums.empty())
-        return {(*m_distance_metric)(m_source, y, x, m_target, y_target, x_target), -1};
-    const int patch_size = m_distance_metric->patch_size();
+        return {metric(m_source, y, x, m_target, y_target, x_target), -1};
+    const int patch_size = metric.patch_size();
     const std::int64_t sum = patch_sum(m_source, {y, x}, m_target, {y_target, x_target}, patch_size, bound);
     if (sum < 0)
         return {PatchDistanceMetric::kDistanceScale, -1};
@@ -290,7 +291,7 @@ void NearestNeighborField::_initialize_field_from(const NearestNeighborField &ot
 // Links (i, j) like other links the coarse pixel, and tells whether a search has to follow.
 bool NearestNeighborField::_initialize_link_from(const NearestNeighborField &other, int i, int j, double fi, double fj)
 {
-    const int patch_size = m_distance_metric->patch_size();
+    const int patch_size = this->patch_size(i, j);
     if (m_source.is_globally_masked(i, j))
         return false;
     // The inpainting links them to themselves (_update_links); measuring them first took half its time.
@@ -427,7 +428,10 @@ void NearestNeighborField::_propagate(int y, int x, int dy, int dx)
 {
     const int y_target = at(y - dy, x - dx, 0) + dy;
     const int x_target = at(y - dy, x - dx, 1) + dx;
-    const std::int64_t neighbor_sum = m_sums.empty() ? -1 : m_sums[_index(y - dy, x - dx)];
+    const int patch_size = this->patch_size(y, x);
+    // The neighbor's sum covers its own patch size.
+    const std::int64_t neighbor_sum =
+        m_sums.empty() || this->patch_size(y - dy, x - dx) != patch_size ? -1 : m_sums[_index(y - dy, x - dx)];
     if (neighbor_sum < 0)
     {
         link_if_closer(y, x, y_target, x_target);
@@ -436,7 +440,6 @@ void NearestNeighborField::_propagate(int y, int x, int dy, int dx)
     if (y_target == at(y, x, 0) && x_target == at(y, x, 1))
         return;
 
-    const int patch_size = m_distance_metric->patch_size();
     const ImagePair images(m_source, m_target);
     const auto line_sum = [&images, dy, patch_size](Position s, Position t) {
         return dy != 0 ? row_sum(images, s, t, patch_size) : column_sum(images, s, t, patch_size);

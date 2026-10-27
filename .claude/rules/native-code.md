@@ -87,9 +87,9 @@ again.
   for the gradients: up to `patch_size` 4 every patch over it is above the 10 %, so that
   line of a hole at the image border never got a vote and stayed flat
   (`test_inpaint_textures_the_image_border`).
-- The larger patches of `m_coarse_metric` on the level below the coarsest with a hole
-  as well: the holes there are wider than them, and they take flat sources in foliage,
-  which filled holes in `forest.bmp` gray (11 of 20 positions worse,
+- The larger patches of `m_coarse_metric` on the level below the coarsest that a hole
+  reaches as well: the holes there are wider than them, and they take flat sources in
+  foliage, which filled holes in `forest.bmp` gray (11 of 20 positions worse,
   `test_reconstructs_known_background` 5.9 → 8.4). Until 2.2 both levels were filled
   with patch_size and with the larger patches, and the fill with the lower mean
   distance with patch_size on the next level was kept. That distance does not see
@@ -117,6 +117,12 @@ again.
   the pattern with a hole of radius 50 stayed broken), a margin in their favor (from
   1.05 on, forest fills got worse), and choosing by the depth of the hole (the same for
   the failing pattern and the forest holes).
+  The larger patches on the coarsest level of the largest hole only, as up to 2.3: the
+  smaller holes elsewhere searched without them, unlike alone, and the lines in the
+  holes of radius 8 to 11 of tripod-holes kinked (edges of the leg where a strut joins
+  it 6.86 → 5.12 with them on the coarsest level of each hole, 30 seeds). On level 0
+  for the holes that reach no coarser one beside larger holes as well: the 59 scratches
+  of camera got a worse seam (1.02 → 1.06, 30 seeds) and took 13 % longer.
 - Split votes (mean of the low frequencies plus the detail of the best vote) on coarser
   levels than the two finest: from level 2 on they helped coffee with `patch_size` 3,
   but raised the error of brick with 7 from 6.96 to 8.99 and of brick-global from 6.30

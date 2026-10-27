@@ -19,6 +19,7 @@ private:
     void _initialize_pyramid(void);
     MaskedImage _run_levels(bool verbose);
     bool _peels(int level) const;
+    cv::Mat _coarse_pixels(int level) const;
     MaskedImage _peel(int level, const MaskedImage &target, cv::Mat &matches) const;
     void _link_peeled(const cv::Mat &matches);
     MaskedImage _expectation_maximization(const MaskedImage &source, MaskedImage target, int level, bool verbose);
@@ -34,11 +35,12 @@ private:
     std::optional<NearestNeighborField> m_source2target;
     NearestNeighborField m_target2source;
     const PatchDistanceMetric *m_distance_metric;
-    // Searches on the coarsest level with a hole, if patch_size is smaller than kCoarsePatchSize.
+    // Searches around each hole on the coarsest level that it reaches, if patch_size is smaller than kCoarsePatchSize.
     std::unique_ptr<PatchDistanceMetric> m_coarse_metric;
+    // Per level the pixels that search with it (CV_8U), or an empty matrix.
+    std::vector<cv::Mat> m_coarse_pixels;
     // Per level: smaller patches where patch_size does not fit, otherwise nullptr.
     std::vector<std::unique_ptr<PatchDistanceMetric>> m_fitting_metrics;
-    int m_coarsest_hole_level = -1;
     // Per level the labels of the holes that the peel fills, or an empty matrix; none from kCoarsePatchSize on.
     std::vector<cv::Mat> m_peel_labels;
     // Per level and label the coarsest level that the hole reaches.
