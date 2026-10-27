@@ -1343,9 +1343,9 @@ void Inpainting::_initialize_pyramid()
         m_pyramid[level].set_texture(to_bytes(texture));
     }
 
-    for (int level = 0; level < static_cast<int>(m_pyramid.size()); ++level)
+    for (const MaskedImage &image : m_pyramid)
     {
-        const int side = std::min(m_pyramid[level].size().height, m_pyramid[level].size().width);
+        const int side = std::min(image.size().height, image.size().width);
         const int fitting = std::max(kMinFittingPatchSize, (side / kLevelSidesPerPatch - 1) / 2);
         m_fitting_metrics.push_back(
             fitting < m_distance_metric->patch_size() ? m_distance_metric->with_patch_size(fitting) : nullptr);
