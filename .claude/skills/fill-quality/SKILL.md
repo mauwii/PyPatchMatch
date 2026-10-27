@@ -34,5 +34,5 @@ uv run --no-sync python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1
   removals; never commit them, nor `evaluation.html`, which embeds them.
 - The workflow `Fill quality` compares every PR that changes the native code with its
   base branch (job summary, artifact `evaluation.html`), and every release with the
-  last stable one, with 10 seeds and patch sizes 3, 7 and 15 (about 30 minutes); a
+  last stable one, with 10 seeds and patch sizes 3, 7 and 15 (about an hour); a
   report, not a gate.
