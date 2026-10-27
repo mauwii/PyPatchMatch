@@ -289,6 +289,13 @@ again.
   structure tensor points within 13 to 18 degrees of the best fit's (alone 10.4 to
   12.2, in the mask 8.6 to 9.4); both (alone 8.0, in the mask 9.7). The edges of the
   whole case changed by at most 4 %.
+  Against the column r15 above the joint of the struts (edges 4.1 alone, 4.2 in the
+  mask, 20 seeds): on level 2, its coarsest, the hole has 4 pixels, which take the
+  guide's link to the left leg; on level 1 the column takes the column just above the
+  joint as its best fit, and the neighbors continue it into the joint. Ignoring the
+  coarser fill on level 1 (alone 4.9, in the mask 5.6), and holes of up to 8 pixels on
+  their coarsest level reaching one level less (alone 4.4, in the mask 5.5; the right
+  leg r15 2.9 → 2.4, the left leg r14 2.9 → 3.5), were worse.
 - Not tried: starting the holes of the coarsest level smoothly instead of black. As the
   downsampling shrinks the holes, only coffee-corner with 15 keeps one there (51 of 216
   pixels); outpainting of a third of the image does with 15, of half with 7, and a hole
