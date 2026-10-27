@@ -295,6 +295,31 @@ def test_line_goes_on_through_a_small_hole():
     assert evaluation.edge_error(result, truth, leg) < 5.0
 
 
+def test_lines_go_on_through_many_holes():
+    """The coarser fill lost the column and the legs of the tripod in the largest holes
+    of tripod-holes, and the near ties closest to it ended or bent them: edges of the
+    column 7.7 to 8.7 and of the legs up to 5.9 and 8.4 with ten seeds (2.7 to 6.5, 3.5
+    and 3.0 with sources as varied as the best fit's and a search nearby).
+    """
+    truth = evaluation.load(IMAGES / "camera_aged.png")
+    holes = np.logical_or.reduce(
+        [
+            evaluation.ellipse(truth.shape, y, x, r, r)
+            for y, x, r in evaluation.TRIPOD_HOLES
+        ]
+    )
+    source = truth.copy()
+    source[holes] = 255
+
+    result = patchmatch.inpaint(source, holes.astype(np.uint8), patch_size=3)
+
+    column = evaluation.ellipse(truth.shape, 452, 294, 15, 15)
+    assert evaluation.edge_error(result, truth, column) < 7.0
+    for y, x, r in [(442, 367, 15), (425, 261, 14)]:
+        leg = evaluation.ellipse(truth.shape, y, x, r, r)
+        assert evaluation.edge_error(result, truth, leg) < 4.0
+
+
 def test_explicit_mask_matches_implicit_white_mask(pruned_image):
     """README: an explicit mask behaves like the default mask of white pixels."""
     holes = evaluation.white(np.array(pruned_image))

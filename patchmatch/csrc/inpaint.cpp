@@ -8,6 +8,7 @@
 #include <iostream>
 #include <limits>
 #include <optional>
+#include <utility>
 
 #include "parallel.h"
 
@@ -60,6 +61,27 @@ namespace
             }
         });
         return count > 0 ? sum / count : sum;
+    }
+
+    // Variance of the colors of image within radius of (cy, cx) where select(y, x) holds, which it does at least once.
+    template <typename Select>
+    double window_variance(const cv::Mat &image, int cy, int cx, int radius, Select select)
+    {
+        cv::Vec3d sum;
+        double squares = 0;
+        int count = 0;
+        for_window(image.size(), cy, cx, radius, [&image, &select, &sum, &squares, &count](int y, int x) {
+            if (!select(y, x))
+                return;
+            const auto &color = image.at<cv::Vec3b>(y, x);
+            for (int c = 0; c < 3; ++c)
+            {
+                sum[c] += color[c];
+                squares += static_cast<double>(color[c]) * color[c];
+            }
+            ++count;
+        });
+        return (squares - sum.dot(sum) / count) / count;
     }
 
     // The pixel loops read three channels and index the masks with the image coordinates.
@@ -186,10 +208,11 @@ namespace
 
     // Per level the labels of the holes that the peel fills there, 0 elsewhere, or an empty matrix: each hole on the
     // coarsest level that it reaches and on the one below. On the levels of the largest hole only, smaller holes
-    // elsewhere broke their lines off.
-    std::vector<cv::Mat> peel_labels(const std::vector<MaskedImage> &pyramid)
+    // elsewhere broke their lines off. reaches: per level and label the coarsest level that the hole reaches.
+    std::vector<cv::Mat> peel_labels(const std::vector<MaskedImage> &pyramid, std::vector<std::vector<int>> &reaches)
     {
         std::vector<cv::Mat> peel(pyramid.size());
+        reaches.resize(pyramid.size());
         cv::Mat coarser_reach; // per pixel the coarsest level that its hole reaches, -1 outside the holes
         for (int level = static_cast<int>(pyramid.size()) - 1; level >= 0; --level)
         {
@@ -199,6 +222,7 @@ namespace
             std::vector reach(static_cast<std::size_t>(count) + 1, level);
             reach_coarser(coarser_reach, labels, reach);
             peel[static_cast<std::size_t>(level)] = peeled_holes(labels, reach, level, coarser_reach);
+            reaches[static_cast<std::size_t>(level)] = std::move(reach);
         }
         return peel;
     }
@@ -729,13 +753,13 @@ namespace
     class Peel
     {
     public:
-        // holes: the labels of the holes to fill (CV_32S), 0 elsewhere; guide: the field of this level that the search
-        // would start from, nullptr on the coarsest level.
+        // holes: the labels of the holes to fill (CV_32S), 0 elsewhere; reach: per label the coarsest level that the
+        // hole reaches; guide: the field of this level that the search would start from, nullptr on the coarsest level.
         Peel(
-            const MaskedImage &source, const MaskedImage &target, const cv::Mat &holes,
+            const MaskedImage &source, const MaskedImage &target, const cv::Mat &holes, const std::vector<int> &reach,
             const NearestNeighborField *guide, int patch_size, int level)
-            : m_source(source), m_target(target), m_holes(holes), m_guide(guide), m_patch_size(patch_size),
-              m_level(level), m_size(source.size()), m_colors(source.image().clone()),
+            : m_source(source), m_target(target), m_holes(holes), m_reach(reach), m_guide(guide),
+              m_patch_size(patch_size), m_level(level), m_size(source.size()), m_colors(source.image().clone()),
               m_filled(m_size, CV_8U, cv::Scalar(0)), m_front_mask(m_size, CV_8U, cv::Scalar(0)),
               m_confidence(m_size, CV_64F, cv::Scalar(0)), m_matches(m_size, CV_32SC2, cv::Scalar::all(-1))
         {
@@ -814,6 +838,14 @@ namespace
         static constexpr int kWarmUp = 8;
         static constexpr int kHoleWarmUp = 2;
         static constexpr double kFitMemory = 0.9;
+        // Where the coarser fill is the first of a hole and this much flatter than the filled pixels around the pixel,
+        // it lost a line, and the near ties closest to it ended or bent the line: only sources about as varied as the
+        // best fit's count there.
+        static constexpr double kFlatGuide = 0.15;
+        // There, a best fit this much flatter than the filled pixels around the pixel lost a line too: the sources
+        // nearby are searched for its few ones. In the whole image, that doubled the time of large images.
+        static constexpr double kFlatFit = 0.3;
+        static constexpr int kLineSearchRadius = 16;
         // Without an isophote, the confidence orders the pixels.
         static constexpr double kFlatData = 0.001;
 
@@ -988,7 +1020,12 @@ namespace
             Fits &fits = m_fits[static_cast<std::size_t>(m_holes.at<int>(p.y, p.x))];
             if (m_candidates.empty() || m_fitted < kWarmUp || fits.count < kHoleWarmUp ||
                 static_cast<double>(m_best) / filled > kPoorFit * fits.mean)
-                _search_everywhere(p);
+                _search(p, _sources());
+            else if (_first_fill(p) && _variance(*_best_fit()) < kFlatFit * _variance_around(p, Role::kFit))
+            {
+                constexpr int side = 2 * kLineSearchRadius + 1;
+                _search(p, _sources() & cv::Rect(p.x - kLineSearchRadius, p.y - kLineSearchRadius, side, side));
+            }
             if (m_candidates.empty())
                 return {-1, -1};
 
@@ -1032,17 +1069,25 @@ namespace
             }
         }
 
-        // A row of sources per task. Each keeps the near ties of its own best fit, among them all that the scan in
-        // order keeps, so that adding them in that order gives the same candidates and best fit.
-        void _search_everywhere(cv::Point p)
+        // The centers of the source patches inside the image.
+        cv::Rect _sources() const
         {
-            const int rows = std::max(m_size.height - 2 * m_patch_size, 0);
-            std::vector<std::vector<Candidate>> found(static_cast<std::size_t>(rows));
+            return {
+                m_patch_size, m_patch_size, std::max(m_size.width - 2 * m_patch_size, 0),
+                std::max(m_size.height - 2 * m_patch_size, 0)};
+        }
+
+        // Every source with its center in centers, a row per task. Each keeps the near ties of its own best fit, among
+        // them all that the scan in order keeps, so that adding them in that order gives the same candidates and best
+        // fit.
+        void _search(cv::Point p, const cv::Rect &centers)
+        {
+            std::vector<std::vector<Candidate>> found(static_cast<std::size_t>(centers.height));
             m_source.compute_hole_sums(); // before the rows read it
-            parallel_for(rows, [this, p, &found](int row) {
+            parallel_for(centers.height, [this, p, &centers, &found](int row) {
                 std::int64_t best = m_best;
-                const int qy = m_patch_size + row;
-                for (int qx = m_patch_size; qx < m_size.width - m_patch_size; ++qx)
+                const int qy = centers.y + row;
+                for (int qx = centers.x; qx < centers.x + centers.width; ++qx)
                 {
                     if (const auto candidate = _fit(p, qy, qx, best))
                     {
@@ -1056,7 +1101,8 @@ namespace
                     _add(candidate);
         }
 
-        // The guide's link, otherwise among the near ties of the best fit the patch closest to the coarser fill.
+        // The guide's link, otherwise among the near ties of the best fit the patch closest to the coarser fill; where
+        // that lost a line, only among those about as varied as the best fit.
         const Candidate &_pick(cv::Point p, bool guided) const
         {
             const auto best = static_cast<double>(m_best);
@@ -1073,11 +1119,15 @@ namespace
                 std::min_element(m_candidates.begin(), m_candidates.end(), [](const Candidate &a, const Candidate &b) {
                     return a.fit < b.fit;
                 });
+            const bool varied_only =
+                _first_fill(p) && _variance_around(p, Role::kGuide) < kFlatGuide * _variance_around(p, Role::kFit);
+            const double least_variance = varied_only ? kGuideVariance * _variance(*chosen) : 0;
             for (auto candidate = m_candidates.begin(); candidate != m_candidates.end(); ++candidate)
             {
                 if (static_cast<double>(candidate->fit) <= near &&
                     (candidate->guide < chosen->guide ||
-                     (candidate->guide == chosen->guide && candidate->fit < chosen->fit)))
+                     (candidate->guide == chosen->guide && candidate->fit < chosen->fit)) &&
+                    (!varied_only || _variance(*candidate) >= least_variance))
                     chosen = candidate;
             }
             return *chosen;
@@ -1105,18 +1155,23 @@ namespace
         // The variance of the colors of a candidate's source patch.
         double _variance(const Candidate &candidate) const
         {
-            cv::Vec3d sum;
-            double squares = 0;
-            for_window(m_size, candidate.y, candidate.x, m_patch_size, [this, &sum, &squares](int y, int x) {
-                const auto &color = m_source.image().at<cv::Vec3b>(y, x);
-                for (int c = 0; c < 3; ++c)
-                {
-                    sum[c] += color[c];
-                    squares += static_cast<double>(color[c]) * color[c];
-                }
-            });
-            const double count = (2.0 * m_patch_size + 1) * (2.0 * m_patch_size + 1);
-            return (squares - sum.dot(sum) / count) / count;
+            return window_variance(
+                m_source.image(), candidate.y, candidate.x, m_patch_size, [](int, int) { return true; });
+        }
+
+        // Whether the coarser fill around p is the first of its hole, on the two finest levels: it lost the lines a few
+        // pixels wide there.
+        bool _first_fill(cv::Point p) const
+        {
+            return m_level <= 1 && m_reach[static_cast<std::size_t>(m_holes.at<int>(p.y, p.x))] > m_level;
+        }
+
+        // The variance of the colors around p of the pixels in role: the filled ones, of which a pixel of the front has
+        // one, or the coarser fill, which includes p.
+        double _variance_around(cv::Point p, Role role) const
+        {
+            return window_variance(
+                m_colors, p.y, p.x, m_patch_size, [this, role](int y, int x) { return _role(y, x) == role; });
         }
 
         const Candidate *_best_fit() const
@@ -1184,6 +1239,7 @@ namespace
         const MaskedImage &m_source;
         const MaskedImage &m_target;
         const cv::Mat &m_holes;
+        const std::vector<int> &m_reach;
         const NearestNeighborField *m_guide;
         int m_patch_size;
         int m_level;
@@ -1273,7 +1329,7 @@ void Inpainting::_initialize_pyramid()
     if (m_distance_metric->patch_size() < kCoarsePatchSize)
     {
         m_coarse_metric = m_distance_metric->with_patch_size(kCoarsePatchSize);
-        m_peel_labels = peel_labels(m_pyramid);
+        m_peel_labels = peel_labels(m_pyramid, m_peel_reach);
     }
 }
 
@@ -1353,14 +1409,15 @@ MaskedImage Inpainting::_peel(int level, const MaskedImage &target, cv::Mat &mat
 {
     const MaskedImage &source = m_pyramid[level];
     const cv::Mat &holes = m_peel_labels[level];
+    const std::vector<int> &reach = m_peel_reach[level];
     const int patch_size = m_distance_metric->patch_size();
     if (level == static_cast<int>(m_pyramid.size()) - 1)
-        return Peel(source, target, holes, nullptr, patch_size, level).run(matches);
+        return Peel(source, target, holes, reach, nullptr, patch_size, level).run(matches);
     // The field that the search of this level starts from: the links of the coarser one are off by a pixel here,
     // so the peel deviated from patterns that the coarser levels had locked onto.
     NearestNeighborField guide(target, source, m_level_metric, m_target2source);
     guide.minimize(nnf_iterations(level));
-    return Peel(source, target, holes, &guide, patch_size, level).run(matches);
+    return Peel(source, target, holes, reach, &guide, patch_size, level).run(matches);
 }
 
 // The search does not find the few sources of a line that the coarser levels lost.
