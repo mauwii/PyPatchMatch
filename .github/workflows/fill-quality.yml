@@ -29,7 +29,7 @@ jobs:
       matrix:
         # releases with the patch sizes of the skill fill-quality; 15 takes 4 times as
         # long as 7, so 5 seeds keep it within the time of the others
-        include: ${{ fromJSON((github.event_name == 'release' || true) && '[{"size":3,"seeds":10},{"size":7,"seeds":10},{"size":15,"seeds":5}]' || '[{"size":3,"seeds":3}]') }}
+        include: ${{ fromJSON(github.event_name == 'release' && '[{"size":3,"seeds":10},{"size":7,"seeds":10},{"size":15,"seeds":5}]' || '[{"size":3,"seeds":3}]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
