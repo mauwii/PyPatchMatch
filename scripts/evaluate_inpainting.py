@@ -19,8 +19,9 @@ birdhouses in forest.bmp, which stands in front of the forest above the hole and
 meadow below it; 2.2 breaks it off as well (error 30). tripod-holes cuts 13 smaller
 holes of different sizes across the legs, the column and the handles of the tripod and
 a cable, all in one mask; up to 2.3.0rc2 the peel continued the line of the largest
-only, which left the edges at those of 2.2 (9.6 and 9.8, now 5.1). The column at the
-edge of the coat breaks off with every version. coffee-corner outpaints the right
+only, which left the edges at those of 2.2 (9.6 and 9.8), and then the largest holes
+still broke the column and the legs off (5.1, now 3.9). The column at the edge of the
+coat still breaks off in some seeds. coffee-corner outpaints the right
 and bottom third of coffee.png, where error and edges come close to those of a flat fill
 (43 and 8.3), so seam, detail and variety rate it; with patch size 15, it keeps a hole
 on the coarsest level. pattern-frame outpaints a frame of an eighth around pattern.png,

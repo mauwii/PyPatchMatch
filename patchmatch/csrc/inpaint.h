@@ -41,6 +41,8 @@ private:
     int m_coarsest_hole_level = -1;
     // Per level the labels of the holes that the peel fills, or an empty matrix; none from kCoarsePatchSize on.
     std::vector<cv::Mat> m_peel_labels;
+    // Per level and label the coarsest level that the hole reaches.
+    std::vector<std::vector<int>> m_peel_reach;
     // Searches on the current level; the votes use the smaller of its patch size and patch_size.
     const PatchDistanceMetric *m_level_metric = nullptr;
 };

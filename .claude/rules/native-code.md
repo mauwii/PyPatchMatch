@@ -259,6 +259,19 @@ again.
   guide's fit is 1.5 or 2 times worse than the best (less gain, coffee `edges` still
   +7 %), and the variance of the known pixels around the pixel instead of the best
   fit's source (no better).
+  Against the column and the legs that the largest holes of tripod-holes still broke
+  off, other forms of `kFlatGuide` and `kFlatFit` (column r8 is the hole below the head;
+  8 seeds per hole unless noted): no tie-break of the near ties on levels 0 and 1
+  (column r8 5.6 → 10.3), varied sources only on all their pixels instead of where the
+  coarser fill is the first of the hole (column r8 8.9), and without the flatness of
+  the coarser fill (`edges` of brick +7.5 % in 42 random holes of radius 6 to 16);
+  instead of the search nearby, `kPoorFit` 1.5 on levels 0 and 1 (pole error 12.4 →
+  16.6, 10 seeds), a search of all sources for every pixel (about 8 times the time), in
+  the whole image (camera scaled to 1024², 2.1 times the time), with 0.5 for every hole
+  on both levels (4.8 times at 512²), on level 1 only (column r8 4.8 → 8.3, 16 seeds),
+  and where the matches of the peeled neighbors overlap a hole (no gain); `kNearTie`
+  0.1 on levels 0 and 1 (column r8 7.9). The column r15 still copies the dark joint of
+  the strut below it in about half of the seeds.
 - Not tried: starting the holes of the coarsest level smoothly instead of black. As the
   downsampling shrinks the holes, only coffee-corner with 15 keeps one there (51 of 216
   pixels); outpainting of a third of the image does with 15, of half with 7, and a hole
