@@ -42,8 +42,12 @@ class NearestNeighborField
 {
 public:
     NearestNeighborField() = default;
-    NearestNeighborField(const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric)
-        : m_source(source), m_target(target), m_distance_metric(metric)
+    // coarse_metric, of the type of metric, measures the pixels of the source that coarse_pixels (CV_8U) sets.
+    NearestNeighborField(
+        const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric,
+        const PatchDistanceMetric *coarse_metric = nullptr, const cv::Mat &coarse_pixels = cv::Mat())
+        : m_source(source), m_target(target), m_distance_metric(metric),
+          m_coarse_metric(coarse_pixels.empty() ? nullptr : coarse_metric), m_coarse_pixels(coarse_pixels)
     {
         m_field = cv::Mat(m_source.size(), CV_32SC3);
         _allocate_sums();
@@ -51,8 +55,10 @@ public:
     }
     NearestNeighborField(
         const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric,
-        const NearestNeighborField &other)
-        : m_source(source), m_target(target), m_distance_metric(metric)
+        const NearestNeighborField &other, const PatchDistanceMetric *coarse_metric = nullptr,
+        const cv::Mat &coarse_pixels = cv::Mat())
+        : m_source(source), m_target(target), m_distance_metric(metric),
+          m_coarse_metric(coarse_pixels.empty() ? nullptr : coarse_metric), m_coarse_pixels(coarse_pixels)
     {
         m_field = cv::Mat(m_source.size(), CV_32SC3);
         _allocate_sums();
@@ -94,6 +100,11 @@ public:
     int at(int y, int x, int c) const
     {
         return m_field.ptr<int>(y, x)[c];
+    }
+    // The patch size that the pixel of the source is measured with.
+    int patch_size(int y, int x) const
+    {
+        return _metric(y, x).patch_size();
     }
     // The distance 0 is not measured, so the sum stays unknown.
     void set_identity(int y, int x)
@@ -142,6 +153,10 @@ private:
         std::int64_t sum;
     };
 
+    const PatchDistanceMetric &_metric(int y, int x) const
+    {
+        return m_coarse_metric && m_coarse_pixels.at<unsigned char>(y, x) ? *m_coarse_metric : *m_distance_metric;
+    }
     // The distance if it is below bound, otherwise any value >= bound.
     Measured _measure(int y, int x, int y_target, int x_target, int bound) const;
     void _set(int y, int x, int y_target, int x_target, Measured measured)
@@ -188,6 +203,8 @@ private:
     // per pixel: the sum behind the distance, for updates in O(patch_size); empty for other metrics
     std::vector<std::int64_t> m_sums;
     const PatchDistanceMetric *m_distance_metric = nullptr;
+    const PatchDistanceMetric *m_coarse_metric = nullptr; // nullptr without coarse pixels
+    cv::Mat m_coarse_pixels;
 };
 
 class PatchSSDDistanceMetric : public PatchDistanceMetric
