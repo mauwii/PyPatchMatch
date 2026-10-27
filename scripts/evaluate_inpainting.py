@@ -22,8 +22,9 @@ a cable, all in one mask; up to 2.3.0rc2 the peel continued the line of the larg
 only, which left the edges at those of 2.2 (9.6 and 9.8), then the largest holes still
 broke the column and the legs off (5.1, then 3.9), and only the largest searched with
 the larger patches on their coarsest level (error 4.6, now 3.9). The column at the edge
-of the coat still breaks off in some seeds, the one above the joint of the struts in
-about half. coffee-corner outpaints the right
+of the coat still breaks off in some seeds, where sources along the edge or of the
+right leg fit about as well as the column, and the one above the joint of the struts
+in about half. coffee-corner outpaints the right
 and bottom third of coffee.png, where error and edges come close to those of a flat fill
 (43 and 8.3), so seam, detail and variety rate it; with patch size 15, it keeps a hole
 on the coarsest level. pattern-frame outpaints a frame of an eighth around pattern.png,
