@@ -278,6 +278,24 @@ again.
   and where the matches of the peeled neighbors overlap a hole (no gain); `kNearTie`
   0.1 on levels 0 and 1 (column r8 7.9). The column r15 still copies the dark joint of
   the strut below it in about half of the seeds.
+  Against the column at the edge of the coat (radius 8, edges 15.6 alone and 9.4 in the
+  mask, 20 seeds): alone, the tie-break on level 0 takes sources of the right leg among
+  the near ties of the best fit, the column above (1.22 to 1.29 times its fit); in the
+  mask, whose holes cut the leg, the guide's link takes sources at the edge of the
+  coat, which are as varied as kGuideVariance asks. Luminance gradients in the fit of
+  the peel, with 4 times the weight of a color step (alone 8.4, in the mask 10.0, the
+  column r15 4.2 → 5.3), and half or a quarter of it (alone 9.4 and 11.4, in the mask
+  9.0); the tie-break and the guide's link on levels 0 and 1 only among sources whose
+  structure tensor points within 13 to 18 degrees of the best fit's (alone 10.4 to
+  12.2, in the mask 8.6 to 9.4); both (alone 8.0, in the mask 9.7). The edges of the
+  whole case changed by at most 4 %.
+  Against the column r15 above the joint of the struts (edges 4.1 alone, 4.2 in the
+  mask, 20 seeds): on level 2, its coarsest, the hole has 4 pixels, which take the
+  guide's link to the left leg; on level 1 the column takes the column just above the
+  joint as its best fit, and the neighbors continue it into the joint. Ignoring the
+  coarser fill on level 1 (alone 4.9, in the mask 5.6), and holes of up to 8 pixels on
+  their coarsest level reaching one level less (alone 4.4, in the mask 5.5; the right
+  leg r15 2.9 → 2.4, the left leg r14 2.9 → 3.5), were worse.
 - Not tried: starting the holes of the coarsest level smoothly instead of black. As the
   downsampling shrinks the holes, only coffee-corner with 15 keeps one there (51 of 216
   pixels); outpainting of a third of the image does with 15, of half with 7, and a hole
