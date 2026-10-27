@@ -33,6 +33,6 @@ uv run --no-sync python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1
 - `examples/images/local/` is for your own images, which the script adds as object
   removals; never commit them, nor `evaluation.html`, which embeds them.
 - The workflow `Fill quality` compares every PR that changes the native code with its
-  base branch (job summary, artifact `evaluation.html`), and every release with the
-  last stable one, with 10 seeds and patch sizes 3, 7 and 15 (about an hour); a
-  report, not a gate.
+  base branch (job summary, artifact `evaluation-3.html`), and every release with the
+  last stable one, in one job per patch size: 10 seeds for 3 and 7, 5 for 15 (about
+  25 minutes); a report, not a gate.

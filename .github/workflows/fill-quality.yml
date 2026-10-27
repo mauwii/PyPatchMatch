@@ -21,8 +21,15 @@ concurrency:
 
 jobs:
   report:
+    name: report (patch_size ${{ matrix.size }})
     runs-on: ubuntu-latest
-    timeout-minutes: 90 # a release takes 50 to 60 minutes
+    timeout-minutes: 60 # patch size 15 of a release takes about 25 minutes
+    strategy:
+      fail-fast: false
+      matrix:
+        # releases with the patch sizes of the skill fill-quality; 15 takes 4 times as
+        # long as 7, so 5 seeds keep it within the time of the others
+        include: ${{ fromJSON((github.event_name == 'release' || true) && '[{"size":3,"seeds":10},{"size":7,"seeds":10},{"size":15,"seeds":5}]' || '[{"size":3,"seeds":3}]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,29 +71,28 @@ jobs:
           cmake -S "$RUNNER_TEMP/base" -B "$RUNNER_TEMP/base/build" -DCMAKE_BUILD_TYPE=Release
           cmake --build "$RUNNER_TEMP/base/build" --parallel
 
-      # releases with the seeds and patch sizes of the skill fill-quality; 3 last, the
-      # default, because each run overwrites evaluation.html
+      # renamed, because an unzipped artifact takes the name of its file
       - name: Evaluate the fills
         env:
-          SIZES: ${{ github.event_name == 'release' && '15 7 3' || '3' }}
-          SEEDS: ${{ github.event_name == 'release' && '10' || '3' }}
+          SIZE: ${{ matrix.size }}
+          SEEDS: ${{ matrix.seeds }}
         run: |
-          for size in $SIZES; do
-            uv run --locked --no-build python scripts/evaluate_inpainting.py \
-              --baseline "$RUNNER_TEMP/base/build/libpatchmatch.so" \
-              --patch-size "$size" --seeds "$SEEDS" --markdown >> "$GITHUB_STEP_SUMMARY"
-          done
+          uv run --locked --no-build python scripts/evaluate_inpainting.py \
+            --baseline "$RUNNER_TEMP/base/build/libpatchmatch.so" \
+            --patch-size "$SIZE" --seeds "$SEEDS" --markdown >> "$GITHUB_STEP_SUMMARY"
+          mv examples/images/evaluation.html "examples/images/evaluation-$SIZE.html"
 
       # unzipped, so that the browser opens it; GitHub strips data: images from the summary
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         id: report
         with:
-          path: examples/images/evaluation.html
+          path: examples/images/evaluation-${{ matrix.size }}.html
           archive: false
 
       - name: Link the report
         env:
+          SIZE: ${{ matrix.size }}
           URL: ${{ steps.report.outputs.artifact-url }}
         run: |
           echo "The times are from a shared runner and only show large differences." >> "$GITHUB_STEP_SUMMARY"
-          echo "The fills side by side: [evaluation.html]($URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "The fills side by side: [evaluation-$SIZE.html]($URL)" >> "$GITHUB_STEP_SUMMARY"
