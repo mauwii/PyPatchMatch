@@ -297,17 +297,20 @@ def test_line_goes_on_through_a_small_hole_beside_a_larger_one():
     assert evaluation.edge_error(result, truth, column) < 5.0
 
 
-def test_line_goes_on_through_a_small_hole():
+@pytest.mark.parametrize("patch_size", [3, 7, 15])
+def test_line_goes_on_through_a_small_hole(patch_size):
     """The coarser fill lost the leg of the tripod, and the guide's link copied the
     background across it: edges 3.0 to 10.3 with ten seeds, above 8 in nine of them
-    (2.5 to 3.6 when the link needs a source as varied as the best fit's).
+    (2.5 to 3.6 when the link needs a source as varied as the best fit's). With 7 and
+    15 the larger patches wiped the peeled leg out again: 11.1 to 13.4 (2.3 to 3.9
+    with patches of 3 around the line).
     """
     truth = evaluation.load(IMAGES / "camera_aged.png")
     leg = evaluation.ellipse(truth.shape, 425, 261, 14, 14)
     source = truth.copy()
     source[leg] = 255
 
-    result = patchmatch.inpaint(source, leg.astype(np.uint8), patch_size=3)
+    result = patchmatch.inpaint(source, leg.astype(np.uint8), patch_size=patch_size)
 
     assert evaluation.edge_error(result, truth, leg) < 5.0
 

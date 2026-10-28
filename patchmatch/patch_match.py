@@ -111,7 +111,8 @@ def inpaint(
             a source; they keep their values from ``image``.
         patch_size: radius of the compared patches, which span
             ``(2 * patch_size + 1) ** 2`` pixels. Larger patches follow larger
-            structures but are much slower; the examples use 3.
+            structures but are much slower; thin lines through smaller holes
+            continue with a radius of 3 regardless. The examples use 3.
 
     Returns:
         The repaired image, with the same shape as ``image``. Only the holes are

@@ -19,8 +19,8 @@ private:
     void _initialize_pyramid(void);
     MaskedImage _run_levels(bool verbose);
     bool _peels(int level) const;
-    cv::Mat _coarse_pixels(int level) const;
-    MaskedImage _peel(int level, const MaskedImage &target, cv::Mat &matches) const;
+    cv::Mat _hole_pixels(int level) const;
+    MaskedImage _peel(int level, const MaskedImage &target, cv::Mat &matches, cv::Mat &lines) const;
     void _link_peeled(const cv::Mat &matches);
     MaskedImage _expectation_maximization(const MaskedImage &source, MaskedImage target, int level, bool verbose);
     void _update_links(const MaskedImage &source, bool image_changed);
@@ -35,13 +35,15 @@ private:
     std::optional<NearestNeighborField> m_source2target;
     NearestNeighborField m_target2source;
     const PatchDistanceMetric *m_distance_metric;
-    // Searches around each hole on the coarsest level that it reaches, if patch_size is smaller than kCoarsePatchSize.
-    std::unique_ptr<PatchDistanceMetric> m_coarse_metric;
-    // Per level the pixels that search with it (CV_8U), or an empty matrix.
-    std::vector<cv::Mat> m_coarse_pixels;
+    // Searches around each hole on the coarsest level that it reaches with kCoarsePatchSize if patch_size is smaller,
+    // otherwise around the lines that the peel continues with kLinePatchSize.
+    std::unique_ptr<PatchDistanceMetric> m_hole_metric;
+    // Per level the pixels that search with it (CV_8U), or an empty matrix; from kCoarsePatchSize on around the holes
+    // whose first fill is on the level, which the peel narrows to its lines.
+    std::vector<cv::Mat> m_hole_pixels;
     // Per level: smaller patches where patch_size does not fit, otherwise nullptr.
     std::vector<std::unique_ptr<PatchDistanceMetric>> m_fitting_metrics;
-    // Per level the labels of the holes that the peel fills, or an empty matrix; none from kCoarsePatchSize on.
+    // Per level the labels of the holes that the peel fills, or an empty matrix.
     std::vector<cv::Mat> m_peel_labels;
     // Per level and label the coarsest level that the hole reaches.
     std::vector<std::vector<int>> m_peel_reach;

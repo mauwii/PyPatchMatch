@@ -16,7 +16,8 @@ plain fill a little with patch sizes 3 and 7. tripod cuts a hole across a leg of
 tripod in camera_aged.png, a thin diagonal line that the fill has to continue; 2.2
 breaks it off (edges 4.6 with patch size 3). pole cuts one across the pole of the
 birdhouses in forest.bmp, which stands in front of the forest above the hole and of the
-meadow below it; 2.2 breaks it off as well (error 30). tripod-holes cuts 13 smaller
+meadow below it; 2.2 breaks it off as well (error 30). With patch sizes 7 and 15, the
+larger patches wiped both lines out up to 2.3.0rc3 (pole 32). tripod-holes cuts 13 smaller
 holes of different sizes across the legs, the column and the handles of the tripod and
 a cable, all in one mask; up to 2.3.0rc2 the peel continued the line of the largest
 only, which left the edges at those of 2.2 (9.6 and 9.8), then the largest holes still
