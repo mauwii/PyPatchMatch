@@ -167,9 +167,10 @@ namespace
         }
     }
 
-    // The labels of the holes that reach at most one level coarser than level, 0 elsewhere, or an empty matrix; and
-    // per pixel the reach of its hole, -1 outside the holes.
-    cv::Mat peeled_holes(const cv::Mat &labels, const std::vector<int> &reach, int level, cv::Mat &pixel_reach)
+    // The labels of the holes that reach at most one level coarser than level and between least and most, 0 elsewhere,
+    // or an empty matrix; and per pixel the reach of its hole, -1 outside the holes.
+    cv::Mat peeled_holes(
+        const cv::Mat &labels, const std::vector<int> &reach, int level, int least, int most, cv::Mat &pixel_reach)
     {
         pixel_reach = cv::Mat(labels.size(), CV_32S, cv::Scalar(-1));
         cv::Mat peeled(labels.size(), CV_32S, cv::Scalar(0));
@@ -183,7 +184,7 @@ namespace
                     continue;
                 const int top = reach[static_cast<std::size_t>(label)];
                 pixel_reach.at<int>(y, x) = top;
-                if (top <= level + 1)
+                if (top <= level + 1 && top >= least && top <= most)
                 {
                     peeled.at<int>(y, x) = label;
                     peels = true;
@@ -195,8 +196,10 @@ namespace
 
     // Per level the labels of the holes that the peel fills there, 0 elsewhere, or an empty matrix: each hole on the
     // coarsest level that it reaches and on the one below. On the levels of the largest hole only, smaller holes
-    // elsewhere broke their lines off. reaches: per level and label the coarsest level that the hole reaches.
-    std::vector<cv::Mat> peel_labels(const std::vector<MaskedImage> &pyramid, std::vector<std::vector<int>> &reaches)
+    // elsewhere broke their lines off. Only the holes that reach between least and most. reaches: per level and label
+    // the coarsest level that the hole reaches.
+    std::vector<cv::Mat> peel_labels(
+        const std::vector<MaskedImage> &pyramid, int least, int most, std::vector<std::vector<int>> &reaches)
     {
         std::vector<cv::Mat> peel(pyramid.size());
         reaches.resize(pyramid.size());
@@ -208,7 +211,7 @@ namespace
             // reach[0] belongs to the globally masked pixels in the windows
             std::vector reach(static_cast<std::size_t>(count) + 1, level);
             reach_coarser(coarser_reach, labels, reach);
-            peel[static_cast<std::size_t>(level)] = peeled_holes(labels, reach, level, coarser_reach);
+            peel[static_cast<std::size_t>(level)] = peeled_holes(labels, reach, level, least, most, coarser_reach);
             reaches[static_cast<std::size_t>(level)] = std::move(reach);
         }
         return peel;
@@ -362,6 +365,50 @@ namespace
     // that a hole reaches, holes wider than the patches were filled from several shifted copies.
     constexpr int kCoarsePatchSize = 5;
 
+    // From kCoarsePatchSize on, the peel continues lines with these patches, and the pixels around the lines search and
+    // vote with them as well: the larger patches of the level wiped the lines out again.
+    constexpr int kLinePatchSize = 3;
+    // From kCoarsePatchSize on, only the holes whose first fill is on level 1 or 0 are peeled, where the coarser fill
+    // loses the lines: the peel of larger holes made bricks worse, and a hole that reaches level 0 only has no coarser
+    // fill.
+    constexpr int kLeastLineReach = 1;
+    constexpr int kMostLineReach = 2;
+
+    // The pixels whose patches of radius overlap a hole that reaches top, outside the holes that reach another level,
+    // or an empty matrix. peeled and reach as in peel_labels.
+    cv::Mat pixels_around(
+        const MaskedImage &image, const cv::Mat &peeled, const std::vector<int> &reach, int top, int radius)
+    {
+        if (peeled.empty())
+            return {};
+        const auto reaches_top = [&peeled, &reach, top](int y, int x) {
+            const int label = peeled.at<int>(y, x);
+            return label > 0 && reach[static_cast<std::size_t>(label)] == top;
+        };
+        cv::Mat pixels(image.size(), CV_8U, cv::Scalar(0));
+        bool any = false;
+        for (int y = 0; y < pixels.rows; ++y)
+        {
+            for (int x = 0; x < pixels.cols; ++x)
+            {
+                if (!reaches_top(y, x))
+                    continue;
+                any = true;
+                for_window(
+                    image.size(), y, x, radius, [&pixels](int yy, int xx) { pixels.at<unsigned char>(yy, xx) = 1; });
+            }
+        }
+        for (int y = 0; y < pixels.rows; ++y)
+        {
+            for (int x = 0; x < pixels.cols; ++x)
+            {
+                if (is_hole(image, y, x) && !reaches_top(y, x))
+                    pixels.at<unsigned char>(y, x) = 0;
+            }
+        }
+        return any ? pixels : cv::Mat();
+    }
+
     // The pixels whose larger patches overlap a hole on the coarsest level that it reaches, outside the holes that
     // reach a coarser one, or an empty matrix. On the coarsest level of the largest hole only, the smaller holes
     // elsewhere searched with patch_size, unlike alone, and broke more lines. On level 0 only if no hole reaches a
@@ -370,36 +417,33 @@ namespace
     cv::Mat coarse_pixels(const MaskedImage &image, const cv::Mat &peeled, const std::vector<int> &reach, int level)
     {
         // reach[0] belongs to no hole
-        if (peeled.empty() ||
-            (level == 0 && std::any_of(reach.begin() + 1, reach.end(), [](int top) { return top > 0; })))
+        if (level == 0 && std::any_of(reach.begin() + 1, reach.end(), [](int top) { return top > 0; }))
             return {};
-        const auto ends_here = [&peeled, &reach, level](int y, int x) {
-            const int label = peeled.at<int>(y, x);
-            return label > 0 && reach[static_cast<std::size_t>(label)] == level;
-        };
-        cv::Mat pixels(image.size(), CV_8U, cv::Scalar(0));
+        return pixels_around(image, peeled, reach, level, kCoarsePatchSize);
+    }
+
+    // Those of pixels within radius of the lines (CV_8U), or an empty matrix. Only around them: patches of
+    // kLinePatchSize everywhere around the holes moved the edges of regions, such as a hedge above a meadow, and lost
+    // the short joints of bricks.
+    cv::Mat around_lines(const cv::Mat &pixels, const cv::Mat &lines, int radius)
+    {
+        if (pixels.empty() || lines.empty())
+            return {};
+        cv::Mat around(pixels.size(), CV_8U, cv::Scalar(0));
         bool any = false;
-        for (int y = 0; y < pixels.rows; ++y)
+        for (int y = 0; y < lines.rows; ++y)
         {
-            for (int x = 0; x < pixels.cols; ++x)
+            for (int x = 0; x < lines.cols; ++x)
             {
-                if (!ends_here(y, x))
+                if (!lines.at<unsigned char>(y, x))
                     continue;
-                any = true;
-                for_window(image.size(), y, x, kCoarsePatchSize, [&pixels](int yy, int xx) {
-                    pixels.at<unsigned char>(yy, xx) = 1;
+                for_window(pixels.size(), y, x, radius, [&around, &pixels, &any](int yy, int xx) {
+                    around.at<unsigned char>(yy, xx) = pixels.at<unsigned char>(yy, xx);
+                    any = any || pixels.at<unsigned char>(yy, xx);
                 });
             }
         }
-        for (int y = 0; y < pixels.rows; ++y)
-        {
-            for (int x = 0; x < pixels.cols; ++x)
-            {
-                if (is_hole(image, y, x) && !ends_here(y, x))
-                    pixels.at<unsigned char>(y, x) = 0;
-            }
-        }
-        return any ? pixels : cv::Mat();
+        return any ? around : cv::Mat();
     }
 
     // A patch wider than a sixth of a level found no sources there inside the image and outside
@@ -788,7 +832,8 @@ namespace
             : m_source(source), m_target(target), m_holes(holes), m_reach(reach), m_guide(guide),
               m_patch_size(patch_size), m_level(level), m_size(source.size()), m_colors(source.image().clone()),
               m_filled(m_size, CV_8U, cv::Scalar(0)), m_front_mask(m_size, CV_8U, cv::Scalar(0)),
-              m_confidence(m_size, CV_64F, cv::Scalar(0)), m_matches(m_size, CV_32SC2, cv::Scalar::all(-1))
+              m_confidence(m_size, CV_64F, cv::Scalar(0)), m_matches(m_size, CV_32SC2, cv::Scalar::all(-1)),
+              m_lines(m_size, CV_8U, cv::Scalar(0))
         {
             double holes_count = 0;
             cv::minMaxLoc(holes, nullptr, &holes_count);
@@ -811,8 +856,9 @@ namespace
                     _enter_front(y, x);
         }
 
-        // The target with the peeled holes, and per peeled pixel the center of its source patch, -1 elsewhere.
-        MaskedImage run(cv::Mat &matches)
+        // The target with the peeled holes, per peeled pixel the center of its source patch, -1 elsewhere, and the
+        // peeled pixels where the coarser fill lost a line (CV_8U).
+        MaskedImage run(cv::Mat &matches, cv::Mat &lines)
         {
             while (!m_front.empty())
             {
@@ -834,6 +880,7 @@ namespace
                     if (m_matches.at<cv::Vec2i>(y, x)[0] >= 0)
                         std::copy_n(m_colors.ptr<unsigned char>(y, x), 3, peeled.get_mutable_image(y, x));
             matches = m_matches;
+            lines = m_lines;
             return peeled;
         }
 
@@ -1057,6 +1104,7 @@ namespace
                 return {-1, -1};
 
             const Candidate &chosen = _pick(p, guided);
+            m_lines.at<unsigned char>(p.y, p.x) = _lost_line(p);
             const double fit = static_cast<double>(chosen.fit) / filled;
             fits.mean = fits.count == 0 ? fit : kFitMemory * fits.mean + (1 - kFitMemory) * fit;
             ++fits.count;
@@ -1146,8 +1194,7 @@ namespace
                 std::min_element(m_candidates.begin(), m_candidates.end(), [](const Candidate &a, const Candidate &b) {
                     return a.fit < b.fit;
                 });
-            const bool varied_only =
-                _first_fill(p) && _variance_around(p, Role::kGuide) < kFlatGuide * _variance_around(p, Role::kFit);
+            const bool varied_only = _lost_line(p);
             const double least_variance = varied_only ? kGuideVariance * _variance(*chosen) : 0;
             for (auto candidate = m_candidates.begin(); candidate != m_candidates.end(); ++candidate)
             {
@@ -1184,6 +1231,12 @@ namespace
         {
             return window_variance(
                 m_source.image(), candidate.y, candidate.x, m_patch_size, [](int, int) { return true; });
+        }
+
+        // Whether the coarser fill around p is the first of its hole and much flatter than the filled pixels around p.
+        bool _lost_line(cv::Point p) const
+        {
+            return _first_fill(p) && _variance_around(p, Role::kGuide) < kFlatGuide * _variance_around(p, Role::kFit);
         }
 
         // Whether the coarser fill around p is the first of its hole, on the two finest levels: it lost the lines a few
@@ -1276,6 +1329,7 @@ namespace
         cv::Mat m_front_mask;
         cv::Mat m_confidence;
         cv::Mat m_matches;
+        cv::Mat m_lines;
         std::vector<cv::Point> m_front;
         std::vector<double> m_priorities; // of the front, in its order
         std::vector<Candidate> m_candidates;
@@ -1350,14 +1404,23 @@ void Inpainting::_initialize_pyramid()
         m_fitting_metrics.push_back(
             fitting < m_distance_metric->patch_size() ? m_distance_metric->with_patch_size(fitting) : nullptr);
     }
-    // No peel either from kCoarsePatchSize on: the searches of the finer levels wiped the peeled lines out again.
     if (m_distance_metric->patch_size() < kCoarsePatchSize)
     {
-        m_coarse_metric = m_distance_metric->with_patch_size(kCoarsePatchSize);
-        m_peel_labels = peel_labels(m_pyramid, m_peel_reach);
+        m_hole_metric = m_distance_metric->with_patch_size(kCoarsePatchSize);
+        m_peel_labels = peel_labels(m_pyramid, 0, std::numeric_limits<int>::max(), m_peel_reach);
         for (std::size_t level = 0; level < m_pyramid.size(); ++level)
-            m_coarse_pixels.push_back(
+            m_hole_pixels.push_back(
                 coarse_pixels(m_pyramid[level], m_peel_labels[level], m_peel_reach[level], static_cast<int>(level)));
+        return;
+    }
+    m_hole_metric = m_distance_metric->with_patch_size(kLinePatchSize);
+    m_peel_labels = peel_labels(m_pyramid, kLeastLineReach, kMostLineReach, m_peel_reach);
+    for (std::size_t level = 0; level < m_pyramid.size(); ++level)
+    {
+        const auto &fitting = m_fitting_metrics[level];
+        m_hole_pixels.push_back(pixels_around(
+            m_pyramid[level], m_peel_labels[level], m_peel_reach[level], static_cast<int>(level) + 1,
+            fitting ? fitting->patch_size() : m_distance_metric->patch_size()));
     }
 }
 
@@ -1396,9 +1459,9 @@ MaskedImage Inpainting::_run_levels(bool verbose)
 
         const MaskedImage &source = m_pyramid[level];
         m_level_metric = m_fitting_metrics[level] ? m_fitting_metrics[level].get() : m_distance_metric;
-        // The larger patches only around the holes that end on this level: below, the holes are wider than them, and
-        // they took flat sources in foliage.
-        const cv::Mat coarse = _coarse_pixels(level);
+        // Below kCoarsePatchSize the larger patches only around the holes that end on this level: below, the holes are
+        // wider than them, and they took flat sources in foliage.
+        cv::Mat hole_pixels = _hole_pixels(level);
         const bool coarsest = level == static_cast<int>(m_pyramid.size()) - 1;
         if (coarsest)
         {
@@ -1406,21 +1469,24 @@ MaskedImage Inpainting::_run_levels(bool verbose)
             target.clear_mask();
         }
         cv::Mat peeled;
+        cv::Mat lines;
         if (_peels(level))
-            target = _peel(level, target, peeled);
+            target = _peel(level, target, peeled, lines);
+        if (m_distance_metric->patch_size() >= kCoarsePatchSize)
+            hole_pixels = around_lines(hole_pixels, lines, m_level_metric->patch_size());
         // The votes of the completeness field keep the known pixels near their input on the
         // coarse levels; on levels 0 and 1, which keep the known pixels, they change nothing.
-        const PatchDistanceMetric *coarse_metric = m_coarse_metric.get();
+        const PatchDistanceMetric *hole_metric = m_hole_metric.get();
         if (level < 2)
             m_source2target.reset();
         else
             m_source2target =
                 coarsest
-                    ? NearestNeighborField(source, target, m_level_metric, coarse_metric, coarse)
-                    : NearestNeighborField(source, target, m_level_metric, *m_source2target, coarse_metric, coarse);
+                    ? NearestNeighborField(source, target, m_level_metric, hole_metric, hole_pixels)
+                    : NearestNeighborField(source, target, m_level_metric, *m_source2target, hole_metric, hole_pixels);
         m_target2source =
-            coarsest ? NearestNeighborField(target, source, m_level_metric, coarse_metric, coarse)
-                     : NearestNeighborField(target, source, m_level_metric, m_target2source, coarse_metric, coarse);
+            coarsest ? NearestNeighborField(target, source, m_level_metric, hole_metric, hole_pixels)
+                     : NearestNeighborField(target, source, m_level_metric, m_target2source, hole_metric, hole_pixels);
         _link_peeled(peeled);
 
         trace(verbose, "Initialization done.");
@@ -1436,26 +1502,27 @@ bool Inpainting::_peels(int level) const
     return level < static_cast<int>(m_peel_labels.size()) && !m_peel_labels[level].empty();
 }
 
-// The pixels that search with m_coarse_metric on level, or an empty matrix.
-cv::Mat Inpainting::_coarse_pixels(int level) const
+// The pixels that search with m_hole_metric on level before the peel, or an empty matrix.
+cv::Mat Inpainting::_hole_pixels(int level) const
 {
-    return level < static_cast<int>(m_coarse_pixels.size()) ? m_coarse_pixels[level] : cv::Mat();
+    return level < static_cast<int>(m_hole_pixels.size()) ? m_hole_pixels[level] : cv::Mat();
 }
 
-MaskedImage Inpainting::_peel(int level, const MaskedImage &target, cv::Mat &matches) const
+MaskedImage Inpainting::_peel(int level, const MaskedImage &target, cv::Mat &matches, cv::Mat &lines) const
 {
     const MaskedImage &source = m_pyramid[level];
     const cv::Mat &holes = m_peel_labels[level];
     const std::vector<int> &reach = m_peel_reach[level];
-    const int patch_size = m_distance_metric->patch_size();
+    const int patch_size =
+        m_distance_metric->patch_size() < kCoarsePatchSize ? m_distance_metric->patch_size() : kLinePatchSize;
     if (level == static_cast<int>(m_pyramid.size()) - 1)
-        return Peel(source, target, holes, reach, nullptr, patch_size, level).run(matches);
+        return Peel(source, target, holes, reach, nullptr, patch_size, level).run(matches, lines);
     // The field that the search of this level starts from: the links of the coarser one are off by a pixel here,
     // so the peel deviated from patterns that the coarser levels had locked onto.
     NearestNeighborField guide(
-        target, source, m_level_metric, m_target2source, m_coarse_metric.get(), _coarse_pixels(level));
+        target, source, m_level_metric, m_target2source, m_hole_metric.get(), _hole_pixels(level));
     guide.minimize(nnf_iterations(level));
-    return Peel(source, target, holes, reach, &guide, patch_size, level).run(matches);
+    return Peel(source, target, holes, reach, &guide, patch_size, level).run(matches, lines);
 }
 
 // The search does not find the few sources of a line that the coarser levels lost.
@@ -1591,7 +1658,8 @@ void Inpainting::_expectation_step(
         holes.emplace(source);
     const VoteCaster caster(
         nnf, source2target, vote, source, upscaled, best_only, holes.has_value() ? &holes.value() : nullptr);
-    // Not the larger patches of m_coarse_metric: they would average more votes, which blurred the fills.
+    // Not the larger patches of m_hole_metric below kCoarsePatchSize: they would average more votes, which blurred the
+    // fills. Its smaller ones from kCoarsePatchSize on, though, which keep the lines.
     const int patch_size = std::min(m_distance_metric->patch_size(), m_level_metric->patch_size());
     const auto &kDistance2Similarity = distance2similarity();
     const auto source_size = nnf.source_size();
@@ -1617,7 +1685,9 @@ void Inpainting::_expectation_step(
                 for (int j = 0; j < source_size.width; ++j)
                 {
                     if (!nnf.source().is_globally_masked(i, j))
-                        caster.cast_patch(i, j, patch_size, kDistance2Similarity[nnf.at(i, j, 2)], rows);
+                        caster.cast_patch(
+                            i, j, std::min(patch_size, nnf.patch_size(i, j)), kDistance2Similarity[nnf.at(i, j, 2)],
+                            rows);
                 }
             }
         });

@@ -236,9 +236,8 @@ again.
   of the distance kept the pole broken, and a regularized or additive priority gained
   little (pole 21 → 16). The guide's link with a tolerance of 0.3 instead of 2:
   pattern-wide +44 %; of 1: brick-global and pattern-wide +8 to +9 %; of 3: meadow
-  8.2 → 9.3. Without the tone shift: camera 3.30 → 3.89. With patch sizes 7 and 15
-  the searches of the finer levels wipe the peeled lines out again (15: tripod and
-  pole unchanged; 7: pole 32 → 20, but forest-frame, meadow and brick-global worse).
+  8.2 → 9.3. Without the tone shift: camera 3.30 → 3.89. From patch size 5 on, see
+  the next item.
   While two fills of the coarse levels were compared, the peel tipped the near tie of
   their distances towards patch_size: pattern +16 % with 30 seeds.
   Against the pieces of the wrong phase that the peel of the level below the coarsest
@@ -296,6 +295,28 @@ again.
   coarser fill on level 1 (alone 4.9, in the mask 5.6), and holes of up to 8 pixels on
   their coarsest level reaching one level less (alone 4.4, in the mask 5.5; the right
   leg r15 2.9 → 2.4, the left leg r14 2.9 → 3.5), were worse.
+- Other forms of the lines from patch size 5 on (`kLinePatchSize`, 30 seeds with 7 and
+  15). The peel alone, with the patches of the level or of 3: the EM of the same level
+  wiped the lines out again (pole error 32 with 15, 18 with 7). Patches of 3 around
+  every hole on the level below its coarsest, which kept the lines: with 5 on its
+  coarsest, as below 5, brick 6.7 → 9.1 and pattern-wide 4.8 → 6.1 with 7; with the
+  patches of the level there, the edge of the hedge in meadow moved down on level 1
+  in some seeds (15: 5.9 → 6.6) and brick-global lost the short joints (+7 and
+  +10 %); 4 or 5 instead of 3 made meadow worse (15: 7.3 and 8.0); also on all finer
+  levels, pattern 2.4 → 4.6 and pattern-wide 3.6 → 7.3 with 15. The peel's guide
+  searched with the patches of the level (meadow with 15: 8.1), or with 5 or 7 (8.2
+  and 7.3); the guide's link without `_varied` on levels 0 and 1 (tripod-holes `edges`
+  3.9 → 7.1 with 7), or with a tolerance of 4 or 6 (no gain). Patches of 3 only within
+  a fixed radius of the pixels where the peel did not take the guide's link: radii of
+  2 to 5 kept the lines with 7, but with 15 the larger patches beyond them wiped the
+  pole out up to a radius of 10 (22.8). The peel of the holes that reach level 3 or
+  coarser, with the larger patches of the level after it: coffee 17.3 → 15.8 with 15,
+  but brick-global 5.97 → 6.30 with 15 and pattern 3.12 → 3.27 with 7. The peel of
+  the holes that reach level 0 only, which search with the larger patches: no effect,
+  but camera with 7 took 4.7 instead of 2.6 s. Left: meadow with 15 (5.86 → 6.14,
+  bimodal: the edge of the hedge moves down in some seeds), and the time of masks with
+  many holes (tripod-holes with 7: 0.9 → 2.5 s; camera: 1.7 → 2.8 and 9.4 → 14.6 s),
+  which the peel's searches of all sources take, as with 3.
 - Not tried: starting the holes of the coarsest level smoothly instead of black. As the
   downsampling shrinks the holes, only coffee-corner with 15 keeps one there (51 of 216
   pixels); outpainting of a third of the image does with 15, of half with 7, and a hole

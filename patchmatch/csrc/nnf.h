@@ -42,12 +42,12 @@ class NearestNeighborField
 {
 public:
     NearestNeighborField() = default;
-    // coarse_metric, of the type of metric, measures the pixels of the source that coarse_pixels (CV_8U) sets.
+    // hole_metric, of the type of metric, measures the pixels of the source that hole_pixels (CV_8U) sets.
     NearestNeighborField(
         const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric,
-        const PatchDistanceMetric *coarse_metric = nullptr, const cv::Mat &coarse_pixels = cv::Mat())
+        const PatchDistanceMetric *hole_metric = nullptr, const cv::Mat &hole_pixels = cv::Mat())
         : m_source(source), m_target(target), m_distance_metric(metric),
-          m_coarse_metric(coarse_pixels.empty() ? nullptr : coarse_metric), m_coarse_pixels(coarse_pixels)
+          m_hole_metric(hole_pixels.empty() ? nullptr : hole_metric), m_hole_pixels(hole_pixels)
     {
         m_field = cv::Mat(m_source.size(), CV_32SC3);
         _allocate_sums();
@@ -55,10 +55,10 @@ public:
     }
     NearestNeighborField(
         const MaskedImage &source, const MaskedImage &target, const PatchDistanceMetric *metric,
-        const NearestNeighborField &other, const PatchDistanceMetric *coarse_metric = nullptr,
-        const cv::Mat &coarse_pixels = cv::Mat())
+        const NearestNeighborField &other, const PatchDistanceMetric *hole_metric = nullptr,
+        const cv::Mat &hole_pixels = cv::Mat())
         : m_source(source), m_target(target), m_distance_metric(metric),
-          m_coarse_metric(coarse_pixels.empty() ? nullptr : coarse_metric), m_coarse_pixels(coarse_pixels)
+          m_hole_metric(hole_pixels.empty() ? nullptr : hole_metric), m_hole_pixels(hole_pixels)
     {
         m_field = cv::Mat(m_source.size(), CV_32SC3);
         _allocate_sums();
@@ -155,7 +155,7 @@ private:
 
     const PatchDistanceMetric &_metric(int y, int x) const
     {
-        return m_coarse_metric && m_coarse_pixels.at<unsigned char>(y, x) ? *m_coarse_metric : *m_distance_metric;
+        return m_hole_metric && m_hole_pixels.at<unsigned char>(y, x) ? *m_hole_metric : *m_distance_metric;
     }
     // The distance if it is below bound, otherwise any value >= bound.
     Measured _measure(int y, int x, int y_target, int x_target, int bound) const;
@@ -203,8 +203,8 @@ private:
     // per pixel: the sum behind the distance, for updates in O(patch_size); empty for other metrics
     std::vector<std::int64_t> m_sums;
     const PatchDistanceMetric *m_distance_metric = nullptr;
-    const PatchDistanceMetric *m_coarse_metric = nullptr; // nullptr without coarse pixels
-    cv::Mat m_coarse_pixels;
+    const PatchDistanceMetric *m_hole_metric = nullptr; // nullptr without hole pixels
+    cv::Mat m_hole_pixels;
 };
 
 class PatchSSDDistanceMetric : public PatchDistanceMetric

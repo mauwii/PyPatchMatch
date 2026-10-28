@@ -78,7 +78,9 @@ The previous import path `from patchmatch import patch_match` keeps working.
 pixels in each direction. Larger patches follow larger structures but are much slower;
 the default of 15 compares 31x31 patches, the examples use 3. Below 5, the coarsest level
 with a hole searches with a radius of 5, so that repeating patterns and lines continue
-across larger holes. Above
+across larger holes. From 5 on, where the coarse levels lost a line a few pixels wide in
+a hole that is gone after two halvings of the image, the two finest levels continue it
+with a radius of 3 around the line: larger patches wiped such lines out. Above
 7, coarse levels narrower than six patches use the largest radius that fits, but at
 least 7: larger patches found no sources there and left the fill flat.
 
