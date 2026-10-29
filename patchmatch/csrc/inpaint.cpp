@@ -381,12 +381,14 @@ MaskedImage Inpainting::_run_levels(bool verbose)
             target = source.clone();
             target.clear_mask();
         }
-        cv::Mat peeled;
-        cv::Mat lines;
+        PeelResult peeled;
         if (_peels(level))
-            target = _peel(level, target, peeled, lines);
+        {
+            peeled = _peel(level, target);
+            target = std::move(peeled.image);
+        }
         if (m_distance_metric->patch_size() >= kCoarsePatchSize)
-            hole_pixels = around_lines(hole_pixels, lines, m_level_metric->patch_size());
+            hole_pixels = around_lines(hole_pixels, peeled.lines, m_level_metric->patch_size());
         // The votes of the completeness field keep the known pixels near their input on the
         // coarse levels; on levels 0 and 1, which keep the known pixels, they change nothing.
         const PatchDistanceMetric *hole_metric = m_hole_metric.get();
@@ -400,7 +402,7 @@ MaskedImage Inpainting::_run_levels(bool verbose)
         m_target2source =
             coarsest ? NearestNeighborField(target, source, m_level_metric, hole_metric, hole_pixels)
                      : NearestNeighborField(target, source, m_level_metric, m_target2source, hole_metric, hole_pixels);
-        _link_peeled(peeled);
+        _link_peeled(peeled.matches);
 
         trace(verbose, "Initialization done.");
 
@@ -421,7 +423,7 @@ cv::Mat Inpainting::_hole_pixels(int level) const
     return level < static_cast<int>(m_hole_pixels.size()) ? m_hole_pixels[level] : cv::Mat();
 }
 
-MaskedImage Inpainting::_peel(int level, const MaskedImage &target, cv::Mat &matches, cv::Mat &lines) const
+PeelResult Inpainting::_peel(int level, const MaskedImage &target) const
 {
     const MaskedImage &source = m_pyramid[level];
     const cv::Mat &holes = m_peel_labels[level];
@@ -429,13 +431,13 @@ MaskedImage Inpainting::_peel(int level, const MaskedImage &target, cv::Mat &mat
     const int patch_size =
         m_distance_metric->patch_size() < kCoarsePatchSize ? m_distance_metric->patch_size() : kLinePatchSize;
     if (level == static_cast<int>(m_pyramid.size()) - 1)
-        return peel_holes(source, target, holes, reach, nullptr, patch_size, level, matches, lines);
+        return peel_holes(source, target, holes, reach, nullptr, patch_size, level);
     // The field that the search of this level starts from: the links of the coarser one are off by a pixel here,
     // so the peel deviated from patterns that the coarser levels had locked onto.
     NearestNeighborField guide(
         target, source, m_level_metric, m_target2source, m_hole_metric.get(), _hole_pixels(level));
     guide.minimize(nnf_iterations(level));
-    return peel_holes(source, target, holes, reach, &guide, patch_size, level, matches, lines);
+    return peel_holes(source, target, holes, reach, &guide, patch_size, level);
 }
 
 // The search does not find the few sources of a line that the coarser levels lost.
@@ -519,12 +521,13 @@ MaskedImage Inpainting::_expectation_maximization(
         auto vote = cv::Mat(new_target.size(), CV_64FC(split ? kSplitChannels : 4), cv::Scalar::all(0));
 
         // Votes for best patch from NNF Source->Target (completeness) and Target->Source (coherence).
+        const VoteSettings settings{upscaled, best_only, keep_known, vote_patch_size};
         if (m_source2target)
         {
-            cast_votes(*m_source2target, true, vote, new_source, upscaled, best_only, keep_known, vote_patch_size);
+            cast_votes(*m_source2target, true, vote, new_source, settings);
             trace(verbose, "  Expectation source to target finished.");
         }
-        cast_votes(m_target2source, false, vote, new_source, upscaled, best_only, keep_known, vote_patch_size);
+        cast_votes(m_target2source, false, vote, new_source, settings);
         trace(verbose, "  Expectation target to source finished.");
 
         // Compile votes and update pixel values.

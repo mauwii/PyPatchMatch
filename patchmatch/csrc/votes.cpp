@@ -311,15 +311,17 @@ cv::Mat voted_texture(const MaskedImage &source, const cv::Mat &vote)
 }
 
 void cast_votes(
-    const NearestNeighborField &nnf, bool source2target, cv::Mat &vote, const MaskedImage &source, bool upscaled,
-    bool best_only, bool keep_known, int patch_size)
+    const NearestNeighborField &nnf, bool source2target, cv::Mat &vote, const MaskedImage &source,
+    const VoteSettings &settings)
 {
     // Votes for known pixels do not count where the maximization step keeps them.
     std::optional<HoleCounter> holes;
-    if (keep_known)
+    if (settings.keep_known)
         holes.emplace(source);
     const VoteCaster caster(
-        nnf, source2target, vote, source, upscaled, best_only, holes.has_value() ? &holes.value() : nullptr);
+        nnf, source2target, vote, source, settings.upscaled, settings.best_only,
+        holes.has_value() ? &holes.value() : nullptr);
+    const int patch_size = settings.patch_size;
     const auto &kDistance2Similarity = distance2similarity();
     const auto source_size = nnf.source_size();
 
@@ -327,7 +329,7 @@ void cast_votes(
     // the sequential order. Four per thread balance holes that some bands lack, and the patches across a border,
     // which both bands visit, stay a minority. A band starts at a multiple of the scale, so that both rows of an
     // upscaled vote fall into it.
-    const int scale = upscaled ? 2 : 1;
+    const int scale = settings.upscaled ? 2 : 1;
     const int threads = thread_count();
     const int band = threads > 1 ? scale * std::max(2 * (2 * patch_size + 1), vote.rows / scale / (4 * threads))
                                  : std::max(1, vote.rows);

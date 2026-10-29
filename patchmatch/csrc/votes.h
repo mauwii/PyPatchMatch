@@ -13,10 +13,20 @@ inline constexpr int kSplitChannels = 9;
 // the distances charge a deficit below half of it, so a fill expects the full texture of its sources.
 cv::Mat voted_texture(const MaskedImage &source, const cv::Mat &vote);
 
-// Expectation step: casts the votes of the patches of patch_size of a field into vote.
+// How an EM iteration votes: for the next finer level, with the best vote only, keeping the known pixels, and with
+// patches of patch_size.
+struct VoteSettings
+{
+    bool upscaled;
+    bool best_only;
+    bool keep_known;
+    int patch_size;
+};
+
+// Expectation step: casts the votes of a field into vote.
 void cast_votes(
-    const NearestNeighborField &nnf, bool source2target, cv::Mat &vote, const MaskedImage &source, bool upscaled,
-    bool best_only, bool keep_known, int patch_size);
+    const NearestNeighborField &nnf, bool source2target, cv::Mat &vote, const MaskedImage &source,
+    const VoteSettings &settings);
 
 // Maximization step: the holes of target, and the known pixels unless keep_known, take their votes.
 void maximize_votes(MaskedImage &target, const cv::Mat &vote, const MaskedImage &source, bool keep_known);

@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <limits>
 #include <optional>
+#include <utility>
 
 #include "parallel.h"
 #include "window.h"
@@ -59,9 +60,7 @@ namespace
                     _enter_front(y, x);
         }
 
-        // The target with the peeled holes, per peeled pixel the center of its source patch, -1 elsewhere, and the
-        // peeled pixels where the coarser fill lost a line (CV_8U).
-        MaskedImage run(cv::Mat &matches, cv::Mat &lines)
+        PeelResult run()
         {
             while (!m_front.empty())
             {
@@ -82,9 +81,7 @@ namespace
                 for (int x = 0; x < m_size.width; ++x)
                     if (m_matches.at<cv::Vec2i>(y, x)[0] >= 0)
                         std::copy_n(m_colors.ptr<unsigned char>(y, x), 3, peeled.get_mutable_image(y, x));
-            matches = m_matches;
-            lines = m_lines;
-            return peeled;
+            return {std::move(peeled), m_matches, m_lines};
         }
 
     private:
@@ -548,9 +545,9 @@ namespace
     };
 } // namespace
 
-MaskedImage peel_holes(
+PeelResult peel_holes(
     const MaskedImage &source, const MaskedImage &target, const cv::Mat &holes, const std::vector<int> &reach,
-    const NearestNeighborField *guide, int patch_size, int level, cv::Mat &matches, cv::Mat &lines)
+    const NearestNeighborField *guide, int patch_size, int level)
 {
-    return Peel(source, target, holes, reach, guide, patch_size, level).run(matches, lines);
+    return Peel(source, target, holes, reach, guide, patch_size, level).run();
 }

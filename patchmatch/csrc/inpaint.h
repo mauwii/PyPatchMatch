@@ -6,6 +6,7 @@
 
 #include "masked_image.h"
 #include "nnf.h"
+#include "peel.h"
 
 class Inpainting
 {
@@ -20,7 +21,7 @@ private:
     MaskedImage _run_levels(bool verbose);
     bool _peels(int level) const;
     cv::Mat _hole_pixels(int level) const;
-    MaskedImage _peel(int level, const MaskedImage &target, cv::Mat &matches, cv::Mat &lines) const;
+    PeelResult _peel(int level, const MaskedImage &target) const;
     void _link_peeled(const cv::Mat &matches);
     MaskedImage _expectation_maximization(const MaskedImage &source, MaskedImage target, int level, bool verbose);
     void _update_links(const MaskedImage &source, bool image_changed);
