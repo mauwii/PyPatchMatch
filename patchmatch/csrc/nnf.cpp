@@ -478,9 +478,6 @@ void NearestNeighborField::_random_search(int y, int x, Draw &draw)
     }
 }
 
-const int PatchDistanceMetric::kDistanceScale = 65535;
-const int PatchSSDDistanceMetric::kSSDScale = 9 * 255 * 255;
-
 namespace
 {
     // Returns kDistanceScale once the result is certain to reach bound, never for bound kDistanceScale.
@@ -530,7 +527,8 @@ int RegularityGuidedPatchDistanceMetricV2::operator()(
         float dj = std::fabs(source_ij[1] - target_ij[1]);
         if (dj > 0.5F)
             dj = 1.0F - dj;
-        score1 = sqrt(di * di + dj * dj) / 0.707;
+        // In double: an unqualified sqrt of a float picks the float or the double overload by the standard library.
+        score1 = std::sqrt(static_cast<double>(di * di + dj * dj)) / 0.707;
         if (score1 < 0 || score1 > 1)
             score1 = 1;
         score1 *= PatchDistanceMetric::kDistanceScale;
