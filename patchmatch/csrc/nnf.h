@@ -32,7 +32,7 @@ public:
     {
         return nullptr;
     }
-    static const int kDistanceScale;
+    static constexpr int kDistanceScale = 65535;
 
 private:
     int m_patch_size;
@@ -218,7 +218,7 @@ public:
     {
         return std::make_unique<PatchSSDDistanceMetric>(patch_size);
     }
-    static const int kSSDScale;
+    static constexpr int kSSDScale = 9 * 255 * 255;
 };
 
 class RegularityGuidedPatchDistanceMetricV2 : public PatchDistanceMetric

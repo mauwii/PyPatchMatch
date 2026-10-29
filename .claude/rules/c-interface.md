@@ -34,5 +34,5 @@ everything, stores the message in a thread-local string and returns a null `data
 `_call` turns that into `RuntimeError("patchmatch failed: <PM_last_error()>")`. Python
 validates every input with its own messages; the comments at the checks in
 `patch_match.py` say how the native code fails without them. For C and C++ callers the
-native code asserts only what keeps its indexing in bounds: the types and sizes of the
-images, the ijmap and `patch_size` (`test_native_rejects_invalid_inputs`).
+native code asserts only what keeps its indexing in bounds: the shapes (`_py_to_cv2`),
+the types and sizes of the images, the ijmap and `patch_size` (`test_native_rejects_invalid_inputs`).

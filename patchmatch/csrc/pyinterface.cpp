@@ -80,6 +80,10 @@ namespace
 
     cv::Mat _py_to_cv2(PM_mat_t pymat)
     {
+        // CV_MAKETYPE does not check the channels: with 0, cv::Mat reads 128 per pixel past the buffer.
+        CV_Assert(
+            pymat.shape.width >= 0 && pymat.shape.height >= 0 && pymat.shape.channels >= 1 &&
+            pymat.shape.channels <= CV_CN_MAX);
         int dtype = CV_MAKETYPE(_dtype_py_to_cv(pymat.dtype), pymat.shape.channels);
         return cv::Mat(cv::Size(pymat.shape.width, pymat.shape.height), dtype, pymat.data_ptr).clone();
     }
