@@ -27,7 +27,7 @@ again.
   and `compute_hole_sums` fill on first use are computed before the loop, on the copies
   that it reads (`NearestNeighborField::prepare`). Every sum gets its terms in the
   sequential order, because `-ffast-math` changes the result of another one: the bands
-  of `_expectation_step` cast the patches in the order of the pixels.
+  of `cast_votes` cast the patches in the order of the pixels.
 - A pass of `minimize` runs its tiles along the anti-diagonals and gives the result of
   the sequential pass only as long as a pixel reads no links but those of its two
   predecessors, whether it searches is known before the pass reaches it (only the pixel
