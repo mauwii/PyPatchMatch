@@ -22,10 +22,13 @@ endif()
 find_package(OpenCV REQUIRED COMPONENTS ${PATCHMATCH_OPENCV_COMPONENTS})
 
 add_library(patchmatch SHARED
+  patchmatch/csrc/holes.cpp
   patchmatch/csrc/inpaint.cpp
   patchmatch/csrc/masked_image.cpp
   patchmatch/csrc/nnf.cpp
+  patchmatch/csrc/peel.cpp
   patchmatch/csrc/pyinterface.cpp
+  patchmatch/csrc/votes.cpp
 )
 target_include_directories(patchmatch PUBLIC patchmatch/csrc)
 target_link_libraries(patchmatch PUBLIC opencv_core)

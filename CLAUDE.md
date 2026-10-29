@@ -74,7 +74,9 @@ Other entry points:
 
 `patchmatch.inpaint` calls through `patch_match.py` (public API, input validation) →
 `_lib.py` (ctypes) → `csrc/pyinterface.*` (`extern "C"`) → `inpaint.*` (`Inpainting`,
-pyramid, EM loop) → `nnf.*` (`NearestNeighborField`, distance metrics) →
+pyramid, EM loop; with `peel.*` (the `Peel` of the holes), `votes.*` (expectation and
+maximization steps), `holes.*` (hole labels and the pixels that search with other patch
+sizes) and `window.h`) → `nnf.*` (`NearestNeighborField`, distance metrics) →
 `masked_image.*` (`MaskedImage`).
 
 - `patch_match.py` loads the library at import time; on `OSError` (no library) or
