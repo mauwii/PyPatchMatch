@@ -87,7 +87,7 @@ again.
   for the gradients: up to `patch_size` 4 every patch over it is above the 10 %, so that
   line of a hole at the image border never got a vote and stayed flat
   (`test_inpaint_textures_the_image_border`).
-- The larger patches of `m_coarse_metric` on the level below the coarsest that a hole
+- The larger patches of `m_hole_metric` on the level below the coarsest that a hole
   reaches as well: the holes there are wider than them, and they take flat sources in
   foliage, which filled holes in `forest.bmp` gray (11 of 20 positions worse,
   `test_reconstructs_known_background` 5.9 → 8.4). Until 2.2 both levels were filled

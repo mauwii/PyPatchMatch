@@ -42,5 +42,5 @@ uv sync --reinstall-package pypatchmatch             # back to the normal librar
   `MaskedImage::upsample` (only called on targets, which have no holes). GCC also
   reports the closing braces of the functions that return a `MaskedImage`, where it
   puts the cleanup for exceptions.
-- GCC 13 (Docker arm64, `-Og`): 97.0 % of the lines, 95.2 % of the branches. The gates
-  are these values rounded down to 5 % with at least two points of margin.
+- GCC 13 (the CI job, x86-64, `-Og`): 98.0 % of the lines, 95.4 % of the branches. The
+  gates are these values rounded down to 5 % with at least two points of margin.
