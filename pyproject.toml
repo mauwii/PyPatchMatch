@@ -129,8 +129,6 @@ environment = { OpenCV_ROOT = "C:/opencv" }
 [tool.uv]
 # the cooldown of dependabot.yml for uv lock --upgrade
 exclude-newer = "7 days"
-# security fix virtualenv 21.14.13 of 2026-10-22; drop once older than 7 days
-exclude-newer-package = { virtualenv = "2026-10-23T00:00:00Z" }
 # Rebuild the package whenever the native sources or the git version change.
 cache-keys = [
     { file = "CMakeLists.txt" },
