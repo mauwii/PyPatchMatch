@@ -35,7 +35,7 @@ repos:
         types: [python]
         pass_filenames: false
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: d4acaec07ac3bc6017fba3c3b8e9810af1b615db  # frozen: 0.13.1
+    rev: eeca16c54e09b4d9a848259e46bae14737944348  # frozen: 0.13.5
     hooks:
       - id: uv-lock
   - repo: https://github.com/pre-commit/mirrors-clang-format
@@ -48,7 +48,7 @@ repos:
     hooks:
       - id: shellcheck
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: 916ad0aaa108c64d294101002066f530ea170b10  # frozen: v0.23.3
+    rev: 341e2a331ba578029e66c2e01183e7a6b5ca9ab4  # frozen: v0.24.0
     hooks:
       - id: markdownlint-cli2
   - repo: https://github.com/crate-ci/typos
