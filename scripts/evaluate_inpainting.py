@@ -46,8 +46,10 @@ runs each inpainting on all cores.
 workflow "Fill quality" redirects it to the job summary.
 
 Besides the table, it writes examples/images/evaluation.html (git-ignored): the holes,
-the fills (of --baseline too) and the originals side by side, cut to the holes. It
-embeds the images of examples/images/local/ as well, so keep it out of the repository.
+the fills (of --baseline too) and the originals side by side, cut to the holes. Each
+library shows the fill of the first seed and, where another one has a higher error (seam
+without an original), that of the worst seed, whose outliers the means hide. It embeds
+the images of examples/images/local/ as well, so keep it out of the repository.
 
 The e2e tests use measure() to check the seam and the detail of forest_pruned.bmp.
 
@@ -152,8 +154,10 @@ class Result(NamedTuple):
     values: dict[str, float]  # means over the seeds
     margins: dict[str, float]  # of the means, see margin()
     seconds: float  # per seed
-    fill: np.ndarray  # of seed 0
+    fill: np.ndarray  # of the first seed
     digest: str  # of the fills of all seeds
+    # seed, column, value and fill of the worst seed, unless it is the first
+    worst: tuple[int, str, float, np.ndarray] | None
 
 
 def load(path: Path) -> np.ndarray:
@@ -412,14 +416,25 @@ def margin(samples: np.ndarray) -> float:
     return quantile * float(samples.std(ddof=1)) / math.sqrt(len(samples))
 
 
-def evaluate(jobs: list[Future[Seed]]) -> Result:
-    """The result of one case and library from the jobs of all seeds, in order."""
+def evaluate(jobs: list[Future[Seed]], seeds: range) -> Result:
+    """The result of one case and library from the jobs of ``seeds``, in order."""
     fills, rows, seconds = zip(*(job.result() for job in jobs), strict=True)
     samples = {key: np.array([row[key] for row in rows]) for key in rows[0]}
     values = {key: float(x.mean()) for key, x in samples.items()}
     margins = {key: margin(x) for key, x in samples.items()}
     digest = hashlib.sha256(b"".join(fill.tobytes() for fill in fills)).hexdigest()
-    return Result(values, margins, float(np.mean(seconds)), fills[0], digest)
+    # outliers, such as a broken line in one seed, hardly move the means
+    key = "error" if "error" in samples else "seam"
+    index = int(samples[key].argmax())
+    worst = (seeds[index], key, float(samples[key][index]), fills[index])
+    return Result(
+        values,
+        margins,
+        float(np.mean(seconds)),
+        fills[0],
+        digest,
+        worst if index else None,
+    )
 
 
 def identical(results: list[Result]) -> str:
@@ -606,9 +621,11 @@ def section(case: Case, results: list[Result], labels: list[str]) -> str:
     if case.global_mask is not None:
         shown[case.global_mask] //= 2
     versions: list[tuple[str, np.ndarray, dict[str, float]]] = [("holes", shown, {})]
-    versions += [
-        (label, r.fill, r.values) for label, r in zip(labels, results, strict=True)
-    ]
+    for label, result in zip(labels, results, strict=True):
+        versions.append((label, result.fill, result.values))
+        if result.worst is not None:
+            seed, key, value, fill = result.worst
+            versions.append((f"{label}, seed {seed}", fill, {key: value}))
     if case.truth is not None:
         versions.append(("original", case.truth, targets(case)))
     figures = "".join(
@@ -705,7 +722,8 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
 def describe(args: argparse.Namespace, labels: list[str], paths: list[str]) -> str:
     lines = [
         f"{datetime.now():%Y-%m-%d %H:%M}, patch_size {args.patch_size}, "
-        f"{args.seeds} seed(s), fills of seed 0",
+        f"{args.seeds} seed(s), fills of seed 0 and of the worst seed by error "
+        "(seam without an original)",
         *(f"{label}: {path}" for label, path in zip(labels, paths, strict=True)),
     ]
     return "".join(f'<p class="meta">{html.escape(line)}</p>' for line in lines)
@@ -745,6 +763,7 @@ def main() -> None:
     header = f"{'case':14} {''.join(f'{key:16}' for key in COLUMNS)}{'time':16}{fills}"
     print(header.rstrip(), file=out)
     rows = []
+    seeds = range(args.seeds)
     pool = ProcessPoolExecutor(args.jobs)
     # parallel processes on one thread each, a single one on all cores
     threads = 0 if args.jobs == 1 else 1
@@ -755,14 +774,14 @@ def main() -> None:
                 (index, seed): pool.submit(
                     fill_seed, path, case, args.patch_size, seed, threads
                 )
-                for seed in range(args.seeds)
+                for seed in seeds
                 for index, path in enumerate(paths)
             }
             for case in chosen
         ]
         for case, futures in zip(chosen, jobs, strict=True):
             results = [
-                evaluate([futures[index, seed] for seed in range(args.seeds)])
+                evaluate([futures[index, seed] for seed in seeds], seeds)
                 for index in range(len(paths))
             ]
             print_row(case.name, results, out)
