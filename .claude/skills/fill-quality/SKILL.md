@@ -29,7 +29,10 @@ uv run --no-sync python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1
 - Judge a change of the fills on all cases with 10 seeds (`--seeds 10`) and patch sizes
   3, 7 and 15: the mean error of brick varied from 10.2 to 12.5 between sets of 3 seeds,
   and fixes for one image regressed others before. Look at the fills in
-  `examples/images/evaluation.html`, which every run overwrites.
+  `examples/images/evaluation.html`, which every run overwrites, including the worst
+  seed of each case, and read the geometric means below the table.
+- Tune on seeds 0 to 9, then confirm the gain with `--first-seed 10 --holdout 3`: seeds
+  and random holes that nothing was tuned on.
 - `examples/images/local/` is for your own images, which the script adds as object
   removals; never commit them, nor `evaluation.html`, which embeds them.
 - The workflow `Fill quality` compares every PR that changes the native code with its
