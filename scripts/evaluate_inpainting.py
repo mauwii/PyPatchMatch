@@ -37,6 +37,13 @@ Usage:
     uv run python scripts/evaluate_inpainting.py
     uv run python scripts/evaluate_inpainting.py --baseline main/libpatchmatch.dylib
     uv run python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1 --cases brick
+    uv run python scripts/evaluate_inpainting.py --first-seed 10 --holdout 3
+
+--first-seed starts the seeds at another number than 0, and --holdout N adds N cases
+per image with an original, each with one random elliptic hole of radius 8 to 40,
+drawn from --first-seed: seeds and holes that no change was tuned on. Gains on seeds
+0 to 9 vanished on 10 to 29 before, and holes elsewhere showed losses that the cases
+did not.
 
 The inpaintings run in parallel processes, one per CPU unless --jobs says otherwise,
 each on one thread. They slow each other down, so time a speed-up with --jobs 1, which
@@ -148,6 +155,7 @@ class Case(NamedTuple):
     truth: np.ndarray | None
     global_mask: np.ndarray | None = None
     ijmap: np.ndarray | None = None  # fills with inpaint_regularity
+    holdout: bool = False  # a random hole of --holdout
 
 
 class Result(NamedTuple):
@@ -237,6 +245,23 @@ def cases() -> Iterator[Case]:
     for path in sorted(LOCAL.glob("*_pruned.*")):
         image = load(path)
         yield Case(path.stem.removesuffix("_pruned"), image, white(image), None)
+
+
+def holdouts(count: int, seed: int) -> Iterator[Case]:
+    """``count`` cases per image with an original, each with one random elliptic hole."""
+    rng = np.random.default_rng(seed)
+    photos = dict.fromkeys(filename for filename, _ in LINES.values())
+    for filename in (*photos, *(f"{name}.png" for name in HOLES)):
+        truth = load(IMAGES / filename)
+        height, width = truth.shape[:2]
+        for k in range(count):
+            ry, rx = (int(radius) for radius in rng.integers(8, 41, size=2))
+            cy, cx = (
+                int(rng.integers(ry, height - ry)),
+                int(rng.integers(rx, width - rx)),
+            )
+            hole = ellipse(truth.shape, cy, cx, ry, rx)
+            yield cut(f"{Path(filename).stem}-h{k}", truth, hole)._replace(holdout=True)
 
 
 def grow(mask: np.ndarray, radius: int) -> np.ndarray:
@@ -719,11 +744,10 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
     return "\n".join(lines)
 
 
-def describe(args: argparse.Namespace, labels: list[str], paths: list[str]) -> str:
+def describe(title: str, first: int, labels: list[str], paths: list[str]) -> str:
     lines = [
-        f"{datetime.now():%Y-%m-%d %H:%M}, patch_size {args.patch_size}, "
-        f"{args.seeds} seed(s), fills of seed 0 and of the worst seed by error "
-        "(seam without an original)",
+        f"{datetime.now():%Y-%m-%d %H:%M}, {title}, fills of seed {first} and of the "
+        "worst seed by error (seam without an original)",
         *(f"{label}: {path}" for label, path in zip(labels, paths, strict=True)),
     ]
     return "".join(f'<p class="meta">{html.escape(line)}</p>' for line in lines)
@@ -735,6 +759,12 @@ def main() -> None:
     parser.add_argument("--baseline", type=Path, help="library file to compare with")
     parser.add_argument("--patch-size", type=int, default=3)
     parser.add_argument("--seeds", type=int, default=3)
+    parser.add_argument(
+        "--first-seed", type=int, default=0, help="also draws the holdout holes"
+    )
+    parser.add_argument(
+        "--holdout", type=int, default=0, help="random holes per image with an original"
+    )
     parser.add_argument("--cases", help="comma-separated names, default: all")
     parser.add_argument("--jobs", type=int, help="processes, default: one per CPU")
     parser.add_argument(
@@ -754,16 +784,23 @@ def main() -> None:
         libraries.insert(0, _lib.load_library(args.baseline.resolve()))
         labels = ["baseline", "current"]
     paths = [lib._name for lib in libraries]
-    selected = set(args.cases.split(",")) if args.cases else None
-    chosen = [case for case in cases() if not selected or case.name in selected]
+    available = [*cases(), *holdouts(args.holdout, args.first_seed)]
+    names = [case.name for case in available]
+    selected = set(args.cases.split(",")) if args.cases else set(names)
+    if unknown := selected.difference(names):
+        parser.error(f"unknown cases: {', '.join(sorted(unknown))}")
+    chosen = [case for case in available if case.name in selected]
+    seeds = range(args.first_seed, args.first_seed + args.seeds)
+    title = f"patch_size {args.patch_size}, {args.seeds} seed(s)"
+    if args.first_seed:
+        title += f" from {args.first_seed}"
 
     out = sys.stderr if args.markdown else sys.stdout
-    print(f"patch_size={args.patch_size} seeds={args.seeds}", file=out)
+    print(title, file=out)
     fills = "fills" if args.baseline else ""
     header = f"{'case':14} {''.join(f'{key:16}' for key in COLUMNS)}{'time':16}{fills}"
     print(header.rstrip(), file=out)
     rows = []
-    seeds = range(args.seeds)
     pool = ProcessPoolExecutor(args.jobs)
     # parallel processes on one thread each, a single one on all cores
     threads = 0 if args.jobs == 1 else 1
@@ -789,11 +826,11 @@ def main() -> None:
     finally:
         pool.shutdown(cancel_futures=True)  # Ctrl+C stops after the running jobs
 
-    meta = describe(args, labels, paths)
+    meta = describe(title, seeds[0], labels, paths)
     write_report(rows, labels, meta)
     print(f"report: {REPORT}", file=out)
     if args.markdown:
-        print(markdown(rows, f"patch_size {args.patch_size}, {args.seeds} seed(s)"))
+        print(markdown(rows, title))
 
 
 if __name__ == "__main__":
