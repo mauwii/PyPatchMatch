@@ -389,7 +389,8 @@ def test_measures_see_known_flaws():
 
     variety compared the patches of the holes only on a grid of 4 pixels, so a hole
     whose right half repeated its left half 57 columns apart scored 0.98, as if nothing
-    repeated (0.31 with 52 columns).
+    repeated (0.31 with 52 columns). The report marked a seam that moved from 1.02 to
+    0.98 as worse, although both lie 0.02 from the 1.0 of the original.
     """
     truth = evaluation.load(IMAGES / "forest.bmp")
     holes = evaluation.ellipse(truth.shape, 70, 560, 45, 55)
@@ -402,3 +403,5 @@ def test_measures_see_known_flaws():
     ys, xs = np.nonzero(right)
     repeated[ys, xs] = truth[ys, xs - 57]
     assert evaluation.measure(repeated, holes, truth)["variety"] < 0.6
+
+    assert evaluation.verdict("seam", 1.02, 0.98, 1.0) == ""

@@ -72,10 +72,12 @@ Columns, means over the seeds:
     fills   with --baseline: whether the fills of all seeds are byte-identical to the
             baseline's, as they have to be after a change that only makes it faster
 
-With --baseline, the report marks seam and detail as better or worse by their distance
-to the values of the original, 1.0 without one. A mark needs a change of more than 2 %
-and of more than twice the standard error over the seeds: between disjoint sets of 3
-seeds of the same library, half of the cells changed by more than 2 %.
+With --baseline, the report marks a column as better or worse when it changes by more
+than 2 % (time: 10 %) and by more than the margin of the seeds: the standard error of
+the difference times the 97.5 % quantile of Student's t, 2.77 for 3 seeds and 2.10 for
+10. Between disjoint sets of 3 seeds of the same library, 2 % alone marked half of the
+cells, twice the standard error 8.5 %, the margin 3.1 %. seam, detail and variety are
+marked by the change of their distance to the values of the original, 1.0 without one.
 """
 
 from __future__ import annotations
@@ -148,7 +150,7 @@ class Case(NamedTuple):
 
 class Result(NamedTuple):
     values: dict[str, float]  # means over the seeds
-    errors: dict[str, float]  # standard errors of the means, 0 for one seed
+    margins: dict[str, float]  # of the means, see margin()
     seconds: float  # per seed
     fill: np.ndarray  # of seed 0
     digest: str  # of the fills of all seeds
@@ -395,17 +397,29 @@ def fill_seed(path: str, case: Case, patch_size: int, seed: int, threads: int) -
     return fill, measure(fill, case.holes, case.truth), seconds
 
 
+def margin(samples: np.ndarray) -> float:
+    """Standard error of the mean of ``samples`` times the 97.5 % quantile of Student's
+    t for the difference of two such means, 0 for one sample.
+
+    Twice the standard error marked 8.5 % of the cells between disjoint sets of 3
+    seeds of the same library (t has 4 degrees of freedom there), the quantile 3.1 %.
+    """
+    if len(samples) < 2:
+        return 0.0
+    df = 2 * (len(samples) - 1)
+    # Cornish-Fisher expansion, within 0.3 % from 4 degrees of freedom on
+    quantile = 1.96 + 2.37 / df + 2.82 / df**2 + 2.56 / df**3
+    return quantile * float(samples.std(ddof=1)) / math.sqrt(len(samples))
+
+
 def evaluate(jobs: list[Future[Seed]]) -> Result:
     """The result of one case and library from the jobs of all seeds, in order."""
     fills, rows, seconds = zip(*(job.result() for job in jobs), strict=True)
     samples = {key: np.array([row[key] for row in rows]) for key in rows[0]}
     values = {key: float(x.mean()) for key, x in samples.items()}
-    errors = {
-        key: float(x.std(ddof=1) / math.sqrt(len(x))) if len(x) > 1 else 0.0
-        for key, x in samples.items()
-    }
+    margins = {key: margin(x) for key, x in samples.items()}
     digest = hashlib.sha256(b"".join(fill.tobytes() for fill in fills)).hexdigest()
-    return Result(values, errors, float(np.mean(seconds)), fills[0], digest)
+    return Result(values, margins, float(np.mean(seconds)), fills[0], digest)
 
 
 def identical(results: list[Result]) -> str:
@@ -543,12 +557,14 @@ def verdict(
 ) -> str:
     """CSS class of ``new`` compared with ``old``: better, worse or none.
 
-    ``noise`` is the standard error of the difference over the seeds.
+    ``noise`` is the margin of the difference over the seeds, see margin().
     """
-    if abs(new - old) <= max((0.1 if key == "time" else 0.02) * abs(old), 2 * noise):
-        return ""
+    bar = max((0.1 if key == "time" else 0.02) * abs(old), noise)
     if key in ("seam", "detail", "variety"):  # best at the value of the original
+        # the distance, or a change across the original's value is marked by its size
         old, new = abs(old - target), abs(new - target)
+    if abs(new - old) <= bar:
+        return ""
     return "better" if new < old else "worse"
 
 
@@ -562,8 +578,8 @@ def column(key: str, results: list[Result]) -> tuple[list[float], list[str]]:
 
 
 def noise(key: str, results: list[Result]) -> float:
-    """Standard error of the difference of the means, 0 for the time."""
-    return math.hypot(*(result.errors.get(key, 0.0) for result in results))
+    """Margin of the difference of the means, 0 for the time."""
+    return math.hypot(*(result.margins.get(key, 0.0) for result in results))
 
 
 def cell(key: str, results: list[Result], goals: dict[str, float]) -> str:
@@ -679,8 +695,9 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
         "Means over the seeds. seam and detail are best at the values of the "
         "original (1.0 without one, see the report), variety at 1.0, error and edges "
         "at 0. With a baseline: baseline → current, 🟢 better and 🔴 worse by more "
-        "than 2 % (time: 10 %) and by more than twice the standard error of the "
-        "difference over the seeds.",
+        "than 2 % (time: 10 %) and by more than the standard error of the difference "
+        "over the seeds times the 97.5 % quantile of Student's t; seam, detail and "
+        "variety by their distance to the values of the original.",
     ]
     return "\n".join(lines)
 
