@@ -621,25 +621,26 @@ def column(key: str, results: list[Result]) -> tuple[list[float], list[str]]:
     return values, [f"{value:.2f}" for value in values]
 
 
+def change(rows: list[tuple[Case, list[Result]]], key: str) -> str:
+    """Geometric mean of current/baseline of ``key`` over ``rows``, as a change."""
+    pairs = [column(key, results)[0] for _, results in rows]
+    ratios = [b / a for a, b in (p for p in pairs if len(p) == 2) if a > 0 and b > 0]
+    if not ratios:
+        return ""
+    mean = math.exp(sum(map(math.log, ratios)) / len(ratios))
+    return f"{key} {(mean - 1) * 100:+.1f} % over {len(ratios)}"
+
+
 def changes(rows: list[tuple[Case, list[Result]]]) -> list[str]:
     """Geometric means of current/baseline of error, edges and time, one line for the
     cases and one for the holdout holes."""
     lines = []
     for holdout, label in ((False, "cases"), (True, "holdout holes")):
-        parts = []
-        for key in ("error", "edges", "time"):
-            ratios = []
-            for case, results in rows:
-                values = column(key, results)[0]
-                if case.holdout == holdout and len(values) == 2 and min(values) > 0:
-                    ratios.append(values[1] / values[0])
-            if ratios:
-                change = math.exp(sum(map(math.log, ratios)) / len(ratios)) - 1
-                parts.append(f"{key} {change * 100:+.1f} % over {len(ratios)}")
-        if parts:
-            lines.append(
-                f"Geometric mean of current/baseline, {label}: " + ", ".join(parts)
-            )
+        group = [row for row in rows if row[0].holdout == holdout]
+        parts = [change(group, key) for key in ("error", "edges", "time")]
+        if any(parts):
+            found = ", ".join(part for part in parts if part)
+            lines.append(f"Geometric mean of current/baseline, {label}: {found}")
     return lines
 
 
