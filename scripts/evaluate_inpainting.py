@@ -37,6 +37,13 @@ Usage:
     uv run python scripts/evaluate_inpainting.py
     uv run python scripts/evaluate_inpainting.py --baseline main/libpatchmatch.dylib
     uv run python scripts/evaluate_inpainting.py --patch-size 15 --seeds 1 --cases brick
+    uv run python scripts/evaluate_inpainting.py --first-seed 10 --holdout 3
+
+--first-seed starts the seeds at another number than 0, and --holdout N adds N cases
+per image with an original, each with one random elliptic hole of radius 8 to 40,
+drawn from --first-seed: seeds and holes that no change was tuned on. Gains on seeds
+0 to 9 vanished on 10 to 29 before, and holes elsewhere showed losses that the cases
+did not.
 
 The inpaintings run in parallel processes, one per CPU unless --jobs says otherwise,
 each on one thread. They slow each other down, so time a speed-up with --jobs 1, which
@@ -46,15 +53,19 @@ runs each inpainting on all cores.
 workflow "Fill quality" redirects it to the job summary.
 
 Besides the table, it writes examples/images/evaluation.html (git-ignored): the holes,
-the fills (of --baseline too) and the originals side by side, cut to the holes. It
-embeds the images of examples/images/local/ as well, so keep it out of the repository.
+the fills (of --baseline too) and the originals side by side, cut to the holes. Each
+library shows the fill of the first seed and, where another one has a higher error (seam
+without an original), that of the worst seed, whose outliers the means hide. It embeds
+the images of examples/images/local/ as well, so keep it out of the repository.
 
 The e2e tests use measure() to check the seam and the detail of forest_pruned.bmp.
 
 Columns, means over the seeds:
     seam    color difference of neighbors across the border of the holes, relative to
             neighbors on either side of it; about 1.0 in textures, 0.47 (pattern) to
-            1.43 (pattern-wide) in the original images
+            1.43 (pattern-wide) in the original images. It rises with blur too (grass
+            blurred with a sigma of 1.5: 0.86 -> 1.42, a hole 12 levels brighter:
+            1.06), so read it with detail
     detail  color difference of neighbors inside the holes, relative to their
             surroundings, lower is blurrier; 0.85 to 1.1 in textures, 1.60 in pole,
             whose hole the pole crosses
@@ -64,17 +75,22 @@ Columns, means over the seeds:
     edges   difference of the gradient directions from the original, in histograms
             weighted by magnitude per 32x32 cell of the holes; lowest for the right
             texture, also when shifted, highest for a flat fill
-    variety difference of the 8x8 patches of the holes, without their mean color, to
-            the closest one that does not overlap them, relative to the original;
-            lower where the fill repeats its sources or blurs (the tiles of
-            grass-large: about 0.25), higher for fragments
+    variety difference of the 8x8 patches of the holes on a grid of 4, without their
+            mean color, to the closest one at any position in the holes that does
+            not overlap them, relative to the original; lower where the fill
+            repeats its sources or blurs (the tiles of grass-large: about 0.3),
+            higher for fragments
     fills   with --baseline: whether the fills of all seeds are byte-identical to the
             baseline's, as they have to be after a change that only makes it faster
 
-With --baseline, the report marks seam and detail as better or worse by their distance
-to the values of the original, 1.0 without one. A mark needs a change of more than 2 %
-and of more than twice the standard error over the seeds: between disjoint sets of 3
-seeds of the same library, half of the cells changed by more than 2 %.
+With --baseline, the report marks a column as better or worse when it changes by more
+than 2 % (time: 10 %) and by more than the margin of the seeds: the standard error of
+the difference times the 97.5 % quantile of Student's t, 2.77 for 3 seeds and 2.10 for
+10. Between disjoint sets of 3 seeds of the same library, 2 % alone marked half of the
+cells, twice the standard error 8.5 %, the margin 3.1 %. seam, detail and variety are
+marked by the change of their distance to the values of the original, 1.0 without one.
+Below the table follow the geometric means of current/baseline of error and edges over
+the cases with an original and of the time over all cases, apart for the holdout holes.
 """
 
 from __future__ import annotations
@@ -143,14 +159,17 @@ class Case(NamedTuple):
     truth: np.ndarray | None
     global_mask: np.ndarray | None = None
     ijmap: np.ndarray | None = None  # fills with inpaint_regularity
+    holdout: bool = False  # a random hole of --holdout
 
 
 class Result(NamedTuple):
     values: dict[str, float]  # means over the seeds
-    errors: dict[str, float]  # standard errors of the means, 0 for one seed
+    margins: dict[str, float]  # of the means, see margin()
     seconds: float  # per seed
-    fill: np.ndarray  # of seed 0
+    fill: np.ndarray  # of the first seed
     digest: str  # of the fills of all seeds
+    # seed, column, value and fill of the worst seed, unless it is the first
+    worst: tuple[int, str, float, np.ndarray] | None
 
 
 def load(path: Path) -> np.ndarray:
@@ -232,6 +251,23 @@ def cases() -> Iterator[Case]:
         yield Case(path.stem.removesuffix("_pruned"), image, white(image), None)
 
 
+def holdouts(count: int, seed: int) -> Iterator[Case]:
+    """``count`` cases per image with an original, each with one random elliptic hole."""
+    rng = np.random.default_rng(seed)
+    photos = dict.fromkeys(filename for filename, _ in LINES.values())
+    for filename in (*photos, *(f"{name}.png" for name in HOLES)):
+        truth = load(IMAGES / filename)
+        height, width = truth.shape[:2]
+        for k in range(count):
+            ry, rx = (int(radius) for radius in rng.integers(8, 41, size=2))
+            cy, cx = (
+                int(rng.integers(ry, height - ry)),
+                int(rng.integers(rx, width - rx)),
+            )
+            hole = ellipse(truth.shape, cy, cx, ry, rx)
+            yield cut(f"{Path(filename).stem}-h{k}", truth, hole)._replace(holdout=True)
+
+
 def grow(mask: np.ndarray, radius: int) -> np.ndarray:
     grown = mask.copy()
     for _ in range(radius):
@@ -286,31 +322,51 @@ def edge_error(image: np.ndarray, truth: np.ndarray, holes: np.ndarray) -> float
 PATCH = 8
 
 
-def patches(image: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """The PATCHxPATCH patches inside ``mask`` on a grid, flattened, and their corners."""
-    grid = (slice(None, None, PATCH // 2),) * 2
+def patches(
+    image: np.ndarray, mask: np.ndarray, stride: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """The PATCHxPATCH patches inside ``mask`` every ``stride`` pixels, flattened, and
+    their corners."""
+    grid = (slice(None, None, stride),) * 2
     windows = sliding_window_view(image, (PATCH, PATCH), axis=(0, 1))[grid]
     inside = sliding_window_view(mask, (PATCH, PATCH))[grid].all(axis=(2, 3))
-    flat = windows[inside].reshape(int(inside.sum()), 3, -1).astype(np.float32)
+    flat = windows[inside].reshape(-1, 3, PATCH * PATCH).astype(np.float32)
     # without their mean color, which the votes shift for repeated sources too
     flat -= flat.mean(axis=2, keepdims=True)
-    return flat.reshape(len(flat), -1), np.argwhere(inside) * (PATCH // 2)
+    corners = np.argwhere(inside).astype(np.int32) * stride
+    return flat.reshape(len(flat), 3 * PATCH * PATCH), corners
 
 
-def variety(image: np.ndarray, truth: np.ndarray, holes: np.ndarray) -> float:
-    def mean(array: np.ndarray) -> float:
-        """Mean distance of the patches to the closest one that does not overlap them."""
-        found, corners = patches(array, holes)
+def variety(image: np.ndarray, truth: np.ndarray, holes: np.ndarray) -> float | None:
+    """None where no patch of the holes has another one beside it, as in scratches."""
+
+    def closest(array: np.ndarray) -> np.ndarray:
+        """Distance of the patches on a grid to the closest one that does not overlap
+        them, inf without one."""
+        queries, corners = patches(array, holes, PATCH // 2)
+        # about 2000 bound the time of the large holes, within 0.013 of all of them
+        step = max(1, len(queries) // 2000)
+        queries, corners = queries[::step], corners[::step]
+        # every position, or a copy whose offset is off the grid looks unrepeated
+        found, places = patches(array, holes, 1)
         norms = (found**2).sum(axis=1)
-        closest = []
-        for start in range(0, len(found), 512):  # bounds the memory of the distances
-            chunk, where = found[start : start + 512], corners[start : start + 512]
-            distances = norms[start : start + 512, None] + norms - 2 * chunk @ found.T
-            distances[np.abs(where[:, None] - corners).max(axis=2) < PATCH] = np.inf
-            closest.append(distances.min(axis=1))
-        return float(np.sqrt(np.maximum(np.concatenate(closest), 0)).mean())
+        nearest = np.full(len(queries), np.inf, dtype=np.float32)
+        for start in range(0, len(queries), 64):  # bounds the memory of the distances
+            chunk, where = queries[start : start + 64], corners[start : start + 64]
+            distances = (chunk**2).sum(axis=1)[:, None] + norms - 2 * chunk @ found.T
+            distances[
+                (np.abs(where[:, None, 0] - places[:, 0]) < PATCH)
+                & (np.abs(where[:, None, 1] - places[:, 1]) < PATCH)
+            ] = np.inf
+            nearest[start : start + 64] = distances.min(axis=1)
+        return nearest
 
-    return mean(image) / mean(truth)
+    fill, original = closest(image), closest(truth)
+    paired = np.isfinite(original)  # the same patches for both, as the holes are
+    if not paired.any():
+        return None
+    fill_mean = np.sqrt(np.maximum(fill[paired], 0)).mean()
+    return float(fill_mean / np.sqrt(np.maximum(original[paired], 0)).mean())
 
 
 def measure(
@@ -334,9 +390,8 @@ def measure(
     if truth is not None:
         values["error"] = coarse_error(result, truth, holes)
         values["edges"] = edge_error(result, truth, holes)
-        # holes thinner than a patch, such as scratches, have none to compare
-        if sliding_window_view(holes, (PATCH, PATCH)).all(axis=(2, 3)).any():
-            values["variety"] = variety(result, truth, holes)
+        if (found := variety(result, truth, holes)) is not None:
+            values["variety"] = found
     return values
 
 
@@ -375,17 +430,40 @@ def fill_seed(path: str, case: Case, patch_size: int, seed: int, threads: int) -
     return fill, measure(fill, case.holes, case.truth), seconds
 
 
-def evaluate(jobs: list[Future[Seed]]) -> Result:
-    """The result of one case and library from the jobs of all seeds, in order."""
+def margin(samples: np.ndarray) -> float:
+    """Standard error of the mean of ``samples`` times the 97.5 % quantile of Student's
+    t for the difference of two such means, 0 for one sample.
+
+    Twice the standard error marked 8.5 % of the cells between disjoint sets of 3
+    seeds of the same library (t has 4 degrees of freedom there), the quantile 3.1 %.
+    """
+    if len(samples) < 2:
+        return 0.0
+    df = 2 * (len(samples) - 1)
+    # Cornish-Fisher expansion, within 0.3 % from 4 degrees of freedom on
+    quantile = 1.96 + 2.37 / df + 2.82 / df**2 + 2.56 / df**3
+    return quantile * float(samples.std(ddof=1)) / math.sqrt(len(samples))
+
+
+def evaluate(jobs: list[Future[Seed]], seeds: range) -> Result:
+    """The result of one case and library from the jobs of ``seeds``, in order."""
     fills, rows, seconds = zip(*(job.result() for job in jobs), strict=True)
     samples = {key: np.array([row[key] for row in rows]) for key in rows[0]}
     values = {key: float(x.mean()) for key, x in samples.items()}
-    errors = {
-        key: float(x.std(ddof=1) / math.sqrt(len(x))) if len(x) > 1 else 0.0
-        for key, x in samples.items()
-    }
+    margins = {key: margin(x) for key, x in samples.items()}
     digest = hashlib.sha256(b"".join(fill.tobytes() for fill in fills)).hexdigest()
-    return Result(values, errors, float(np.mean(seconds)), fills[0], digest)
+    # outliers, such as a broken line in one seed, hardly move the means
+    key = "error" if "error" in samples else "seam"
+    index = int(samples[key].argmax())
+    worst = (seeds[index], key, float(samples[key][index]), fills[index])
+    return Result(
+        values,
+        margins,
+        float(np.mean(seconds)),
+        fills[0],
+        digest,
+        worst if index else None,
+    )
 
 
 def identical(results: list[Result]) -> str:
@@ -523,12 +601,14 @@ def verdict(
 ) -> str:
     """CSS class of ``new`` compared with ``old``: better, worse or none.
 
-    ``noise`` is the standard error of the difference over the seeds.
+    ``noise`` is the margin of the difference over the seeds, see margin().
     """
-    if abs(new - old) <= max((0.1 if key == "time" else 0.02) * abs(old), 2 * noise):
-        return ""
+    bar = max((0.1 if key == "time" else 0.02) * abs(old), noise)
     if key in ("seam", "detail", "variety"):  # best at the value of the original
+        # the distance, or a change across the original's value is marked by its size
         old, new = abs(old - target), abs(new - target)
+    if abs(new - old) <= bar:
+        return ""
     return "better" if new < old else "worse"
 
 
@@ -541,9 +621,32 @@ def column(key: str, results: list[Result]) -> tuple[list[float], list[str]]:
     return values, [f"{value:.2f}" for value in values]
 
 
+def change(rows: list[tuple[Case, list[Result]]], key: str) -> str:
+    """Geometric mean of current/baseline of ``key`` over ``rows``, as a change."""
+    pairs = [column(key, results)[0] for _, results in rows]
+    ratios = [b / a for a, b in (p for p in pairs if len(p) == 2) if a > 0 and b > 0]
+    if not ratios:
+        return ""
+    mean = math.exp(sum(map(math.log, ratios)) / len(ratios))
+    return f"{key} {(mean - 1) * 100:+.1f} % over {len(ratios)}"
+
+
+def changes(rows: list[tuple[Case, list[Result]]]) -> list[str]:
+    """Geometric means of current/baseline of error, edges and time, one line for the
+    cases and one for the holdout holes."""
+    lines = []
+    for holdout, label in ((False, "cases"), (True, "holdout holes")):
+        group = [row for row in rows if row[0].holdout == holdout]
+        parts = [change(group, key) for key in ("error", "edges", "time")]
+        if any(parts):
+            found = ", ".join(part for part in parts if part)
+            lines.append(f"Geometric mean of current/baseline, {label}: {found}")
+    return lines
+
+
 def noise(key: str, results: list[Result]) -> float:
-    """Standard error of the difference of the means, 0 for the time."""
-    return math.hypot(*(result.errors.get(key, 0.0) for result in results))
+    """Margin of the difference of the means, 0 for the time."""
+    return math.hypot(*(result.margins.get(key, 0.0) for result in results))
 
 
 def cell(key: str, results: list[Result], goals: dict[str, float]) -> str:
@@ -570,9 +673,11 @@ def section(case: Case, results: list[Result], labels: list[str]) -> str:
     if case.global_mask is not None:
         shown[case.global_mask] //= 2
     versions: list[tuple[str, np.ndarray, dict[str, float]]] = [("holes", shown, {})]
-    versions += [
-        (label, r.fill, r.values) for label, r in zip(labels, results, strict=True)
-    ]
+    for label, result in zip(labels, results, strict=True):
+        versions.append((label, result.fill, result.values))
+        if result.worst is not None:
+            seed, key, value, fill = result.worst
+            versions.append((f"{label}, seed {seed}", fill, {key: value}))
     if case.truth is not None:
         versions.append(("original", case.truth, targets(case)))
     figures = "".join(
@@ -653,22 +758,25 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
             "",
             f"The fills of all seeds are byte-identical to the baseline in {same} of "
             f"{len(rows)} cases.",
+            "",
+            *(f"- {line}" for line in changes(rows)),
         ]
     lines += [
         "",
         "Means over the seeds. seam and detail are best at the values of the "
         "original (1.0 without one, see the report), variety at 1.0, error and edges "
         "at 0. With a baseline: baseline → current, 🟢 better and 🔴 worse by more "
-        "than 2 % (time: 10 %) and by more than twice the standard error of the "
-        "difference over the seeds.",
+        "than 2 % (time: 10 %) and by more than the standard error of the difference "
+        "over the seeds times the 97.5 % quantile of Student's t; seam, detail and "
+        "variety by their distance to the values of the original.",
     ]
     return "\n".join(lines)
 
 
-def describe(args: argparse.Namespace, labels: list[str], paths: list[str]) -> str:
+def describe(title: str, first: int, labels: list[str], paths: list[str]) -> str:
     lines = [
-        f"{datetime.now():%Y-%m-%d %H:%M}, patch_size {args.patch_size}, "
-        f"{args.seeds} seed(s), fills of seed 0",
+        f"{datetime.now():%Y-%m-%d %H:%M}, {title}, fills of seed {first} and of the "
+        "worst seed by error (seam without an original)",
         *(f"{label}: {path}" for label, path in zip(labels, paths, strict=True)),
     ]
     return "".join(f'<p class="meta">{html.escape(line)}</p>' for line in lines)
@@ -680,6 +788,12 @@ def main() -> None:
     parser.add_argument("--baseline", type=Path, help="library file to compare with")
     parser.add_argument("--patch-size", type=int, default=3)
     parser.add_argument("--seeds", type=int, default=3)
+    parser.add_argument(
+        "--first-seed", type=int, default=0, help="also draws the holdout holes"
+    )
+    parser.add_argument(
+        "--holdout", type=int, default=0, help="random holes per image with an original"
+    )
     parser.add_argument("--cases", help="comma-separated names, default: all")
     parser.add_argument("--jobs", type=int, help="processes, default: one per CPU")
     parser.add_argument(
@@ -699,11 +813,19 @@ def main() -> None:
         libraries.insert(0, _lib.load_library(args.baseline.resolve()))
         labels = ["baseline", "current"]
     paths = [lib._name for lib in libraries]
-    selected = set(args.cases.split(",")) if args.cases else None
-    chosen = [case for case in cases() if not selected or case.name in selected]
+    available = [*cases(), *holdouts(args.holdout, args.first_seed)]
+    names = [case.name for case in available]
+    selected = set(args.cases.split(",")) if args.cases else set(names)
+    if unknown := selected.difference(names):
+        parser.error(f"unknown cases: {', '.join(sorted(unknown))}")
+    chosen = [case for case in available if case.name in selected]
+    seeds = range(args.first_seed, args.first_seed + args.seeds)
+    title = f"patch_size {args.patch_size}, {args.seeds} seed(s)"
+    if args.first_seed:
+        title += f" from {args.first_seed}"
 
     out = sys.stderr if args.markdown else sys.stdout
-    print(f"patch_size={args.patch_size} seeds={args.seeds}", file=out)
+    print(title, file=out)
     fills = "fills" if args.baseline else ""
     header = f"{'case':14} {''.join(f'{key:16}' for key in COLUMNS)}{'time':16}{fills}"
     print(header.rstrip(), file=out)
@@ -718,14 +840,14 @@ def main() -> None:
                 (index, seed): pool.submit(
                     fill_seed, path, case, args.patch_size, seed, threads
                 )
-                for seed in range(args.seeds)
+                for seed in seeds
                 for index, path in enumerate(paths)
             }
             for case in chosen
         ]
         for case, futures in zip(chosen, jobs, strict=True):
             results = [
-                evaluate([futures[index, seed] for seed in range(args.seeds)])
+                evaluate([futures[index, seed] for seed in seeds], seeds)
                 for index in range(len(paths))
             ]
             print_row(case.name, results, out)
@@ -733,11 +855,13 @@ def main() -> None:
     finally:
         pool.shutdown(cancel_futures=True)  # Ctrl+C stops after the running jobs
 
-    meta = describe(args, labels, paths)
+    meta = describe(title, seeds[0], labels, paths)
     write_report(rows, labels, meta)
+    if args.baseline:
+        print("\n".join(changes(rows)), file=out)
     print(f"report: {REPORT}", file=out)
     if args.markdown:
-        print(markdown(rows, f"patch_size {args.patch_size}, {args.seeds} seed(s)"))
+        print(markdown(rows, title))
 
 
 if __name__ == "__main__":
