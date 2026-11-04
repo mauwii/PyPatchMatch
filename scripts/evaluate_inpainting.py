@@ -87,6 +87,8 @@ the difference times the 97.5 % quantile of Student's t, 2.77 for 3 seeds and 2.
 10. Between disjoint sets of 3 seeds of the same library, 2 % alone marked half of the
 cells, twice the standard error 8.5 %, the margin 3.1 %. seam, detail and variety are
 marked by the change of their distance to the values of the original, 1.0 without one.
+Below the table follow the geometric means of current/baseline of error and edges over
+the cases with an original and of the time over all cases, apart for the holdout holes.
 """
 
 from __future__ import annotations
@@ -617,6 +619,28 @@ def column(key: str, results: list[Result]) -> tuple[list[float], list[str]]:
     return values, [f"{value:.2f}" for value in values]
 
 
+def changes(rows: list[tuple[Case, list[Result]]]) -> list[str]:
+    """Geometric means of current/baseline of error, edges and time, one line for the
+    cases and one for the holdout holes."""
+    lines = []
+    for holdout, label in ((False, "cases"), (True, "holdout holes")):
+        parts = []
+        for key in ("error", "edges", "time"):
+            ratios = []
+            for case, results in rows:
+                values = column(key, results)[0]
+                if case.holdout == holdout and len(values) == 2 and min(values) > 0:
+                    ratios.append(values[1] / values[0])
+            if ratios:
+                change = math.exp(sum(map(math.log, ratios)) / len(ratios)) - 1
+                parts.append(f"{key} {change * 100:+.1f} % over {len(ratios)}")
+        if parts:
+            lines.append(
+                f"Geometric mean of current/baseline, {label}: " + ", ".join(parts)
+            )
+    return lines
+
+
 def noise(key: str, results: list[Result]) -> float:
     """Margin of the difference of the means, 0 for the time."""
     return math.hypot(*(result.margins.get(key, 0.0) for result in results))
@@ -731,6 +755,8 @@ def markdown(rows: list[tuple[Case, list[Result]]], title: str) -> str:
             "",
             f"The fills of all seeds are byte-identical to the baseline in {same} of "
             f"{len(rows)} cases.",
+            "",
+            *(f"- {line}" for line in changes(rows)),
         ]
     lines += [
         "",
@@ -828,6 +854,8 @@ def main() -> None:
 
     meta = describe(title, seeds[0], labels, paths)
     write_report(rows, labels, meta)
+    if args.baseline:
+        print("\n".join(changes(rows)), file=out)
     print(f"report: {REPORT}", file=out)
     if args.markdown:
         print(markdown(rows, title))
