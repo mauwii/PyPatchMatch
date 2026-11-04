@@ -382,3 +382,23 @@ def test_reconstructs_known_background(pruned_image, region, patch_size):
     error = evaluation.coarse_error(result, truth, mask)
     naive_error = evaluation.coarse_error(naive, truth, mask)
     assert error < 0.8 * naive_error, (error, naive_error)
+
+
+def test_measures_see_known_flaws():
+    """scripts/evaluate_inpainting.py rates fills whose flaw is known.
+
+    variety compared the patches of the holes only on a grid of 4 pixels, so a hole
+    whose right half repeated its left half 57 columns apart scored 0.98, as if nothing
+    repeated (0.31 with 52 columns).
+    """
+    truth = evaluation.load(IMAGES / "forest.bmp")
+    holes = evaluation.ellipse(truth.shape, 70, 560, 45, 55)
+    original = evaluation.measure(truth, holes, truth)
+    assert (original["error"], original["edges"], original["variety"]) == (0, 0, 1)
+
+    repeated = truth.copy()
+    right = holes.copy()
+    right[:, :560] = False
+    ys, xs = np.nonzero(right)
+    repeated[ys, xs] = truth[ys, xs - 57]
+    assert evaluation.measure(repeated, holes, truth)["variety"] < 0.6

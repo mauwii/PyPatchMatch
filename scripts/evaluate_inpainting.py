@@ -64,10 +64,11 @@ Columns, means over the seeds:
     edges   difference of the gradient directions from the original, in histograms
             weighted by magnitude per 32x32 cell of the holes; lowest for the right
             texture, also when shifted, highest for a flat fill
-    variety difference of the 8x8 patches of the holes, without their mean color, to
-            the closest one that does not overlap them, relative to the original;
-            lower where the fill repeats its sources or blurs (the tiles of
-            grass-large: about 0.25), higher for fragments
+    variety difference of the 8x8 patches of the holes on a grid of 4, without their
+            mean color, to the closest one at any position in the holes that does
+            not overlap them, relative to the original; lower where the fill
+            repeats its sources or blurs (the tiles of grass-large: about 0.3),
+            higher for fragments
     fills   with --baseline: whether the fills of all seeds are byte-identical to the
             baseline's, as they have to be after a change that only makes it faster
 
@@ -286,31 +287,51 @@ def edge_error(image: np.ndarray, truth: np.ndarray, holes: np.ndarray) -> float
 PATCH = 8
 
 
-def patches(image: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """The PATCHxPATCH patches inside ``mask`` on a grid, flattened, and their corners."""
-    grid = (slice(None, None, PATCH // 2),) * 2
+def patches(
+    image: np.ndarray, mask: np.ndarray, stride: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """The PATCHxPATCH patches inside ``mask`` every ``stride`` pixels, flattened, and
+    their corners."""
+    grid = (slice(None, None, stride),) * 2
     windows = sliding_window_view(image, (PATCH, PATCH), axis=(0, 1))[grid]
     inside = sliding_window_view(mask, (PATCH, PATCH))[grid].all(axis=(2, 3))
-    flat = windows[inside].reshape(int(inside.sum()), 3, -1).astype(np.float32)
+    flat = windows[inside].reshape(-1, 3, PATCH * PATCH).astype(np.float32)
     # without their mean color, which the votes shift for repeated sources too
     flat -= flat.mean(axis=2, keepdims=True)
-    return flat.reshape(len(flat), -1), np.argwhere(inside) * (PATCH // 2)
+    corners = np.argwhere(inside).astype(np.int32) * stride
+    return flat.reshape(len(flat), 3 * PATCH * PATCH), corners
 
 
-def variety(image: np.ndarray, truth: np.ndarray, holes: np.ndarray) -> float:
-    def mean(array: np.ndarray) -> float:
-        """Mean distance of the patches to the closest one that does not overlap them."""
-        found, corners = patches(array, holes)
+def variety(image: np.ndarray, truth: np.ndarray, holes: np.ndarray) -> float | None:
+    """None where no patch of the holes has another one beside it, as in scratches."""
+
+    def closest(array: np.ndarray) -> np.ndarray:
+        """Distance of the patches on a grid to the closest one that does not overlap
+        them, inf without one."""
+        queries, corners = patches(array, holes, PATCH // 2)
+        # about 2000 bound the time of the large holes, within 0.013 of all of them
+        step = max(1, len(queries) // 2000)
+        queries, corners = queries[::step], corners[::step]
+        # every position, or a copy whose offset is off the grid looks unrepeated
+        found, places = patches(array, holes, 1)
         norms = (found**2).sum(axis=1)
-        closest = []
-        for start in range(0, len(found), 512):  # bounds the memory of the distances
-            chunk, where = found[start : start + 512], corners[start : start + 512]
-            distances = norms[start : start + 512, None] + norms - 2 * chunk @ found.T
-            distances[np.abs(where[:, None] - corners).max(axis=2) < PATCH] = np.inf
-            closest.append(distances.min(axis=1))
-        return float(np.sqrt(np.maximum(np.concatenate(closest), 0)).mean())
+        nearest = np.full(len(queries), np.inf, dtype=np.float32)
+        for start in range(0, len(queries), 64):  # bounds the memory of the distances
+            chunk, where = queries[start : start + 64], corners[start : start + 64]
+            distances = (chunk**2).sum(axis=1)[:, None] + norms - 2 * chunk @ found.T
+            distances[
+                (np.abs(where[:, None, 0] - places[:, 0]) < PATCH)
+                & (np.abs(where[:, None, 1] - places[:, 1]) < PATCH)
+            ] = np.inf
+            nearest[start : start + 64] = distances.min(axis=1)
+        return nearest
 
-    return mean(image) / mean(truth)
+    fill, original = closest(image), closest(truth)
+    paired = np.isfinite(original)  # the same patches for both, as the holes are
+    if not paired.any():
+        return None
+    fill_mean = np.sqrt(np.maximum(fill[paired], 0)).mean()
+    return float(fill_mean / np.sqrt(np.maximum(original[paired], 0)).mean())
 
 
 def measure(
@@ -334,9 +355,8 @@ def measure(
     if truth is not None:
         values["error"] = coarse_error(result, truth, holes)
         values["edges"] = edge_error(result, truth, holes)
-        # holes thinner than a patch, such as scratches, have none to compare
-        if sliding_window_view(holes, (PATCH, PATCH)).all(axis=(2, 3)).any():
-            values["variety"] = variety(result, truth, holes)
+        if (found := variety(result, truth, holes)) is not None:
+            values["variety"] = found
     return values
 
 
