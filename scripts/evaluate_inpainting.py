@@ -63,7 +63,9 @@ The e2e tests use measure() to check the seam and the detail of forest_pruned.bm
 Columns, means over the seeds:
     seam    color difference of neighbors across the border of the holes, relative to
             neighbors on either side of it; about 1.0 in textures, 0.47 (pattern) to
-            1.43 (pattern-wide) in the original images
+            1.43 (pattern-wide) in the original images. It rises with blur too (grass
+            blurred with a sigma of 1.5: 0.86 -> 1.42, a hole 12 levels brighter:
+            1.06), so read it with detail
     detail  color difference of neighbors inside the holes, relative to their
             surroundings, lower is blurrier; 0.85 to 1.1 in textures, 1.60 in pole,
             whose hole the pole crosses
