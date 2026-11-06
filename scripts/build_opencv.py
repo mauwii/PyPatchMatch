@@ -25,9 +25,10 @@ from pathlib import Path
 OPENCV_SHA256S = {
     "4.14.0": "ee8fb9b30eb60850431b4656447080e3737b56e45719c92b67f245950609f86e",
     "5.0.0": "b0528f5a1d379d59d4701cb28c36e22214cc51cf64594e5b56f2d3e6c0233095",
+    "5.1.0": "638c1dae7e37e45afea21aa217dc667ad7cf57acc66cdf652c074f1e0e5ad6d2",
 }
 # the version of the release wheels
-OPENCV_VERSION = os.environ.get("PATCHMATCH_OPENCV_VERSION") or "5.0.0"
+OPENCV_VERSION = os.environ.get("PATCHMATCH_OPENCV_VERSION") or "5.1.0"
 if OPENCV_VERSION not in OPENCV_SHA256S:
     sys.exit(f"OpenCV {OPENCV_VERSION} is not pinned, known: {sorted(OPENCV_SHA256S)}")
 OPENCV_SHA256 = OPENCV_SHA256S[OPENCV_VERSION]
@@ -63,6 +64,8 @@ CMAKE_OPTIONS = {
     "WITH_FFMPEG": "OFF",
     "WITH_GSTREAMER": "OFF",
     "WITH_GTK": "OFF",
+    # OpenCV 5.1 exports the bundled HarfBuzz even when nothing builds it
+    "WITH_HARFBUZZ": "OFF",
     "WITH_JASPER": "OFF",
     "WITH_JPEG": "OFF",
     "WITH_OPENEXR": "OFF",
