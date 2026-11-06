@@ -1,0 +1,48 @@
+name: Rerun
+
+# When the hosted pool is starved (macOS arm64 above all), GitHub cancels a job after
+# 15 minutes in the queue; that limit cannot be raised, so rerun the run instead.
+on:
+  # safe: no checkout, no artifacts; the fork-controlled branch name only goes through env
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: [CI, CodeQL, Fill quality, Wheels]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  rerun:
+    name: rerun jobs that got no runner
+    # at most 4 reruns per run
+    if: >-
+      contains(fromJSON('["failure", "cancelled"]'), github.event.workflow_run.conclusion)
+      && github.event.workflow_run.run_attempt < 5
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write # to rerun
+      checks: read # to read the annotations of the jobs
+    steps:
+      - name: Rerun the failed jobs if one got no runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          WORKFLOW: ${{ github.event.workflow_run.workflow_id }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EVENT: ${{ github.event.workflow_run.event }}
+        run: |
+          # a rerun of a superseded PR run would cancel the newer run of its concurrency group
+          latest=$(gh run list --workflow "$WORKFLOW" --branch "$BRANCH" --event "$EVENT" \
+            --limit 1 --json databaseId --jq '.[0].databaseId')
+          [ "$latest" = "$RUN" ] || exit 0
+          for job in $(gh api "repos/$GH_REPO/actions/runs/$RUN/attempts/$ATTEMPT/jobs" \
+              --paginate --jq '.jobs[] | select(.conclusion == "cancelled") | .id'); do
+            if gh api "repos/$GH_REPO/check-runs/$job/annotations" --jq '.[].message' \
+                | grep -q 'was not acquired by Runner'; then
+              echo "job $job got no runner, rerunning run $RUN"
+              gh run rerun "$RUN" --failed
+              exit 0
+            fi
+          done
