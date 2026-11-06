@@ -25,4 +25,4 @@ explain their settings; this lists what they do not say.
   `OPENCV_SHA256S`. The CI cache of the OpenCV build is keyed on the hash of the
   script. `PATCHMATCH_OPENCV_VERSION` selects another pinned version, e.g. 4.14.0 of
   the 2.0.0 wheels to compare the fills. Builds from the sdist link whatever OpenCV the
-  system has; CI tests 5.0 through the script and 4.6 in `system-opencv`.
+  system has; CI tests 5.1 through the script and 4.6 in `system-opencv`.
