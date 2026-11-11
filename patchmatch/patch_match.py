@@ -99,6 +99,7 @@ def inpaint(
     *,
     global_mask: ImageLike | None = None,
     patch_size: SupportsIndex = 15,
+    seed: SupportsIndex | None = None,
 ) -> np.ndarray:
     """Fill the masked regions of ``image`` using PatchMatch.
 
@@ -113,6 +114,8 @@ def inpaint(
             ``(2 * patch_size + 1) ** 2`` pixels. Larger patches follow larger
             structures but are much slower; thin lines through smaller holes
             continue with a radius of 3 regardless. The examples use 3.
+        seed: seed of the randomized search of this call, modulo ``2**32`` like
+            :func:`set_random_seed`; ``None`` takes the one set there.
 
     Returns:
         The repaired image, with the same shape as ``image``. Only the holes are
@@ -120,10 +123,13 @@ def inpaint(
     """
     lib = _get_lib()
     patch_size = _check_patch_size(patch_size)
+    seed = _check_seed(seed)
     image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
     if not _has_holes(mask, global_mask):
         return image.copy()
 
+    if seed is not None:
+        return _call_seeded(image, mask, global_mask, None, patch_size, 0.0, seed)
     if global_mask is None:
         return _call(lib.PM_inpaint, image, mask, ctypes.c_int(patch_size))
     return _call(lib.PM_inpaint2, image, mask, global_mask, ctypes.c_int(patch_size))
@@ -137,6 +143,7 @@ def inpaint_regularity(
     global_mask: ImageLike | None = None,
     patch_size: SupportsIndex = 15,
     guide_weight: float = 0.25,
+    seed: SupportsIndex | None = None,
 ) -> np.ndarray:
     """Like :func:`inpaint`, additionally guided by a regularity map.
 
@@ -149,6 +156,7 @@ def inpaint_regularity(
     """
     lib = _get_lib()
     patch_size = _check_patch_size(patch_size)
+    seed = _check_seed(seed)
     image, mask, global_mask = _prepare_inputs(image, mask, global_mask)
 
     if not (
@@ -176,6 +184,10 @@ def inpaint_regularity(
     if not _has_holes(mask, global_mask):
         return image.copy()
 
+    if seed is not None:
+        return _call_seeded(
+            image, mask, global_mask, ijmap, patch_size, guide_weight, seed
+        )
     args = (ijmap, ctypes.c_int(patch_size), ctypes.c_float(guide_weight))
     if global_mask is None:
         return _call(lib.PM_inpaint_regularity, image, mask, *args)
@@ -188,13 +200,22 @@ def _check_patch_size(patch_size: SupportsIndex) -> int:
     return _check_int("patch_size", patch_size, 1, _MAX_PATCH_SIZE)
 
 
-def _check_int(name: str, value: SupportsIndex, minimum: int, maximum: int) -> int:
+def _check_seed(seed: SupportsIndex | None) -> int | None:
+    # the native code keeps the seed as a 32-bit unsigned int, see set_random_seed
+    return None if seed is None else _index("seed", seed) % 2**32
+
+
+def _index(name: str, value: SupportsIndex) -> int:
     try:
-        value = operator.index(value)
+        return operator.index(value)
     except TypeError:
         raise TypeError(
             f"{name} must be an integer, got {type(value).__name__}"
         ) from None
+
+
+def _check_int(name: str, value: SupportsIndex, minimum: int, maximum: int) -> int:
+    value = _index(name, value)
     if not minimum <= value <= maximum:
         raise ValueError(f"{name} must be between {minimum} and {maximum}, got {value}")
     return value
@@ -247,6 +268,32 @@ def _call(func: Callable[..., CMatT], *args: object) -> np.ndarray:
         return pymat_to_np(ret)
     finally:
         lib.PM_free_pymat(ret)
+
+
+def _call_seeded(
+    image: np.ndarray,
+    mask: np.ndarray,
+    global_mask: np.ndarray | None,
+    ijmap: np.ndarray | None,
+    patch_size: int,
+    guide_weight: float,
+    seed: int,
+) -> np.ndarray:
+    """Call PM_inpaint_seeded, which takes the optional arrays as pointers."""
+    # the pymats point into the arrays, which the caller keeps alive
+    optional = [
+        None if a is None else ctypes.pointer(np_to_pymat(a))
+        for a in (global_mask, ijmap)
+    ]
+    return _call(
+        _get_lib().PM_inpaint_seeded,
+        image,
+        mask,
+        *optional,
+        ctypes.c_int(patch_size),
+        ctypes.c_float(guide_weight),
+        ctypes.c_uint(seed),
+    )
 
 
 def _canonize_image_array(image: ImageLike) -> np.ndarray:
