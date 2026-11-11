@@ -123,5 +123,17 @@ def load_library(path: Path | None = None) -> ctypes.CDLL:
         lib.PM_inpaint2_regularity,
     ):
         func.restype = CMatT
+    # missing up to 2.3, like PM_set_num_threads
+    if hasattr(lib, "PM_inpaint_seeded"):
+        lib.PM_inpaint_seeded.argtypes = [
+            CMatT,
+            CMatT,
+            ctypes.POINTER(CMatT),
+            ctypes.POINTER(CMatT),
+            ctypes.c_int,
+            ctypes.c_float,
+            ctypes.c_uint,
+        ]
+        lib.PM_inpaint_seeded.restype = CMatT
 
     return lib

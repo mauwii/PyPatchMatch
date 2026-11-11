@@ -38,5 +38,10 @@ extern "C"
     PM_mat_t PM_inpaint2(PM_mat_t image, PM_mat_t mask, PM_mat_t global_mask, int patch_size);
     PM_mat_t PM_inpaint2_regularity(
         PM_mat_t image, PM_mat_t mask, PM_mat_t global_mask, PM_mat_t ijmap, int patch_size, float guide_weight);
+    // Like the functions above with the seed of this call instead of PM_set_random_seed's. A null global_mask or
+    // ijmap leaves it out; without ijmap, guide_weight is unused.
+    PM_mat_t PM_inpaint_seeded(
+        PM_mat_t image, PM_mat_t mask, const PM_mat_t *global_mask, const PM_mat_t *ijmap, int patch_size,
+        float guide_weight, unsigned int seed);
 
 } /*  extern "C" */

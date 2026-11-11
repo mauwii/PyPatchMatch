@@ -105,12 +105,13 @@ namespace
     }
 
     PM_mat_t inpaint(
-        PM_mat_t source_py, PM_mat_t mask_py, const PM_mat_t *global_mask_py, const PatchDistanceMetric &metric)
+        PM_mat_t source_py, PM_mat_t mask_py, const PM_mat_t *global_mask_py, const PatchDistanceMetric &metric,
+        unsigned int seed)
     {
         cv::Mat source = _py_to_cv2(source_py);
         cv::Mat mask = _py_to_cv2(mask_py);
         cv::Mat global_mask = global_mask_py ? _py_to_cv2(*global_mask_py) : cv::Mat();
-        cv::Mat result = Inpainting(source, mask, global_mask, &metric).run(verbose().load(), random_seed().load());
+        cv::Mat result = Inpainting(source, mask, global_mask, &metric).run(verbose().load(), seed);
         return _cv2_to_py(result);
     }
 } // namespace
@@ -144,7 +145,7 @@ void PM_free_pymat(PM_mat_t pymat)
 PM_mat_t PM_inpaint(PM_mat_t source_py, PM_mat_t mask_py, int patch_size)
 {
     return guarded([source_py, mask_py, patch_size] {
-        return inpaint(source_py, mask_py, nullptr, PatchSSDDistanceMetric(patch_size));
+        return inpaint(source_py, mask_py, nullptr, PatchSSDDistanceMetric(patch_size), random_seed().load());
     });
 }
 
@@ -154,14 +155,15 @@ PM_mat_t PM_inpaint_regularity(
     return guarded([source_py, mask_py, ijmap_py, patch_size, guide_weight] {
         return inpaint(
             source_py, mask_py, nullptr,
-            RegularityGuidedPatchDistanceMetricV2(patch_size, _py_to_cv2(ijmap_py), guide_weight));
+            RegularityGuidedPatchDistanceMetricV2(patch_size, _py_to_cv2(ijmap_py), guide_weight),
+            random_seed().load());
     });
 }
 
 PM_mat_t PM_inpaint2(PM_mat_t source_py, PM_mat_t mask_py, PM_mat_t global_mask_py, int patch_size)
 {
     return guarded([source_py, mask_py, global_mask_py, patch_size] {
-        return inpaint(source_py, mask_py, &global_mask_py, PatchSSDDistanceMetric(patch_size));
+        return inpaint(source_py, mask_py, &global_mask_py, PatchSSDDistanceMetric(patch_size), random_seed().load());
     });
 }
 
@@ -172,6 +174,20 @@ PM_mat_t PM_inpaint2_regularity(
     return guarded([source_py, mask_py, global_mask_py, ijmap_py, patch_size, guide_weight] {
         return inpaint(
             source_py, mask_py, &global_mask_py,
-            RegularityGuidedPatchDistanceMetricV2(patch_size, _py_to_cv2(ijmap_py), guide_weight));
+            RegularityGuidedPatchDistanceMetricV2(patch_size, _py_to_cv2(ijmap_py), guide_weight),
+            random_seed().load());
+    });
+}
+
+PM_mat_t PM_inpaint_seeded(
+    PM_mat_t source_py, PM_mat_t mask_py, const PM_mat_t *global_mask_py, const PM_mat_t *ijmap_py, int patch_size,
+    float guide_weight, unsigned int seed)
+{
+    return guarded([source_py, mask_py, global_mask_py, ijmap_py, patch_size, guide_weight, seed] {
+        if (ijmap_py)
+            return inpaint(
+                source_py, mask_py, global_mask_py,
+                RegularityGuidedPatchDistanceMetricV2(patch_size, _py_to_cv2(*ijmap_py), guide_weight), seed);
+        return inpaint(source_py, mask_py, global_mask_py, PatchSSDDistanceMetric(patch_size), seed);
     });
 }

@@ -277,6 +277,52 @@ def test_concurrent_inpaint_is_deterministic(image):
         np.testing.assert_array_equal(result, expected)
 
 
+@pytest.mark.parametrize("use_global_mask", [False, True], ids=["", "global"])
+@pytest.mark.parametrize("regularity", [False, True], ids=["inpaint", "regularity"])
+def test_seed_argument_equals_set_random_seed(
+    image, hole_mask, ijmap, regularity, use_global_mask
+):
+    global_mask = None
+    if use_global_mask:
+        global_mask = np.zeros_like(hole_mask)
+        global_mask[:8] = 1
+
+    def fill(**seed):
+        if regularity:
+            return patchmatch.inpaint_regularity(
+                image, hole_mask, ijmap, global_mask=global_mask, patch_size=3, **seed
+            )
+        return patchmatch.inpaint(
+            image, hole_mask, global_mask=global_mask, patch_size=3, **seed
+        )
+
+    patchmatch.set_random_seed(5)
+    expected = fill()
+    patchmatch.set_random_seed(0)  # the global seed does not apply to this call
+    np.testing.assert_array_equal(fill(seed=5), expected)
+    np.testing.assert_array_equal(fill(seed=np.int64(5 + 2**32)), expected)
+    assert not np.array_equal(fill(seed=0), expected)
+
+
+def test_concurrent_seeds_are_deterministic(image):
+    seeds = list(range(8))
+    expected = [patchmatch.inpaint(image, patch_size=3, seed=s) for s in seeds]
+    with ThreadPoolExecutor(4) as pool:
+        results = list(
+            pool.map(
+                lambda s: patchmatch.inpaint(image, patch_size=3, seed=s), seeds * 2
+            )
+        )
+    for result, seed in zip(results, seeds * 2, strict=True):
+        np.testing.assert_array_equal(result, expected[seed])
+
+
+@pytest.mark.parametrize("seed", [1.5, "1"])
+def test_seed_must_be_an_integer(image, seed):
+    with pytest.raises(TypeError, match="seed must be an integer"):
+        patchmatch.inpaint(image, seed=seed)
+
+
 @pytest.fixture
 def default_threads():
     yield
@@ -505,14 +551,27 @@ def test_inpaint_regularity_invalid_guide_weight(image, ijmap, guide_weight):
 
 @pytest.mark.parametrize(
     "name",
-    ["PM_inpaint", "PM_inpaint2", "PM_inpaint_regularity", "PM_inpaint2_regularity"],
+    [
+        "PM_inpaint",
+        "PM_inpaint2",
+        "PM_inpaint_regularity",
+        "PM_inpaint2_regularity",
+        "PM_inpaint_seeded",
+    ],
 )
 def test_native_exception_raises_runtime_error(name):
     # A null data pointer with a non-empty shape fails an OpenCV assertion. The
     # exception must not propagate through the C interface and abort the process.
     func = getattr(patch_match._get_lib(), name)
     bad = _lib.CMatT(None, _lib.CShapeT(4, 4, 3), 0)
-    args = [bad if argtype is _lib.CMatT else argtype(3) for argtype in func.argtypes]
+    args = [
+        bad
+        if argtype is _lib.CMatT
+        else ctypes.pointer(bad)
+        if argtype is ctypes.POINTER(_lib.CMatT)
+        else argtype(3)
+        for argtype in func.argtypes
+    ]
     with pytest.raises(RuntimeError, match=r"patchmatch failed: .*Assertion failed"):
         patch_match._call(func, *args)
 

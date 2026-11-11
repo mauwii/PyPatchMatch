@@ -85,7 +85,9 @@ with a radius of 3 around the line: larger patches wiped such lines out. Above
 least 7: larger patches found no sources there and left the fill flat.
 
 `patchmatch.set_random_seed(seed)` sets the seed of the randomized search, modulo
-`2**32`, and `patchmatch.set_verbose(True)` prints the progress of the native code to
+`2**32`; the `seed` argument of `inpaint` and `inpaint_regularity` sets it for that call
+only, so that concurrent calls with different seeds stay reproducible.
+`patchmatch.set_verbose(True)` prints the progress of the native code to
 stderr. The inpainting runs on all cores; `patchmatch.set_num_threads(n)` limits it to
 `n` threads (0 restores the default), and the fills do not depend on it.
 `patchmatch.inpaint_regularity(image, mask, ijmap)` additionally guides the
