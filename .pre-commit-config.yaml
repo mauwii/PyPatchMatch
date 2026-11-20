@@ -35,7 +35,7 @@ repos:
         types: [python]
         pass_filenames: false
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: d1df990f871e616da38bb602a2671d5e840b9989  # frozen: 0.13.7
+    rev: b9d5257d60a86c20fd9a3919d548e08ba5ab905b  # frozen: 0.13.8
     hooks:
       - id: uv-lock
   - repo: https://github.com/pre-commit/mirrors-clang-format
@@ -48,12 +48,12 @@ repos:
     hooks:
       - id: shellcheck
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: 341e2a331ba578029e66c2e01183e7a6b5ca9ab4  # frozen: v0.24.0
+    rev: c01a1853c19b175aee6a09f24e2ad9b748c485ad  # frozen: v0.24.1
     hooks:
       - id: markdownlint-cli2
   - repo: https://github.com/crate-ci/typos
     # a tag: Dependabot matched the frozen comment against the tags of its other crates
-    rev: v1.52.0
+    rev: v1.52.2
     hooks:
       - id: typos
   - repo: https://github.com/rhysd/actionlint
