@@ -30,7 +30,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0 # setuptools-scm derives the version from the git tags
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           version: latest-known
           prune-cache: true
@@ -83,7 +83,7 @@ jobs:
           path: ${{ runner.os == 'Windows' && 'C:/opencv' || '/tmp/opencv' }}
           key: opencv-wheel-${{ matrix.os }}-${{ env.ImageOS }}-${{ hashFiles('dist/*/scripts/build_opencv.py', 'dist/*/pyproject.toml') }}
       # the frontend build[uv] of cibuildwheel uses this uv on macOS and Windows
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           version: latest-known
           enable-cache: false
@@ -136,7 +136,7 @@ jobs:
         with:
           name: dist-sdist
           path: dist/
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           version: latest-known
           prune-cache: true
